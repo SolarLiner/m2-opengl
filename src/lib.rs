@@ -49,6 +49,7 @@ pub trait Application: Sized + Send + Sync {
 }
 
 pub fn run<App: 'static + Application>(title: &str) -> anyhow::Result<()> {
+    color_eyre::install()?;
     let fmt_layer = tracing_subscriber::fmt::Layer::default()
         .pretty()
         .with_filter(EnvFilter::from_default_env());

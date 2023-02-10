@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, path::Path};
 
-use anyhow::Context;
+use anyhow::{Context, ContextCompat};
 use either::Either;
 
 use violette_low::{
@@ -30,11 +30,13 @@ impl<const N: usize> From<[f32; N]> for TextureSlot<N> {
     }
 }
 
+type TextureUniformBind<'bind, const N: usize> = (Option<BindGuard<'bind, BoundTexture<'bind, [f32; N]>>>, Either<[f32; N], TextureUnit>);
+
 impl<const N: usize> TextureSlot<N>
 where
     [f32; N]: Uniform,
 {
-    pub fn as_uniform(&mut self, texture_unit: u32) -> anyhow::Result<(Option<BindGuard<BoundTexture<[f32; N]>>>, Either<[f32; N], TextureUnit>)> {
+    pub fn as_uniform(&mut self, texture_unit: u32) -> anyhow::Result<TextureUniformBind<N>> {
         Ok(match self {
             Self::Texture(texture) => {
                 let (binding, unit) = texture.as_uniform(texture_unit)?;

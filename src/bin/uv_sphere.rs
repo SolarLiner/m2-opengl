@@ -73,7 +73,7 @@ impl Application for App {
         geom_pass
             .framebuffer()
             .bind()?
-            .enable_feature(FramebufferFeature::DepthTest(DepthTestFunction::Less))?;
+            .set_feature(FramebufferFeature::DepthTest(DepthTestFunction::Less))?;
         let rot_target = camera.transform.rotation;
         violette_low::culling(Some(Cull::Back));
 

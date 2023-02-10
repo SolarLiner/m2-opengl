@@ -6,7 +6,7 @@ use glam::{vec2, Vec2};
 use violette_low::{
     base::bindable::BindableExt,
     buffer::{Buffer, BufferKind},
-    framebuffer::{BoundFB, FramebufferFeature::DepthTest, DepthTestFunction::Always},
+    framebuffer::{BoundFB, FramebufferFeature::DepthTest, DepthTestFunction::Always, FramebufferFeatureId},
     program::{Linked, Program},
     program::{Uniform, UniformLocation},
     vertex::DrawMode,
@@ -97,7 +97,7 @@ impl ScreenDraw {
         let _progbind = self.program.bind()?;
         let mut _vaobind = self.vao.bind()?;
         let idx_binding = self.indices.bind()?;
-        framebuffer.disable_feature(DepthTest(Always))?;
+        framebuffer.disable_features(FramebufferFeatureId::DEPTH_TEST)?;
         framebuffer.draw_elements(&mut _vaobind, &idx_binding, DrawMode::TrianglesList, ..)?;
         Ok(())
     }

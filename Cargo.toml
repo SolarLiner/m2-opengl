@@ -7,7 +7,7 @@ edition = "2021"
 members = ["violette/violette-low"]
 
 [dependencies]
-anyhow = "1.0.53"
+anyhow = {version = "0.6.8", package = "eyre" }
 bevy_app = "0.9.1"
 bevy_ecs = "0.9.1"
 bytemuck = { version = "1.7.3", features = ["derive"] }
@@ -28,3 +28,4 @@ tracing-tracy = "0.10.2"
 
 violette-low = { path = "./violette/violette-low", features = ["uniforms-glam", "vertex-glam"] }
 either = "1.8.1"
+color-eyre = "0.6.2"

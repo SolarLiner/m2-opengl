@@ -206,7 +206,7 @@ impl GeometryBuffers {
             Ok(())
         })?;
 
-        frame.enable_feature(FramebufferFeature::Blending(Blend::SrcAlpha, Blend::One))?; // Additive blending
+        frame.set_feature(FramebufferFeature::Blending(Blend::SrcAlpha, Blend::One))?; // Additive blending
         frame.do_clear(ClearBuffer::COLOR)?;
         if lights.is_empty() {
             return Ok(());
