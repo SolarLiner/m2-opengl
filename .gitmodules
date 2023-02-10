@@ -1,0 +1,3 @@
+[submodule "violette"]
+	path = violette
+	url = git@github.com:SolarLiner/violette-gl.git

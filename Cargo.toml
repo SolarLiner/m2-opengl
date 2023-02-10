@@ -1,0 +1,30 @@
+[package]
+name = "m2-opengl"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = ["violette/violette-low"]
+
+[dependencies]
+anyhow = "1.0.53"
+bevy_app = "0.9.1"
+bevy_ecs = "0.9.1"
+bytemuck = { version = "1.7.3", features = ["derive"] }
+crevice = { version = "0.12.0", features = ["glam"] }
+float-ord = "0.3.2"
+glam = { version = "0.22.0", features = ["bytemuck", "rand", "num-traits"] }
+glutin = "0.30.3"
+glutin-winit = "0.2.1"
+winit = "0.27.5"
+image = "0.24.1"
+num-derive = "0.3.3"
+num-traits = "0.2.14"
+rand = "0.8.5"
+raw-window-handle = "0.5.0"
+tracing = "0.1.33"
+tracing-subscriber = { version = "0.3.11", features = ["env-filter", "json"] }
+tracing-tracy = "0.10.2"
+
+violette-low = { path = "./violette/violette-low", features = ["uniforms-glam", "vertex-glam"] }
+either = "1.8.1"
