@@ -1,3 +1,6 @@
+use std::marker::PhantomData;
+
+use bytemuck::Pod;
 use float_ord::FloatOrd;
 use glam::{vec2, vec3, Vec2, Vec3};
 use eyre::{Context, Result};
@@ -22,27 +25,15 @@ use violette_low::program::Program;
 
 use crate::transform::Transform;
 
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-#[repr(C)]
-pub struct Vertex {
-    pub position: Vec3,
-    pub normal: Vec3,
-    pub uv: Vec2,
-}
-
-impl AsVertexAttributes for Vertex {
-    type Attr = (Vec3, Vec3, Vec2);
-}
-
 #[derive(Debug)]
-pub struct Mesh {
+pub struct Mesh<Vertex> {
     pub transform: Transform,
-    vertices: ArrayBuffer<Vertex>,
+    _vertices: ArrayBuffer<Vertex>,
     array: VertexArray,
     indices: ElementBuffer<u32>,
 }
 
-impl Mesh {
+impl<Vertex: Pod + AsVertexAttributes> Mesh<Vertex> {
     pub fn new(
         vertices: impl IntoIterator<Item = Vertex>,
         indices: impl IntoIterator<Item = u32>,
@@ -57,13 +48,45 @@ impl Mesh {
         vao.with_element_buffer(&indices)?;
         Ok(Self {
             transform: Transform::default(),
-            vertices,
+            _vertices: vertices,
             array: vao,
             indices,
         })
     }
 
-    pub fn uv_sphere(radius: f32, nlon: usize, nlat: usize) -> Result<Self> {
+    pub fn reset_transform(&mut self) {
+        self.transform = Transform::default();
+    }
+
+    pub fn transformed(mut self, transform: Transform) -> Self {
+        self.transform = transform * self.transform;
+        self
+    }
+
+    pub fn draw(&self, program: &Program, framebuffer: &Framebuffer, wireframe: bool) -> Result<()> {
+        framebuffer
+            .draw_elements(program, &self.array, if wireframe {DrawMode::Lines} else {DrawMode::Triangles}, ..)
+            .context("Cannot draw mesh")?;
+        Ok(())
+    }
+
+    pub(crate) fn distance_to_camera(&self, camera: &crate::camera::Camera) -> FloatOrd<f32> {
+        FloatOrd(self.transform.position.distance(camera.transform.position))
+    }
+}
+
+pub struct MeshBuilder<Vertex, Ctor> {
+    ctor: Ctor,
+    __phantom: PhantomData<Vertex>
+}
+
+impl<Vtx, Ctor> MeshBuilder<Vtx, Ctor> {
+    pub fn new(ctor: Ctor) -> Self { Self { ctor, __phantom: PhantomData } }
+}
+
+impl<Vertex: Pod + AsVertexAttributes, Ctor: Fn(Vec3, Vec3, Vec2) -> Vertex> MeshBuilder<Vertex, Ctor> {
+
+    pub fn uv_sphere(&self, radius: f32, nlon: usize, nlat: usize) -> Result<Mesh<Vertex>> {
         use std::f32::consts::*;
         let mut vertices = Vec::with_capacity(nlon * nlat + 2);
         let num_triangles = nlon * nlat * 2;
@@ -72,11 +95,7 @@ impl Mesh {
         let lat_step = PI / (nlat - 1) as f32;
         let lon_step = TAU / (nlon - 1) as f32;
 
-        vertices.push(Vertex {
-            position: Vec3::Y,
-            uv: vec2(0.5, 1.0),
-            normal: Vec3::Y,
-        });
+        vertices.push((self.ctor)(Vec3::Y, Vec3::Y, vec2(0.5, 1.)));
         for j in 1..nlat {
             let phi = FRAC_PI_2 - j as f32 * lat_step;
             for i in 0..nlon {
@@ -86,18 +105,10 @@ impl Mesh {
                 let normal = vec3(cphi * cth, sphi, cphi * sth);
                 let position = normal * radius;
                 let uv = vec2(i as f32 / nlon as f32, 1. - j as f32 / nlat as f32);
-                vertices.push(Vertex {
-                    position,
-                    normal,
-                    uv,
-                })
+                vertices.push((self.ctor)(position, normal, uv));
             }
         }
-        vertices.push(Vertex {
-            position: -Vec3::Y,
-            uv: vec2(0.5, 0.0),
-            normal: -Vec3::Y,
-        });
+        vertices.push((self.ctor)(-Vec3::Y, -Vec3::Y, vec2(0.5, 0.0)));
 
         // Indices: first row connected to north pole
         for i in 0..nlon {
@@ -126,27 +137,6 @@ impl Mesh {
             indices.extend([last_idx, bottom_row + i, bottom_row + i + 1]);
         }
 
-        Self::new(vertices, indices.into_iter().map(|i| i as u32))
-    }
-
-    pub fn reset_transform(&mut self) {
-        self.transform = Transform::default();
-    }
-
-    pub fn transformed(mut self, transform: Transform) -> Self {
-        self.transform = transform * self.transform;
-        self
-    }
-
-    pub fn draw(&self, program: &Program, framebuffer: &Framebuffer, wireframe: bool) -> Result<()> {
-        self.indices.bind();
-        framebuffer
-            .draw_elements(program, &self.array, if wireframe {DrawMode::Lines} else {DrawMode::TrianglesList}, ..)
-            .context("Cannot draw mesh")?;
-        Ok(())
-    }
-
-    pub(crate) fn distance_to_camera(&self, camera: &crate::camera::Camera) -> FloatOrd<f32> {
-        FloatOrd(self.transform.position.distance(camera.transform.position))
+        Mesh::new(vertices, indices.into_iter().map(|i| i as u32))
     }
 }

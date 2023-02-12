@@ -2,6 +2,7 @@
 name = "m2-opengl"
 version = "0.1.0"
 edition = "2021"
+default-run = "uv_sphere"
 
 [workspace]
 members = ["violette/violette-low"]

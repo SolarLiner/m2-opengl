@@ -16,7 +16,7 @@ use violette_low::{
 };
 
 use crate::{
-    camera::Camera, material::Material, mesh::Mesh,
+    camera::Camera, material::{Material, Vertex}, mesh::Mesh,
     screen_draw::ScreenDraw,
 };
 use crate::light::LightBuffer;
@@ -126,7 +126,7 @@ impl GeometryBuffers {
         &mut self,
         camera: &Camera,
         material: &Material,
-        meshes: &mut [Mesh],
+        meshes: &mut [Mesh<Vertex>],
     ) -> Result<()> {
         self.fbo.enable_buffers([0, 1, 2, 3])?;
         self.pos.with_binding(|| self.albedo.with_binding(|| self.normal.with_binding(|| self.rough_metal.with_binding(|| material.draw_meshes(&self.fbo, camera, meshes)))))?;

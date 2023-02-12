@@ -7,6 +7,7 @@ use std::{
 use either::Either;
 use eyre::{Context, ContextCompat, Result};
 
+use glam::{Vec3, Vec2};
 use violette_low::{
     framebuffer::ClearBuffer,
     framebuffer::Framebuffer,
@@ -14,10 +15,26 @@ use violette_low::{
     program::{Program, Uniform, UniformLocation},
     shader::Shader,
     shader::VertexShader,
-    texture::{Texture, TextureUnit},
+    texture::{Texture, TextureUnit}, vertex::AsVertexAttributes,
 };
 
 use crate::{camera::Camera, mesh::Mesh};
+
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[repr(C)]
+pub struct Vertex {
+    pub position: Vec3,
+    pub normal: Vec3,
+    pub uv: Vec2,
+}
+
+impl Vertex {
+    pub fn new(position: Vec3, normal: Vec3, uv: Vec2) -> Self { Self { position, normal, uv } }
+}
+
+impl AsVertexAttributes for Vertex {
+    type Attr = (Vec3, Vec3, Vec2);
+}
 
 pub enum TextureSlot<const N: usize> {
     Texture(Texture<[f32; N]>),
@@ -186,14 +203,12 @@ impl Material {
         &self,
         framebuffer: &Framebuffer,
         camera: &Camera,
-        meshes: &mut [Mesh],
+        meshes: &mut [Mesh<Vertex>],
     ) -> Result<()> {
         let mut ordering = (0..meshes.len()).collect::<Vec<_>>();
         ordering.sort_by_cached_key(|ix| meshes[*ix].distance_to_camera(camera));
         let mat_view_proj = camera.projection.matrix() * camera.transform.matrix();
         self.program.set_uniform(self.uniform_view_proj, mat_view_proj)?;
-        framebuffer.do_clear(ClearBuffer::DEPTH).unwrap();
-
 
         let unit_color = self.color_slot.as_uniform(0)?;
         if let (Some(normal_map), Some(uniform_normal)) = (&self.normal_map, self.uniform_normal) {

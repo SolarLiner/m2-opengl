@@ -70,7 +70,7 @@ impl ScreenDraw {
     pub fn draw(&mut self, framebuffer: &Framebuffer) -> Result<()> {
         SCREEN_INDEX_BUFFER.bind();
         framebuffer.disable_features(FramebufferFeatureId::DEPTH_TEST)?;
-        framebuffer.draw_elements(&self.program, &*SCREEN_VAO, DrawMode::TrianglesList, ..)?;
+        framebuffer.draw_elements(&self.program, &*SCREEN_VAO, DrawMode::Triangles, ..)?;
         Ok(())
     }
 }

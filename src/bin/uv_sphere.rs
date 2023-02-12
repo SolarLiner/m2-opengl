@@ -7,7 +7,7 @@ use winit::{
     event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
 };
 
-use m2_opengl::material::TextureSlot::Color;
+use m2_opengl::{material::{TextureSlot::Color, Vertex}, mesh::MeshBuilder};
 use m2_opengl::{
     camera::{Camera, Projection},
     gbuffers::GeometryBuffers,
@@ -34,7 +34,7 @@ enum DebugTexture {
 
 struct App {
     camera: Camera,
-    mesh: Mesh,
+    mesh: Mesh<Vertex>,
     lights: LightBuffer,
     geom_pass: GeometryBuffers,
     material: Material,
@@ -47,7 +47,7 @@ struct App {
 impl Application for App {
     #[tracing::instrument(target = "App::new")]
     fn new(size: PhysicalSize<f32>) -> Result<Self> {
-        let mesh = Mesh::uv_sphere(1.0, 32, 32)?;
+        let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 32)?;
         let material =
             Material::create([0.8, 0.9, 1.0], None, [0.8, 0.0])?.with_normal_amount(0.2)?;
         let lights = GpuLight::create_buffer([
@@ -141,28 +141,29 @@ impl Application for App {
 
     #[tracing::instrument(target = "App::render", skip_all)]
     fn render(&mut self) {
+        let frame = &*Framebuffer::backbuffer();
+        frame.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH).unwrap();
         // 2-pass rendering: Fill up the G-Buffers
-        self.geom_pass.draw_meshes(&self.camera, &mut self.material, std::array::from_mut(&mut self.mesh)).unwrap();
+        self.geom_pass.draw_meshes(&self.camera, &self.material, std::array::from_mut(&mut self.mesh)).unwrap();
 
         // 2-pass rendering: Perform defferred shading and draw to screen
-        let bb = &*Framebuffer::backbuffer();
         match self.debug_mode {
             None => {
                 self.geom_pass
-                    .draw_screen(bb, &self.camera, &self.lights)
+                    .draw_screen(frame, &self.camera, &self.lights)
                     .context("Cannot draw to screen")
             }
             Some(DebugTexture::Position) => {
-                self.geom_pass.debug_position(bb).context("Cannot draw to screen")
+                self.geom_pass.debug_position(frame).context("Cannot draw to screen")
             }
             Some(DebugTexture::Albedo) => {
-                self.geom_pass.debug_albedo(bb).context("Cannot draw to screen")
+                self.geom_pass.debug_albedo(frame).context("Cannot draw to screen")
             }
             Some(DebugTexture::Normal) => {
-                self.geom_pass.debug_normal(bb).context("Cannot draw to screen")
+                self.geom_pass.debug_normal(frame).context("Cannot draw to screen")
             }
             Some(DebugTexture::RoughMetal) => {
-                self.geom_pass.debug_rough_metal(bb).context("Cannot draw to screen")
+                self.geom_pass.debug_rough_metal(frame).context("Cannot draw to screen")
             }
         }.unwrap()
     }
