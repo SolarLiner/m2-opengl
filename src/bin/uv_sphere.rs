@@ -7,7 +7,7 @@ use winit::{
     event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
 };
 
-use m2_opengl::{material::{TextureSlot::Color, Vertex}, mesh::MeshBuilder};
+use m2_opengl::{material::{Vertex}, mesh::MeshBuilder};
 use m2_opengl::{
     camera::{Camera, Projection},
     gbuffers::GeometryBuffers,
@@ -19,9 +19,7 @@ use m2_opengl::{
     Application,
 };
 use violette_low::{
-    base::resource::ResourceExt,
     framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer, FramebufferFeature},
-    texture::Texture,
     Cull,
 };
 

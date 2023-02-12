@@ -6,9 +6,6 @@ use glam::{vec2, vec3, Vec2, Vec3};
 use eyre::{Context, Result};
 
 use violette_low::{
-    base::{
-        resource::ResourceExt
-    },
     buffer::{
         Buffer,
     },
@@ -18,7 +15,7 @@ use violette_low::{
         VertexArray
     }
 };
-use violette_low::base::resource::Resource;
+
 use violette_low::buffer::{ArrayBuffer, ElementBuffer};
 use violette_low::framebuffer::Framebuffer;
 use violette_low::program::Program;

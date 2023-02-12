@@ -43,10 +43,10 @@ pub trait Application: Sized + Send + Sync {
         wb
     }
     fn new(size: PhysicalSize<f32>) -> Result<Self>;
-    fn resize(&mut self, size: PhysicalSize<u32>) {}
-    fn interact(&mut self, event: WindowEvent) {}
+    fn resize(&mut self, _size: PhysicalSize<u32>) {}
+    fn interact(&mut self, _event: WindowEvent) {}
     /// /!\ Does not run on the main thread. OpenGL calls are unsafe here.
-    fn tick(&mut self, dt: Duration) {}
+    fn tick(&mut self, _dt: Duration) {}
     fn render(&mut self);
 }
 

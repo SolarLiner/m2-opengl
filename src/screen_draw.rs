@@ -1,7 +1,7 @@
 use std::{ops, path::Path};
 
 use eyre::{Context, Result};
-use once_cell::unsync::Lazy;
+use once_cell::sync::Lazy;
 
 use violette_low::{
     buffer::{
@@ -15,12 +15,11 @@ use violette_low::{
         VertexArray,
     },
 };
-use violette_low::base::resource::Resource;
 use violette_low::framebuffer::Framebuffer;
 
 const INDICES: [u32; 6] = [/* Face 1: */ 0, 2, 1, /* Face 2: */ 0, 3, 2];
-const SCREEN_INDEX_BUFFER: Lazy<ElementBuffer<u32>> = Lazy::new(|| Buffer::with_data(&INDICES).unwrap());
-const SCREEN_VAO: Lazy<VertexArray> = Lazy::new(|| {
+static SCREEN_INDEX_BUFFER: Lazy<ElementBuffer<u32>> = Lazy::new(|| Buffer::with_data(&INDICES).unwrap());
+static SCREEN_VAO: Lazy<VertexArray> = Lazy::new(|| {
     let mut vao = VertexArray::new();
     vao.with_element_buffer(&*SCREEN_INDEX_BUFFER).unwrap();
     vao
@@ -68,9 +67,8 @@ impl ScreenDraw {
     #[allow(const_item_mutation)]
     #[tracing::instrument(skip_all)]
     pub fn draw(&mut self, framebuffer: &Framebuffer) -> Result<()> {
-        SCREEN_INDEX_BUFFER.bind();
         framebuffer.disable_features(FramebufferFeatureId::DEPTH_TEST)?;
-        framebuffer.draw_elements(&self.program, &*SCREEN_VAO, DrawMode::Triangles, ..)?;
+        framebuffer.draw_elements(&self.program, &SCREEN_VAO, DrawMode::Triangles, ..)?;
         Ok(())
     }
 }

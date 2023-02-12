@@ -18,7 +18,7 @@ struct TriangleApp {
 }
 
 impl Application for TriangleApp {
-    fn new(size: winit::dpi::PhysicalSize<f32>) -> Result<Self> {
+    fn new(_size: winit::dpi::PhysicalSize<f32>) -> Result<Self> {
         let vert_shader = VertexShader::load("assets/shaders_old/triangle.vert.glsl")?;
         let frag_shader = FragmentShader::load("assets/shaders_old/triangle.frag.glsl")?;
         let mat_program = Program::new()

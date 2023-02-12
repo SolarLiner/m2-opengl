@@ -9,7 +9,6 @@ use eyre::{Context, ContextCompat, Result};
 
 use glam::{Vec3, Vec2};
 use violette_low::{
-    framebuffer::ClearBuffer,
     framebuffer::Framebuffer,
     gl,
     program::{Program, Uniform, UniformLocation},
