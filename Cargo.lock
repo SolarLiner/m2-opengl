@@ -1223,6 +1223,7 @@ dependencies = [
  "image",
  "num-derive",
  "num-traits",
+ "once_cell",
  "rand",
  "raw-window-handle 0.5.0",
  "tracing",

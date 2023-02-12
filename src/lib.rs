@@ -5,17 +5,19 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::Context;
-use glutin::surface::{SurfaceAttributesBuilder, WindowSurface};
-use glutin::{config::Api, display::GetGlDisplay};
+use eyre::{Context, eyre, Result};
 use glutin::{
-    config::ConfigTemplateBuilder,
+    surface::{SurfaceAttributesBuilder, WindowSurface},
+    config::{
+        Api,
+        ConfigTemplateBuilder
+    },
     context::{ContextApi, ContextAttributesBuilder, Version},
-    prelude::*,
+    prelude::*
 };
+use glutin::display::GetGlDisplay;
 use glutin_winit::DisplayBuilder;
 use raw_window_handle::HasRawWindowHandle;
-// use tracing::Event;
 use tracing_subscriber::{
     fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
 };
@@ -40,15 +42,15 @@ pub trait Application: Sized + Send + Sync {
     fn window_features(wb: WindowBuilder) -> WindowBuilder {
         wb
     }
-    fn new(size: PhysicalSize<f32>) -> anyhow::Result<Self>;
-    fn resize(&mut self, size: PhysicalSize<u32>);
-    fn interact(&mut self, event: WindowEvent);
+    fn new(size: PhysicalSize<f32>) -> Result<Self>;
+    fn resize(&mut self, size: PhysicalSize<u32>) {}
+    fn interact(&mut self, event: WindowEvent) {}
     /// /!\ Does not run on the main thread. OpenGL calls are unsafe here.
-    fn tick(&mut self, dt: Duration);
+    fn tick(&mut self, dt: Duration) {}
     fn render(&mut self);
 }
 
-pub fn run<App: 'static + Application>(title: &str) -> anyhow::Result<()> {
+pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
     color_eyre::install()?;
     let fmt_layer = tracing_subscriber::fmt::Layer::default()
         .pretty()
@@ -97,7 +99,7 @@ pub fn run<App: 'static + Application>(title: &str) -> anyhow::Result<()> {
                 .find(|config| config.api().contains(Api::OPENGL) && config.depth_size() >= 24)
                 .expect("Couldn't find a suitable OpenGL configuration")
         })
-        .map_err(|err| anyhow::anyhow!("Cannot create OpenGL configuration & window: {}", err))?;
+        .map_err(|err| eyre!("Cannot create OpenGL configuration & window: {}", err))?;
     let window = window.expect("No window despite configuration");
     tracing::debug!(message="Using config", api=?gl_config.api(), depth_size=%gl_config.depth_size());
 
@@ -213,7 +215,7 @@ pub fn run<App: 'static + Application>(title: &str) -> anyhow::Result<()> {
                 tracing::debug!(%frame_time);
                 next_frame_time = frame_start + Duration::from_nanos(16_666_667);
             }
-            winit::event::Event::WindowEvent { event, .. } => match event {
+            Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested
                 | WindowEvent::KeyboardInput {
                     input:
@@ -253,5 +255,4 @@ pub fn run<App: 'static + Application>(title: &str) -> anyhow::Result<()> {
             _ => {}
         }
     });
-    Ok(())
 }

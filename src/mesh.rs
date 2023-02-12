@@ -1,23 +1,24 @@
-use anyhow::Context;
 use float_ord::FloatOrd;
 use glam::{vec2, vec3, Vec2, Vec3};
+use eyre::{Context, Result};
 
 use violette_low::{
     base::{
-        GlType,
-        bindable::BindableExt
+        resource::ResourceExt
     },
     buffer::{
         Buffer,
-        BufferKind
     },
-    framebuffer::BoundFB,
     vertex::{
         DrawMode,
         AsVertexAttributes,
         VertexArray
     }
 };
+use violette_low::base::resource::Resource;
+use violette_low::buffer::{ArrayBuffer, ElementBuffer};
+use violette_low::framebuffer::Framebuffer;
+use violette_low::program::Program;
 
 use crate::transform::Transform;
 
@@ -36,30 +37,33 @@ impl AsVertexAttributes for Vertex {
 #[derive(Debug)]
 pub struct Mesh {
     pub transform: Transform,
+    vertices: ArrayBuffer<Vertex>,
     array: VertexArray,
-    indices: Buffer<u32>,
+    indices: ElementBuffer<u32>,
 }
 
 impl Mesh {
     pub fn new(
         vertices: impl IntoIterator<Item = Vertex>,
         indices: impl IntoIterator<Item = u32>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self> {
         let vertices = vertices.into_iter().collect::<Vec<_>>();
-        let vertices = Buffer::with_data(BufferKind::Array, &vertices)?;
+        let vertices = Buffer::with_data(&vertices)?;
         let indices = indices.into_iter().collect::<Vec<_>>();
-        let indices = Buffer::with_data(BufferKind::ElementArray, &indices)?;
+        let indices = Buffer::with_data(&indices)?;
 
         let mut vao = VertexArray::new();
-        vao.with_binding(|vao| vao.with_vertex_buffer(vertices))?;
+        vao.with_vertex_buffer(&vertices)?;
+        vao.with_element_buffer(&indices)?;
         Ok(Self {
             transform: Transform::default(),
+            vertices,
             array: vao,
             indices,
         })
     }
 
-    pub fn uv_sphere(radius: f32, nlon: usize, nlat: usize) -> anyhow::Result<Self> {
+    pub fn uv_sphere(radius: f32, nlon: usize, nlat: usize) -> Result<Self> {
         use std::f32::consts::*;
         let mut vertices = Vec::with_capacity(nlon * nlat + 2);
         let num_triangles = nlon * nlat * 2;
@@ -134,20 +138,10 @@ impl Mesh {
         self
     }
 
-    pub fn draw(&mut self, framebuffer: &mut BoundFB) -> anyhow::Result<()> {
-        let mut _vaobind = self.array.bind()?;
-        let ibuf_binding = self.indices.bind()?;
+    pub fn draw(&self, program: &Program, framebuffer: &Framebuffer, wireframe: bool) -> Result<()> {
+        self.indices.bind();
         framebuffer
-            .draw_elements(&mut _vaobind, &ibuf_binding, DrawMode::TrianglesList, ..)
-            .context("Cannot draw mesh")?;
-        Ok(())
-    }
-
-    pub fn wireframe(&mut self, framebuffer: &mut BoundFB) -> anyhow::Result<()> {
-        let mut _vaobind = self.array.bind()?;
-        let ibuf_binding = self.indices.bind()?;
-        framebuffer
-            .draw_elements(&mut _vaobind, &ibuf_binding, DrawMode::Lines, ..)
+            .draw_elements(program, &self.array, if wireframe {DrawMode::Lines} else {DrawMode::TrianglesList}, ..)
             .context("Cannot draw mesh")?;
         Ok(())
     }

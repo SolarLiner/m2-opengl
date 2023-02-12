@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::Context;
+use eyre::{Context, Result};
 use glam::{vec3, Quat, Vec2, Vec3};
 use winit::{
     dpi::PhysicalSize,
@@ -19,7 +19,7 @@ use m2_opengl::{
     Application,
 };
 use violette_low::{
-    base::bindable::BindableExt,
+    base::resource::ResourceExt,
     framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer, FramebufferFeature},
     texture::Texture,
     Cull,
@@ -46,7 +46,7 @@ struct App {
 
 impl Application for App {
     #[tracing::instrument(target = "App::new")]
-    fn new(size: PhysicalSize<f32>) -> anyhow::Result<Self> {
+    fn new(size: PhysicalSize<f32>) -> Result<Self> {
         let mesh = Mesh::uv_sphere(1.0, 32, 32)?;
         let material =
             Material::create([0.8, 0.9, 1.0], None, [0.8, 0.0])?.with_normal_amount(0.2)?;
@@ -72,7 +72,6 @@ impl Application for App {
         geom_pass.set_exposure(0.06);
         geom_pass
             .framebuffer()
-            .bind()?
             .set_feature(FramebufferFeature::DepthTest(DepthTestFunction::Less))?;
         let rot_target = camera.transform.rotation;
         violette_low::culling(Some(Cull::Back));
@@ -93,8 +92,6 @@ impl Application for App {
         self.camera.projection.update(size.cast());
         self.geom_pass.resize(size).unwrap();
         Framebuffer::backbuffer()
-            .bind()
-            .unwrap()
             .viewport(0, 0, size.width as _, size.height as _);
     }
 
@@ -148,36 +145,29 @@ impl Application for App {
         self.geom_pass.draw_meshes(&self.camera, &mut self.material, std::array::from_mut(&mut self.mesh)).unwrap();
 
         // 2-pass rendering: Perform defferred shading and draw to screen
-        Framebuffer::backbuffer()
-            .with_binding(|bb| {
-                // bb.clear_color([0., 0., 0., 1.]);
-                // bb.clear_depth(1.0);
-                // bb.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
-                match self.debug_mode {
-                    None => {
-                        let mut lightbuf = self.lights.bind().unwrap();
-                        self.geom_pass
-                            .draw_screen(bb, &self.camera, &mut lightbuf)
-                            .context("Cannot draw to screen")
-                    }
-                    Some(DebugTexture::Position) => {
-                        self.geom_pass.debug_position(bb).context("Cannot draw to screen")
-                    }
-                    Some(DebugTexture::Albedo) => {
-                        self.geom_pass.debug_albedo(bb).context("Cannot draw to screen")
-                    }
-                    Some(DebugTexture::Normal) => {
-                        self.geom_pass.debug_normal(bb).context("Cannot draw to screen")
-                    }
-                    Some(DebugTexture::RoughMetal) => {
-                        self.geom_pass.debug_rough_metal(bb).context("Cannot draw to screen")
-                    }
-                }
-            })
-            .unwrap();
+        let bb = &*Framebuffer::backbuffer();
+        match self.debug_mode {
+            None => {
+                self.geom_pass
+                    .draw_screen(bb, &self.camera, &self.lights)
+                    .context("Cannot draw to screen")
+            }
+            Some(DebugTexture::Position) => {
+                self.geom_pass.debug_position(bb).context("Cannot draw to screen")
+            }
+            Some(DebugTexture::Albedo) => {
+                self.geom_pass.debug_albedo(bb).context("Cannot draw to screen")
+            }
+            Some(DebugTexture::Normal) => {
+                self.geom_pass.debug_normal(bb).context("Cannot draw to screen")
+            }
+            Some(DebugTexture::RoughMetal) => {
+                self.geom_pass.debug_rough_metal(bb).context("Cannot draw to screen")
+            }
+        }.unwrap()
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<()> {
     m2_opengl::run::<App>("UV Sphere")
 }

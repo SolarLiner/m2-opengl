@@ -1,53 +1,32 @@
-use std::{path::Path, ops};
+use std::{ops, path::Path};
 
-use anyhow::Context;
-use glam::{vec2, Vec2};
+use eyre::{Context, Result};
+use once_cell::unsync::Lazy;
 
 use violette_low::{
-    base::bindable::BindableExt,
-    buffer::{Buffer, BufferKind},
-    framebuffer::{BoundFB, FramebufferFeature::DepthTest, DepthTestFunction::Always, FramebufferFeatureId},
-    program::{Linked, Program},
-    program::{Uniform, UniformLocation},
-    vertex::DrawMode,
-    vertex::{AsVertexAttributes, VertexArray},
+    buffer::{
+        Buffer,
+        ElementBuffer,
+    },
+    framebuffer::{FramebufferFeatureId},
+    program::Program,
+    vertex::{
+        DrawMode,
+        VertexArray,
+    },
 };
-
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-#[repr(C)]
-struct Vertex {
-    pos: Vec2,
-    uv: Vec2,
-}
-
-impl AsVertexAttributes for Vertex {
-    type Attr = (Vec2, Vec2);
-}
-
-const VERTICES: [Vertex; 4] = [
-    Vertex {
-        pos: vec2(-1., -1.),
-        uv: vec2(0., 0.),
-    },
-    Vertex {
-        pos: vec2(-1., 1.),
-        uv: vec2(0., 1.),
-    },
-    Vertex {
-        pos: vec2(1., 1.),
-        uv: vec2(1., 1.),
-    },
-    Vertex {
-        pos: vec2(1., -1.),
-        uv: vec2(1., 0.),
-    },
-];
+use violette_low::base::resource::Resource;
+use violette_low::framebuffer::Framebuffer;
 
 const INDICES: [u32; 6] = [/* Face 1: */ 0, 2, 1, /* Face 2: */ 0, 3, 2];
+const SCREEN_INDEX_BUFFER: Lazy<ElementBuffer<u32>> = Lazy::new(|| Buffer::with_data(&INDICES).unwrap());
+const SCREEN_VAO: Lazy<VertexArray> = Lazy::new(|| {
+    let mut vao = VertexArray::new();
+    vao.with_element_buffer(&*SCREEN_INDEX_BUFFER).unwrap();
+    vao
+});
 
 pub struct ScreenDraw {
-    vao: VertexArray,
-    indices: Buffer<u32>,
     program: Program,
 }
 
@@ -66,24 +45,18 @@ impl ops::DerefMut for ScreenDraw {
 }
 
 impl ScreenDraw {
-    pub fn new(shader_source: &str) -> anyhow::Result<Self> {
+    pub fn new(shader_source: &str) -> Result<Self> {
         let program = Program::from_sources(
-            &std::fs::read_to_string("assets/shaders/noop.vert.glsl")?,
+            &std::fs::read_to_string("assets/shaders/screen.vert.glsl")?,
             Some(shader_source),
             None,
         ).context("Could not compile OpenGL shader program")?;
-        let indices = Buffer::with_data(BufferKind::ElementArray, &INDICES)?;
-        let mut vao = VertexArray::new();
-        vao.bind()?
-            .with_vertex_buffer(Buffer::with_data(BufferKind::Array, &VERTICES)?)?;
         Ok(Self {
-            vao,
-            indices,
             program,
         })
     }
 
-    pub fn load(file: impl AsRef<Path>) -> anyhow::Result<Self> {
+    pub fn load(file: impl AsRef<Path>) -> Result<Self> {
         let filename = file.as_ref().display().to_string();
         Self::new(
             std::fs::read_to_string(file)
@@ -92,13 +65,12 @@ impl ScreenDraw {
         )
     }
 
+    #[allow(const_item_mutation)]
     #[tracing::instrument(skip_all)]
-    pub fn draw(&mut self, framebuffer: &mut BoundFB) -> anyhow::Result<()> {
-        let _progbind = self.program.bind()?;
-        let mut _vaobind = self.vao.bind()?;
-        let idx_binding = self.indices.bind()?;
+    pub fn draw(&mut self, framebuffer: &Framebuffer) -> Result<()> {
+        SCREEN_INDEX_BUFFER.bind();
         framebuffer.disable_features(FramebufferFeatureId::DEPTH_TEST)?;
-        framebuffer.draw_elements(&mut _vaobind, &idx_binding, DrawMode::TrianglesList, ..)?;
+        framebuffer.draw_elements(&self.program, &*SCREEN_VAO, DrawMode::TrianglesList, ..)?;
         Ok(())
     }
 }

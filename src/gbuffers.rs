@@ -1,40 +1,25 @@
-use anyhow::Context;
+use eyre::{Context, Result};
 use winit::dpi::PhysicalSize;
 
 use violette_low::{
-    base::bindable::BindableExt,
-    framebuffer::{Blend, BoundFB, ClearBuffer, Framebuffer, FramebufferFeature},
+    base::resource::ResourceExt,
+    framebuffer::{
+        Blend,
+        ClearBuffer,
+        Framebuffer,
+        FramebufferFeature,
+        DepthTestFunction,
+        FramebufferFeatureId
+    },
     program::{UniformBlockIndex, UniformLocation},
     texture::{DepthStencil, Dimension, SampleMode, Texture},
 };
 
 use crate::{
-    camera::Camera, light::BoundLightBuffer, material::Material, mesh::Mesh,
+    camera::Camera, material::Material, mesh::Mesh,
     screen_draw::ScreenDraw,
 };
-
-macro_rules! resize_texture {
-    ($size:expr, $this:ident :: $($param:ident)*) => {
-        $($this.$param.bind()?.clear_resize($size.width, $size.height, 1)?);*
-    };
-}
-
-macro_rules! bind_texture {
-    ($($texture:expr),*) => {
-        $(
-        let _texture_bind = $texture.bind()?;
-        )*
-    };
-    ($program:expr, $($location:expr , $i:literal => $texture:expr);*) => {
-        $program.with_binding(|program| {
-            $(
-                program.set_uniform($location, $texture.as_uniform($i)?)?;
-            )*
-            Ok(())
-        })?;
-        bind_texture!($($texture),*);
-    };
-}
+use crate::light::LightBuffer;
 
 pub struct GeometryBuffers {
     screen_pass: ScreenDraw,
@@ -57,60 +42,43 @@ pub struct GeometryBuffers {
 }
 
 impl GeometryBuffers {
-    pub fn new(size: PhysicalSize<u32>) -> anyhow::Result<Self> {
+    pub fn new(size: PhysicalSize<u32>) -> Result<Self> {
         let mut pos = Texture::new(size.width, size.height, 1, Dimension::D2);
-        pos.with_binding(|pos| {
             pos.filter_min(SampleMode::Linear)?;
             pos.filter_mag(SampleMode::Linear)?;
-            pos.reserve_memory()
-        })?;
+            pos.reserve_memory()?;
 
         let mut albedo = Texture::new(size.width, size.height, 1, Dimension::D2);
-        albedo.with_binding(|tex| {
-            tex.filter_min(SampleMode::Linear)?;
-            tex.filter_mag(SampleMode::Linear)?;
-            tex.reserve_memory()
-        })?;
+        albedo.filter_min(SampleMode::Linear)?;
+        albedo.filter_mag(SampleMode::Linear)?;
+        albedo.reserve_memory()?;
 
         let mut normal = Texture::new(size.width, size.height, 1, Dimension::D2);
-        normal.with_binding(|normal| {
-            normal.filter_min(SampleMode::Linear)?;
-            normal.filter_mag(SampleMode::Linear)?;
-            normal.reserve_memory()
-        })?;
+        normal.filter_min(SampleMode::Linear)?;
+        normal.filter_mag(SampleMode::Linear)?;
+        normal.reserve_memory()?;
 
         let mut rough_metal = Texture::new(size.width, size.height, 1, Dimension::D2);
-        rough_metal.with_binding(|normal| {
-            normal.filter_min(SampleMode::Linear)?;
-            normal.filter_mag(SampleMode::Linear)?;
-            normal.reserve_memory()
-        })?;
-
-        // let mut out_color = Texture::new(size.width, size.height, 1, Dimension::D2);
-        // out_color.with_binding(|tex| {
-        //     tex.filter_min(SampleMode::Linear)?;
-        //     tex.filter_mag(SampleMode::Linear)?;
-        //     tex.reserve_memory()
-        // })?;
+        rough_metal.filter_min(SampleMode::Linear)?;
+        rough_metal.filter_mag(SampleMode::Linear)?;
+        rough_metal.reserve_memory()?;
 
         let mut out_depth = Texture::new(size.width, size.height, 1, Dimension::D2);
-        out_depth.with_binding(|tex| {
-            tex.filter_min(SampleMode::Linear)?;
-            tex.filter_mag(SampleMode::Linear)?;
-            tex.reserve_memory()
-        })?;
+        out_depth.filter_min(SampleMode::Linear)?;
+        out_depth.filter_mag(SampleMode::Linear)?;
+        out_depth.reserve_memory()?;
 
         let mut fbo = Framebuffer::new();
-        fbo.with_binding(|fbo| {
-            fbo.attach_color(0, &pos)?;
-            fbo.attach_color(1, &albedo)?;
-            fbo.attach_color(2, &normal)?;
-            fbo.attach_color(3, &rough_metal)?;
-            fbo.attach_depth(&out_depth)?;
-            fbo.assert_complete()
-        })?;
+        fbo.attach_color(0, &pos)?;
+        fbo.attach_color(1, &albedo)?;
+        fbo.attach_color(2, &normal)?;
+        fbo.attach_color(3, &rough_metal)?;
+        fbo.attach_depth(&out_depth)?;
+        fbo.features(FramebufferFeatureId::DEPTH_TEST)?;
+        fbo.set_feature(FramebufferFeature::DepthTest(DepthTestFunction::Less))?;
+        fbo.assert_complete()?;
 
-        let mut screen_pass = ScreenDraw::load("assets/shaders/defferred.frag.glsl")
+        let screen_pass = ScreenDraw::load("assets/shaders/defferred.frag.glsl")
             .context("Cannot load screen shader pass")?;
         let debug_texture = ScreenDraw::load("assets/shaders/blit.frag.glsl")
             .context("Cannot load blit program")?;
@@ -130,7 +98,6 @@ impl GeometryBuffers {
             albedo,
             normal,
             rough_metal,
-            // out_color,
             out_depth,
             uniform_exposure,
             uniform_camera_pos,
@@ -158,85 +125,86 @@ impl GeometryBuffers {
     pub fn draw_meshes(
         &mut self,
         camera: &Camera,
-        material: &mut Material,
+        material: &Material,
         meshes: &mut [Mesh],
-    ) -> anyhow::Result<()> {
-        let mut fbo = self.fbo.bind()?;
-        fbo.enable_buffers([0, 1, 2, 3])?;
-        bind_texture!(self.pos, self.albedo, self.normal, self.rough_metal);
-        material.draw_meshes(&mut fbo, camera, meshes)?;
+    ) -> Result<()> {
+        self.fbo.enable_buffers([0, 1, 2, 3])?;
+        self.pos.with_binding(|| self.albedo.with_binding(|| self.normal.with_binding(|| self.rough_metal.with_binding(|| material.draw_meshes(&self.fbo, camera, meshes)))))?;
 
         Ok(())
     }
 
-    pub fn debug_position(&mut self, frame: &mut BoundFB) -> anyhow::Result<()> {
-        let (_bind, unit) = self.pos.as_uniform(0)?;
-        self.debug_texture.bind()?.set_uniform(self.debug_uniform_in_texture, unit)?;
-        self.debug_texture.draw(frame)
+    pub fn debug_position(&mut self, frame: &Framebuffer) -> Result<()> {
+        let unit = self.pos.as_uniform(0)?;
+        self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
+        self.debug_texture.draw(frame)?;
+        Ok(())
     }
 
-    pub fn debug_albedo(&mut self, frame: &mut BoundFB) -> anyhow::Result<()> {
-        let (_bind, unit) = self.albedo.as_uniform(0)?;
-        self.debug_texture.bind()?.set_uniform(self.debug_uniform_in_texture, unit)?;
-        self.debug_texture.draw(frame)
+    pub fn debug_albedo(&mut self, frame: &Framebuffer) -> Result<()> {
+        let unit = self.albedo.as_uniform(0)?;
+        self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
+        self.debug_texture.draw(frame)?;
+        Ok(())
     }
 
-    pub fn debug_normal(&mut self, frame: &mut BoundFB) -> anyhow::Result<()> {
-        let (_bind, unit) = self.normal.as_uniform(0)?;
-        self.debug_texture.bind()?.set_uniform(self.debug_uniform_in_texture, unit)?;
-        self.debug_texture.draw(frame)
+    pub fn debug_normal(&mut self, frame: &Framebuffer) -> Result<()> {
+        let unit = self.normal.as_uniform(0)?;
+        self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
+        self.debug_texture.draw(frame)?;
+        Ok(())
     }
 
-    pub fn debug_rough_metal(&mut self, frame: &mut BoundFB) -> anyhow::Result<()> {
-        let (_bind, unit) = self.normal.as_uniform(0)?;
-        self.debug_texture.bind()?.set_uniform(self.debug_uniform_in_texture, unit)?;
-        self.debug_texture.draw(frame)
+    pub fn debug_rough_metal(&mut self, frame: &Framebuffer) -> Result<()> {
+        let unit = self.normal.as_uniform(0)?;
+        self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
+        self.debug_texture.draw(frame)?;
+        Ok(())
     }
 
     #[tracing::instrument(skip_all)]
     pub fn draw_screen(
         &mut self,
-        frame: &mut BoundFB,
+        frame: &Framebuffer,
         camera: &Camera,
-        lights: &mut BoundLightBuffer,
-    ) -> anyhow::Result<()> {
-        self.screen_pass.with_binding(|screen_program| {
-            screen_program.set_uniform(self.uniform_exposure, self.exposure)?;
-            screen_program.set_uniform(self.uniform_camera_pos, camera.transform.position)?;
-            Ok(())
-        })?;
+        lights: &LightBuffer,
+    ) -> Result<()> {
+        self.screen_pass.set_uniform(self.uniform_exposure, self.exposure)?;
+        self.screen_pass.set_uniform(self.uniform_camera_pos, camera.transform.position)?;
 
         frame.set_feature(FramebufferFeature::Blending(Blend::SrcAlpha, Blend::One))?; // Additive blending
+        frame.enable_features(FramebufferFeatureId::BLENDING)?;
+        frame.disable_features(FramebufferFeatureId::DEPTH_TEST)?;
         frame.do_clear(ClearBuffer::COLOR)?;
         if lights.is_empty() {
             return Ok(());
         }
 
-        let (_bind, unit_pos) = self.pos.as_uniform(0)?;
-        let (_bind, unit_albedo) = self.albedo.as_uniform(1)?;
-        let (_bind, unit_normal) = self.normal.as_uniform(2)?;
-        let (_bind, unit_rough_metal) = self.rough_metal.as_uniform(3)?;
-        self.screen_pass.with_binding(|prog| {
-            prog.set_uniform(self.uniform_frame_pos, unit_pos)?;
-            prog.set_uniform(self.uniform_frame_albedo, unit_albedo)?;
-            prog.set_uniform(self.uniform_frame_normal, unit_normal)?;
-            prog.set_uniform(self.uniform_frame_rough_metal, unit_rough_metal)?;
-            Ok(())
-        })?;
+        let unit_pos = self.pos.as_uniform(0)?;
+        let unit_albedo = self.albedo.as_uniform(1)?;
+        let unit_normal = self.normal.as_uniform(2)?;
+        let unit_rough_metal = self.rough_metal.as_uniform(3)?;
+        self.screen_pass.set_uniform(self.uniform_frame_pos, unit_pos)?;
+        self.screen_pass.set_uniform(self.uniform_frame_albedo, unit_albedo)?;
+        self.screen_pass.set_uniform(self.uniform_frame_normal, unit_normal)?;
+        self.screen_pass.set_uniform(self.uniform_frame_rough_metal, unit_rough_metal)?;
+
         for light_ix in 0..lights.len() {
             self.screen_pass
-                .bind()?
                 .bind_block(self.uniform_block_light, &lights.slice(light_ix..=light_ix))?;
             self.screen_pass.draw(frame)?;
         }
         Ok(())
     }
 
-    pub fn resize(&mut self, size: PhysicalSize<u32>) -> anyhow::Result<()> {
+    pub fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         self.fbo
-            .bind()?
             .viewport(0, 0, size.width as _, size.height as _);
-        resize_texture!(size, self::pos albedo normal rough_metal /* out_color */ out_depth);
+        self.pos.clear_resize(size.width, size.height, 1)?;
+        self.albedo.clear_resize(size.width, size.height, 1)?;
+        self.normal.clear_resize(size.width, size.height, 1)?;
+        self.rough_metal.clear_resize(size.width, size.height, 1)?;
+        self.out_depth.clear_resize(size.width, size.height, 1)?;
         Ok(())
     }
 }

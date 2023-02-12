@@ -1,11 +1,18 @@
-use anyhow::Context;
-use crevice::std140;
-use crevice::std140::AsStd140;
+use eyre::{Context, Result};
+use color_eyre::eyre;
+use crevice::{
+    std140::{
+        self,
+        AsStd140
+    }
+};
 use glam::Vec3;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use violette_low::buffer::{BoundBuffer, Buffer, BufferKind};
+use violette_low::{
+    buffer::{Buffer, UniformBuffer},
+};
 
 #[derive(Debug, Copy, Clone, FromPrimitive)]
 #[repr(u32)]
@@ -94,18 +101,17 @@ impl From<Light> for GpuLight {
 }
 
 impl GpuLight {
-    pub fn create_buffer(lights: impl IntoIterator<Item = Light>) -> anyhow::Result<LightBuffer> {
+    pub fn create_buffer(lights: impl IntoIterator<Item = Light>) -> Result<LightBuffer> {
         let data = lights
             .into_iter()
             .map(Self::from)
             .map(|v| v.as_std140())
             .collect::<Vec<_>>();
-        Buffer::with_data(BufferKind::Uniform, &data).context("Cannot create light buffer")
+        Buffer::with_data(&data).context("Cannot create light buffer")
     }
 }
 
-pub type LightBuffer = Buffer<<GpuLight as AsStd140>::Output>;
-pub type BoundLightBuffer<'a> = BoundBuffer<'a, <GpuLight as AsStd140>::Output>;
+pub type LightBuffer = UniformBuffer<<GpuLight as AsStd140>::Output>;
 
 fn from_std140vec3(v: std140::Vec3) -> Vec3 {
     Vec3::from([v.x, v.y, v.z])
