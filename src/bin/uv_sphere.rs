@@ -20,7 +20,7 @@ use m2_opengl::{
 };
 use violette_low::{
     framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer},
-    Cull,
+    Cull, texture::Texture,
 };
 
 enum DebugTexture {
@@ -48,7 +48,7 @@ impl Application for App {
     fn new(size: PhysicalSize<f32>) -> Result<Self> {
         let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 32)?;
         let material =
-            Material::create([0.8, 0.9, 1.0], None, [0.8, 0.0])?.with_normal_amount(0.2)?;
+            Material::create(Texture::load_rgb32f("assets/textures/moon_color.png")?, Texture::load_rgb32f("assets/textures/moon_normal.png")?, [0.8, 0.0])?.with_normal_amount(0.1)?;
         let lights = GpuLight::create_buffer([
             Light::Ambient { color: Vec3::ONE * 0.01 },
             Light::Directional {
@@ -70,7 +70,7 @@ impl Application for App {
         };
         let geom_pass = GeometryBuffers::new(size.cast())?;
         let post_process = Postprocess::new(size.cast())?;
-        post_process.set_exposure(0.1)?;
+        post_process.set_exposure(1e-3)?;
         post_process.framebuffer().clear_color([0., 0., 0., 1.])?;
         post_process.framebuffer().clear_depth(1.)?;
 

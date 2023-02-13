@@ -1,20 +1,17 @@
-use std::{
-    collections::BTreeSet,
-    ops::Not,
-    path::Path,
-};
+use std::{collections::BTreeSet, ops::Not, path::Path};
 
 use either::Either;
 use eyre::{Context, ContextCompat, Result};
 
-use glam::{Vec3, Vec2};
+use glam::{Vec2, Vec3};
 use violette_low::{
     framebuffer::Framebuffer,
     gl,
     program::{Program, Uniform, UniformLocation},
     shader::Shader,
     shader::VertexShader,
-    texture::{Texture, TextureUnit}, vertex::AsVertexAttributes,
+    texture::{Texture, TextureUnit},
+    vertex::AsVertexAttributes,
 };
 
 use crate::{camera::Camera, mesh::Mesh};
@@ -28,7 +25,13 @@ pub struct Vertex {
 }
 
 impl Vertex {
-    pub fn new(position: Vec3, normal: Vec3, uv: Vec2) -> Self { Self { position, normal, uv } }
+    pub fn new(position: Vec3, normal: Vec3, uv: Vec2) -> Self {
+        Self {
+            position,
+            normal,
+            uv,
+        }
+    }
 }
 
 impl AsVertexAttributes for Vertex {
@@ -55,8 +58,8 @@ impl<const N: usize> From<[f32; N]> for TextureSlot<N> {
 pub type TextureSlotUniform<const N: usize> = Either<[f32; N], TextureUnit>;
 
 impl<const N: usize> TextureSlot<N>
-    where
-        [f32; N]: Uniform,
+where
+    [f32; N]: Uniform,
 {
     pub fn as_uniform(&self, texture_unit: u32) -> Result<TextureSlotUniform<N>> {
         Ok(match self {
@@ -64,7 +67,7 @@ impl<const N: usize> TextureSlot<N>
                 let unit = texture.as_uniform(texture_unit)?;
                 Either::Right(unit)
             }
-            &Self::Color(color) => Either::Left(color)
+            &Self::Color(color) => Either::Left(color),
         })
     }
 }
@@ -97,9 +100,11 @@ impl ShaderBuilder {
             let first_line_index = source.find(first_line).unwrap();
             let rest_index = first_line_index + first_line.len();
             self.version_line.replace(first_line.to_string());
-            self.sources.push(format!("#line 2 {}\n{}", source_id, &source[rest_index..]));
+            self.sources
+                .push(format!("#line 2 {}\n{}", source_id, &source[rest_index..]));
         } else {
-            self.sources.push(format!("#line 1 {}\n{}", source_id, source));
+            self.sources
+                .push(format!("#line 1 {}\n{}", source_id, source));
         }
         Ok(())
     }
@@ -167,9 +172,12 @@ impl Material {
                 .build::<{ gl::FRAGMENT_SHADER }>()
                 .context("Cannot build material shader")?
         };
-        let program = Program::new().with_shader(vert_shader.id).with_shader(frag_shader.id).link()?;
+        let program = Program::new()
+            .with_shader(vert_shader.id)
+            .with_shader(frag_shader.id)
+            .link()?;
         let uniform_color = program.uniform("color").unwrap();
-        let uniform_normal = program.uniform("normal");
+        let uniform_normal = program.uniform("normal_map");
         let uniform_normal_amt = program.uniform("normal_amount");
         let uniform_rough_metal = program.uniform("rough_metal").unwrap();
         let uniform_view_proj = program.uniform("view_proj").unwrap();
@@ -207,19 +215,25 @@ impl Material {
         let mut ordering = (0..meshes.len()).collect::<Vec<_>>();
         ordering.sort_by_cached_key(|ix| meshes[*ix].distance_to_camera(camera));
         let mat_view_proj = camera.projection.matrix() * camera.transform.matrix();
-        self.program.set_uniform(self.uniform_view_proj, mat_view_proj)?;
+        self.program
+            .set_uniform(self.uniform_view_proj, mat_view_proj)?;
 
         if let (Some(normal_map), Some(uniform_normal)) = (&self.normal_map, self.uniform_normal) {
-            self.program.set_uniform(uniform_normal, normal_map.as_uniform(1)?)?;
+            self.program
+                .set_uniform(uniform_normal, normal_map.as_uniform(1)?)?;
         }
-        self.program.set_uniform(self.uniform_color, self.color_slot.as_uniform(0)?)?;
-        self.program.set_uniform(self.uniform_rough_metal, self.rough_metal.as_uniform(2)?)?;
+        self.program
+            .set_uniform(self.uniform_color, self.color_slot.as_uniform(0)?)?;
+        self.program
+            .set_uniform(self.uniform_rough_metal, self.rough_metal.as_uniform(2)?)?;
 
         for mesh_ix in ordering {
             let mesh = &meshes[mesh_ix];
-            self.program.set_uniform(self.uniform_model, mesh.transform.matrix())?;
+            self.program
+                .set_uniform(self.uniform_model, mesh.transform.matrix())?;
             mesh.draw(&self.program, framebuffer, false)?;
         }
+        unsafe { gl::BindTexture(gl::TEXTURE_2D, 0) }
         Ok(())
     }
 }

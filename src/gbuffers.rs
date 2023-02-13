@@ -154,7 +154,7 @@ impl GeometryBuffers {
     }
 
     pub fn debug_rough_metal(&mut self, frame: &Framebuffer) -> Result<()> {
-        let unit = self.normal.as_uniform(0)?;
+        let unit = self.rough_metal.as_uniform(0)?;
         self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
         Ok(())
