@@ -4,7 +4,7 @@ use eyre::{Context, Result};
 use winit::dpi::PhysicalSize;
 
 use violette_low::{
-    base::resource::{ResourceExt, Resource},
+    base::resource::{Resource},
     framebuffer::{
         Blend,
         ClearBuffer,
@@ -44,27 +44,27 @@ impl GeometryBuffers {
         let Some(width) = NonZeroU32::new(size.width) else { eyre::bail!("Zero width resize"); };
         let Some(height) = NonZeroU32::new(size.height) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();
-        let mut pos = Texture::new(width, height, nonzero_one, Dimension::D2);
+        let pos = Texture::new(width, height, nonzero_one, Dimension::D2);
             pos.filter_min(SampleMode::Linear)?;
             pos.filter_mag(SampleMode::Linear)?;
             pos.reserve_memory()?;
 
-        let mut albedo = Texture::new(width, height, nonzero_one, Dimension::D2);
+        let albedo = Texture::new(width, height, nonzero_one, Dimension::D2);
         albedo.filter_min(SampleMode::Linear)?;
         albedo.filter_mag(SampleMode::Linear)?;
         albedo.reserve_memory()?;
 
-        let mut normal = Texture::new(width, height, nonzero_one, Dimension::D2);
+        let normal = Texture::new(width, height, nonzero_one, Dimension::D2);
         normal.filter_min(SampleMode::Linear)?;
         normal.filter_mag(SampleMode::Linear)?;
         normal.reserve_memory()?;
 
-        let mut rough_metal = Texture::new(width, height, nonzero_one, Dimension::D2);
+        let rough_metal = Texture::new(width, height, nonzero_one, Dimension::D2);
         rough_metal.filter_min(SampleMode::Linear)?;
         rough_metal.filter_mag(SampleMode::Linear)?;
         rough_metal.reserve_memory()?;
 
-        let mut out_depth = Texture::new(width, height, nonzero_one, Dimension::D2);
+        let out_depth = Texture::new(width, height, nonzero_one, Dimension::D2);
         out_depth.filter_min(SampleMode::Linear)?;
         out_depth.filter_mag(SampleMode::Linear)?;
         out_depth.reserve_memory()?;

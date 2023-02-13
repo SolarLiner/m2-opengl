@@ -1,7 +1,7 @@
-use std::{num::NonZeroU32, ops::Add};
+use std::{num::NonZeroU32};
 
 use violette_low::{framebuffer::Framebuffer, texture::Texture, program::UniformLocation};
-use winit::{dpi::PhysicalSize, platform::unix::x11::ffi::Screen};
+use winit::{dpi::PhysicalSize};
 use eyre::Result;
 
 use crate::screen_draw::ScreenDraw;
