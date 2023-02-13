@@ -7,7 +7,7 @@ use winit::{
     event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
 };
 
-use m2_opengl::{material::{Vertex}, mesh::MeshBuilder};
+use m2_opengl::{material::{Vertex}, mesh::MeshBuilder, postprocess::Postprocess};
 use m2_opengl::{
     camera::{Camera, Projection},
     gbuffers::GeometryBuffers,
@@ -19,7 +19,7 @@ use m2_opengl::{
     Application,
 };
 use violette_low::{
-    framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer, FramebufferFeature},
+    framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer},
     Cull,
 };
 
@@ -35,6 +35,7 @@ struct App {
     mesh: Mesh<Vertex>,
     lights: LightBuffer,
     geom_pass: GeometryBuffers,
+    post_process: Postprocess,
     material: Material,
     dragging: bool,
     rot_target: Quat,
@@ -49,6 +50,7 @@ impl Application for App {
         let material =
             Material::create([0.8, 0.9, 1.0], None, [0.8, 0.0])?.with_normal_amount(0.2)?;
         let lights = GpuLight::create_buffer([
+            Light::Ambient { color: Vec3::ONE * 0.01 },
             Light::Directional {
                 dir: Vec3::X,
                 color: Vec3::ONE * 12.,
@@ -66,13 +68,23 @@ impl Application for App {
                 ..Default::default()
             },
         };
-        let mut geom_pass = GeometryBuffers::new(size.cast())?;
-        geom_pass.set_exposure(0.06);
-        geom_pass
-            .framebuffer()
-            .set_feature(FramebufferFeature::DepthTest(DepthTestFunction::Less))?;
+        let geom_pass = GeometryBuffers::new(size.cast())?;
+        let post_process = Postprocess::new(size.cast())?;
+        post_process.set_exposure(0.1)?;
+        post_process.framebuffer().clear_color([0., 0., 0., 1.])?;
+        post_process.framebuffer().clear_depth(1.)?;
+
+        let geo_fbo = geom_pass
+            .framebuffer();
+        geo_fbo.enable_depth_test(DepthTestFunction::Less)?;
+        geo_fbo.clear_color([0., 0., 0., 1.])?;
+        geo_fbo.clear_depth(1.)?;
+
         let rot_target = camera.transform.rotation;
         violette_low::culling(Some(Cull::Back));
+
+        let size = size.cast();
+        Framebuffer::backbuffer().viewport(0, 0, size.width, size.height);
 
         Ok(Self {
             camera,
@@ -80,6 +92,7 @@ impl Application for App {
             lights,
             material,
             geom_pass,
+            post_process,
             dragging: false,
             rot_target,
             last_mouse_pos: Vec2::ONE / 2.,
@@ -89,6 +102,7 @@ impl Application for App {
     fn resize(&mut self, size: PhysicalSize<u32>) {
         self.camera.projection.update(size.cast());
         self.geom_pass.resize(size).unwrap();
+        self.post_process.resize(size).unwrap();
         Framebuffer::backbuffer()
             .viewport(0, 0, size.width as _, size.height as _);
     }
@@ -137,33 +151,51 @@ impl Application for App {
         self.camera.transform.rotation = self.camera.transform.rotation.lerp(self.rot_target, 1e-2);
     }
 
+    #[cfg(never)]
     #[tracing::instrument(target = "App::render", skip_all)]
     fn render(&mut self) {
         let frame = &*Framebuffer::backbuffer();
+        frame.clear_color([0., 0., 0., 1.]).unwrap();
+        frame.clear_depth(1.).unwrap();
+        frame.enable_features(FramebufferFeatureId::DEPTH_TEST).unwrap();
+        frame.set_feature(FramebufferFeature::DepthTest(DepthTestFunction::Less)).unwrap();
         frame.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH).unwrap();
+        self.material.draw_meshes(frame, &self.camera, std::array::from_mut(&mut self.mesh)).unwrap();
+    }
+
+    #[tracing::instrument(target = "App::render", skip_all)]
+    fn render(&mut self) {
+        let backbuffer = &Framebuffer::backbuffer();
+        backbuffer.do_clear(ClearBuffer::COLOR|ClearBuffer::DEPTH).unwrap();
+
         // 2-pass rendering: Fill up the G-Buffers
         self.geom_pass.draw_meshes(&self.camera, &self.material, std::array::from_mut(&mut self.mesh)).unwrap();
 
         // 2-pass rendering: Perform defferred shading and draw to screen
         match self.debug_mode {
             None => {
+                let frame = self.post_process.framebuffer();
+                frame.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH).unwrap();
                 self.geom_pass
                     .draw_screen(frame, &self.camera, &self.lights)
-                    .context("Cannot draw to screen")
+                    .context("Cannot draw to screen").unwrap();
+
+                // Post-processing
+                self.post_process.draw(backbuffer)
             }
             Some(DebugTexture::Position) => {
-                self.geom_pass.debug_position(frame).context("Cannot draw to screen")
+                self.geom_pass.debug_position(&Framebuffer::backbuffer()).context("Cannot draw to screen")
             }
             Some(DebugTexture::Albedo) => {
-                self.geom_pass.debug_albedo(frame).context("Cannot draw to screen")
+                self.geom_pass.debug_albedo(&Framebuffer::backbuffer()).context("Cannot draw to screen")
             }
             Some(DebugTexture::Normal) => {
-                self.geom_pass.debug_normal(frame).context("Cannot draw to screen")
+                self.geom_pass.debug_normal(&Framebuffer::backbuffer()).context("Cannot draw to screen")
             }
             Some(DebugTexture::RoughMetal) => {
-                self.geom_pass.debug_rough_metal(frame).context("Cannot draw to screen")
+                self.geom_pass.debug_rough_metal(&Framebuffer::backbuffer()).context("Cannot draw to screen")
             }
-        }.unwrap()
+        }.unwrap();
     }
 }
 

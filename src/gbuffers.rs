@@ -1,15 +1,15 @@
+use std::num::NonZeroU32;
+
 use eyre::{Context, Result};
 use winit::dpi::PhysicalSize;
 
 use violette_low::{
-    base::resource::ResourceExt,
+    base::resource::{ResourceExt, Resource},
     framebuffer::{
         Blend,
         ClearBuffer,
         Framebuffer,
-        FramebufferFeature,
         DepthTestFunction,
-        FramebufferFeatureId
     },
     program::{UniformBlockIndex, UniformLocation},
     texture::{DepthStencil, Dimension, SampleMode, Texture},
@@ -30,8 +30,6 @@ pub struct GeometryBuffers {
     normal: Texture<[f32; 3]>,
     rough_metal: Texture<[f32; 2]>,
     out_depth: Texture<DepthStencil<f32, ()>>,
-    exposure: f32,
-    uniform_exposure: UniformLocation,
     uniform_camera_pos: UniformLocation,
     uniform_frame_pos: UniformLocation,
     uniform_frame_albedo: UniformLocation,
@@ -43,40 +41,45 @@ pub struct GeometryBuffers {
 
 impl GeometryBuffers {
     pub fn new(size: PhysicalSize<u32>) -> Result<Self> {
-        let mut pos = Texture::new(size.width, size.height, 1, Dimension::D2);
+        let Some(width) = NonZeroU32::new(size.width) else { eyre::bail!("Zero width resize"); };
+        let Some(height) = NonZeroU32::new(size.height) else { eyre::bail!("Zero height resize"); };
+        let nonzero_one = NonZeroU32::new(1).unwrap();
+        let mut pos = Texture::new(width, height, nonzero_one, Dimension::D2);
             pos.filter_min(SampleMode::Linear)?;
             pos.filter_mag(SampleMode::Linear)?;
             pos.reserve_memory()?;
 
-        let mut albedo = Texture::new(size.width, size.height, 1, Dimension::D2);
+        let mut albedo = Texture::new(width, height, nonzero_one, Dimension::D2);
         albedo.filter_min(SampleMode::Linear)?;
         albedo.filter_mag(SampleMode::Linear)?;
         albedo.reserve_memory()?;
 
-        let mut normal = Texture::new(size.width, size.height, 1, Dimension::D2);
+        let mut normal = Texture::new(width, height, nonzero_one, Dimension::D2);
         normal.filter_min(SampleMode::Linear)?;
         normal.filter_mag(SampleMode::Linear)?;
         normal.reserve_memory()?;
 
-        let mut rough_metal = Texture::new(size.width, size.height, 1, Dimension::D2);
+        let mut rough_metal = Texture::new(width, height, nonzero_one, Dimension::D2);
         rough_metal.filter_min(SampleMode::Linear)?;
         rough_metal.filter_mag(SampleMode::Linear)?;
         rough_metal.reserve_memory()?;
 
-        let mut out_depth = Texture::new(size.width, size.height, 1, Dimension::D2);
+        let mut out_depth = Texture::new(width, height, nonzero_one, Dimension::D2);
         out_depth.filter_min(SampleMode::Linear)?;
         out_depth.filter_mag(SampleMode::Linear)?;
         out_depth.reserve_memory()?;
 
-        let mut fbo = Framebuffer::new();
+        let fbo = Framebuffer::new();
         fbo.attach_color(0, &pos)?;
         fbo.attach_color(1, &albedo)?;
         fbo.attach_color(2, &normal)?;
         fbo.attach_color(3, &rough_metal)?;
         fbo.attach_depth(&out_depth)?;
-        fbo.features(FramebufferFeatureId::DEPTH_TEST)?;
-        fbo.set_feature(FramebufferFeature::DepthTest(DepthTestFunction::Less))?;
+        fbo.enable_depth_test(DepthTestFunction::Less)?;
         fbo.assert_complete()?;
+        fbo.clear_color([0., 0., 0., 1.])?;
+        fbo.clear_depth(1.)?;
+        fbo.viewport(0, 0, size.width as _, size.height as _);
 
         let screen_pass = ScreenDraw::load("assets/shaders/defferred.frag.glsl")
             .context("Cannot load screen shader pass")?;
@@ -84,7 +87,6 @@ impl GeometryBuffers {
             .context("Cannot load blit program")?;
         let debug_uniform_in_texture = debug_texture.uniform("in_texture").unwrap();
 
-        let uniform_exposure = screen_pass.uniform("exposure").unwrap();
         let uniform_camera_pos = screen_pass.uniform("camera_pos").unwrap();
         let uniform_frame_pos = screen_pass.uniform("frame_position").unwrap();
         let uniform_frame_albedo = screen_pass.uniform("frame_albedo").unwrap();
@@ -99,7 +101,6 @@ impl GeometryBuffers {
             normal,
             rough_metal,
             out_depth,
-            uniform_exposure,
             uniform_camera_pos,
             debug_uniform_in_texture,
             uniform_frame_pos,
@@ -109,27 +110,24 @@ impl GeometryBuffers {
             uniform_block_light,
             screen_pass,
             debug_texture,
-            exposure: 1.,
         })
     }
 
-    pub fn set_exposure(&mut self, v: f32) {
-        self.exposure = v;
-    }
-
-    pub fn framebuffer(&mut self) -> &mut Framebuffer {
-        &mut self.fbo
+    pub fn framebuffer(&self) -> &Framebuffer {
+        &self.fbo
     }
 
     #[tracing::instrument(skip_all)]
     pub fn draw_meshes(
-        &mut self,
+        &self,
         camera: &Camera,
         material: &Material,
         meshes: &mut [Mesh<Vertex>],
     ) -> Result<()> {
         self.fbo.enable_buffers([0, 1, 2, 3])?;
-        self.pos.with_binding(|| self.albedo.with_binding(|| self.normal.with_binding(|| self.rough_metal.with_binding(|| material.draw_meshes(&self.fbo, camera, meshes)))))?;
+        self.fbo.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
+        // self.pos.with_binding(|| self.albedo.with_binding(|| self.normal.with_binding(|| self.rough_metal.with_binding(|| material.draw_meshes(&self.fbo, camera, meshes)))))?;
+        material.draw_meshes(&self.fbo, camera, meshes)?;
 
         Ok(())
     }
@@ -169,12 +167,10 @@ impl GeometryBuffers {
         camera: &Camera,
         lights: &LightBuffer,
     ) -> Result<()> {
-        self.screen_pass.set_uniform(self.uniform_exposure, self.exposure)?;
         self.screen_pass.set_uniform(self.uniform_camera_pos, camera.transform.position)?;
 
-        frame.set_feature(FramebufferFeature::Blending(Blend::SrcAlpha, Blend::One))?; // Additive blending
-        frame.enable_features(FramebufferFeatureId::BLENDING)?;
-        frame.disable_features(FramebufferFeatureId::DEPTH_TEST)?;
+        frame.disable_depth_test()?;
+        frame.enable_blending(Blend::One, Blend::One)?;
         frame.do_clear(ClearBuffer::COLOR)?;
         if lights.is_empty() {
             return Ok(());
@@ -194,17 +190,22 @@ impl GeometryBuffers {
                 .bind_block(self.uniform_block_light, &lights.slice(light_ix..=light_ix))?;
             self.screen_pass.draw(frame)?;
         }
+
+        self.rough_metal.unbind();
         Ok(())
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let Some(width) = NonZeroU32::new(size.width) else { eyre::bail!("Zero width resize"); };
+        let Some(height) = NonZeroU32::new(size.height) else { eyre::bail!("Zero height resize"); };
+        let nonzero_one = NonZeroU32::new(1).unwrap();
         self.fbo
-            .viewport(0, 0, size.width as _, size.height as _);
-        self.pos.clear_resize(size.width, size.height, 1)?;
-        self.albedo.clear_resize(size.width, size.height, 1)?;
-        self.normal.clear_resize(size.width, size.height, 1)?;
-        self.rough_metal.clear_resize(size.width, size.height, 1)?;
-        self.out_depth.clear_resize(size.width, size.height, 1)?;
+            .viewport(0, 0, width.get() as _, height.get() as _);
+        self.pos.clear_resize(width, height, nonzero_one)?;
+        self.albedo.clear_resize(width, height, nonzero_one)?;
+        self.normal.clear_resize(width, height, nonzero_one)?;
+        self.rough_metal.clear_resize(width, height, nonzero_one)?;
+        self.out_depth.clear_resize(width, height, nonzero_one)?;
         Ok(())
     }
 }

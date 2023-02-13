@@ -209,15 +209,11 @@ impl Material {
         let mat_view_proj = camera.projection.matrix() * camera.transform.matrix();
         self.program.set_uniform(self.uniform_view_proj, mat_view_proj)?;
 
-        let unit_color = self.color_slot.as_uniform(0)?;
         if let (Some(normal_map), Some(uniform_normal)) = (&self.normal_map, self.uniform_normal) {
-            let unit = normal_map.as_uniform(1)?;
-            self.program.set_uniform(uniform_normal, unit)?;
+            self.program.set_uniform(uniform_normal, normal_map.as_uniform(1)?)?;
         }
-        let unit_rough_metal = self.rough_metal.as_uniform(2)?;
-
-        self.program.set_uniform(self.uniform_color, unit_color)?;
-        self.program.set_uniform(self.uniform_rough_metal, unit_rough_metal)?;
+        self.program.set_uniform(self.uniform_color, self.color_slot.as_uniform(0)?)?;
+        self.program.set_uniform(self.uniform_rough_metal, self.rough_metal.as_uniform(2)?)?;
 
         for mesh_ix in ordering {
             let mesh = &meshes[mesh_ix];

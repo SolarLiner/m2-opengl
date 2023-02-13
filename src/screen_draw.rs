@@ -8,7 +8,6 @@ use violette_low::{
         Buffer,
         ElementBuffer,
     },
-    framebuffer::{FramebufferFeatureId},
     program::Program,
     vertex::{
         DrawMode,
@@ -64,10 +63,9 @@ impl ScreenDraw {
         )
     }
 
-    #[allow(const_item_mutation)]
     #[tracing::instrument(skip_all)]
-    pub fn draw(&mut self, framebuffer: &Framebuffer) -> Result<()> {
-        framebuffer.disable_features(FramebufferFeatureId::DEPTH_TEST)?;
+    pub fn draw(&self, framebuffer: &Framebuffer) -> Result<()> {
+        framebuffer.disable_depth_test()?;
         framebuffer.draw_elements(&self.program, &SCREEN_VAO, DrawMode::Triangles, ..)?;
         Ok(())
     }

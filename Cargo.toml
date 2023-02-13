@@ -27,6 +27,6 @@ tracing = "0.1.33"
 tracing-subscriber = { version = "0.3.11", features = ["env-filter", "json"] }
 tracing-tracy = "0.10.2"
 once_cell = "1.17.0"
-violette-low = { path = "./violette/violette-low", features = ["uniforms-glam", "vertex-glam", "no-unbind"] }
+violette-low = { path = "./violette/violette-low", features = ["uniforms-glam", "vertex-glam"] }
 either = "1.8.1"
 color-eyre = "0.6.2"

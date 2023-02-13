@@ -16,18 +16,16 @@ use violette_low::{
     }
 };
 
-use violette_low::buffer::{ArrayBuffer, ElementBuffer};
-use violette_low::framebuffer::Framebuffer;
-use violette_low::program::Program;
+use violette_low::{buffer::{ArrayBuffer, ElementBuffer}, framebuffer::Framebuffer, program::Program};
 
 use crate::transform::Transform;
 
 #[derive(Debug)]
 pub struct Mesh<Vertex> {
     pub transform: Transform,
-    _vertices: ArrayBuffer<Vertex>,
     array: VertexArray,
-    indices: ElementBuffer<u32>,
+    _vertices: ArrayBuffer<Vertex>,
+    _indices: ElementBuffer<u32>,
 }
 
 impl<Vertex: Pod + AsVertexAttributes> Mesh<Vertex> {
@@ -47,7 +45,7 @@ impl<Vertex: Pod + AsVertexAttributes> Mesh<Vertex> {
             transform: Transform::default(),
             _vertices: vertices,
             array: vao,
-            indices,
+            _indices: indices,
         })
     }
 
@@ -67,7 +65,7 @@ impl<Vertex: Pod + AsVertexAttributes> Mesh<Vertex> {
         Ok(())
     }
 
-    pub(crate) fn distance_to_camera(&self, camera: &crate::camera::Camera) -> FloatOrd<f32> {
+    pub fn distance_to_camera(&self, camera: &crate::camera::Camera) -> FloatOrd<f32> {
         FloatOrd(self.transform.position.distance(camera.transform.position))
     }
 }
@@ -82,7 +80,6 @@ impl<Vtx, Ctor> MeshBuilder<Vtx, Ctor> {
 }
 
 impl<Vertex: Pod + AsVertexAttributes, Ctor: Fn(Vec3, Vec3, Vec2) -> Vertex> MeshBuilder<Vertex, Ctor> {
-
     pub fn uv_sphere(&self, radius: f32, nlon: usize, nlat: usize) -> Result<Mesh<Vertex>> {
         use std::f32::consts::*;
         let mut vertices = Vec::with_capacity(nlon * nlat + 2);

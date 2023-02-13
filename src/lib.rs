@@ -24,8 +24,7 @@ use tracing_subscriber::{
 use tracing_tracy::TracyLayer;
 use winit::{
     dpi::PhysicalSize,
-    event::{ElementState, StartCause, VirtualKeyCode, WindowEvent},
-    event::{Event, KeyboardInput},
+    event::{ElementState, StartCause, VirtualKeyCode, WindowEvent, Event, KeyboardInput},
     event_loop::EventLoopBuilder,
     window::{Fullscreen, WindowBuilder},
 };
@@ -37,6 +36,7 @@ pub mod material;
 pub mod mesh;
 pub mod screen_draw;
 pub mod transform;
+pub mod postprocess;
 
 pub trait Application: Sized + Send + Sync {
     fn window_features(wb: WindowBuilder) -> WindowBuilder {
@@ -113,28 +113,17 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
     // it's expected in multithreaded + multiwindow operation mode, since you
     // can send NotCurrentContext, but not Surface.
     let context_attributes = ContextAttributesBuilder::new()
-        .with_debug(true)
+        .with_debug(cfg!(debug_assertions))
         .with_profile(glutin::context::GlProfile::Core)
-        .with_robustness(glutin::context::Robustness::RobustNoResetNotification)
+        .with_robustness(glutin::context::Robustness::RobustLoseContextOnReset)
         .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
-        .build(raw_window_handle);
-
-    // Since glutin by default tries to create OpenGL core context, which may not be
-    // present we should try gles.
-    let fallback_context_attributes = ContextAttributesBuilder::new()
-        .with_context_api(ContextApi::Gles(None))
         .build(raw_window_handle);
 
     let not_current_gl_context = unsafe {
         gl_display
             .create_context(&gl_config, &context_attributes)
-            .unwrap_or_else(|_| {
-                gl_display
-                    .create_context(&gl_config, &fallback_context_attributes)
-                    .unwrap()
-            })
+            .context("Cannot create OpenGL display context")?
     };
-    // let attrs = window.build_surface_attributes(Default::default());
     let inner_size = window.inner_size();
     let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
         window.raw_window_handle(),
@@ -191,6 +180,7 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
         move || {
             let mut last_tick = Instant::now();
             loop {
+                let _span = tracing::trace_span!("loop_tick").entered();
                 let tick_start = Instant::now();
                 app.lock().unwrap().tick(last_tick.elapsed());
                 let tick_duration = tick_start.elapsed().as_secs_f32();

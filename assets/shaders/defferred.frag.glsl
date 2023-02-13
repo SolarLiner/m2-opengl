@@ -1,13 +1,13 @@
 #version 330
 
-in vec2 screen_uv;
+in vec2 v_uv;
 
 uniform sampler2D frame_position;
 uniform sampler2D frame_albedo;
 uniform sampler2D frame_normal;
 uniform sampler2D frame_rough_metal;
 
-uniform float exposure;
+// uniform float exposure;
 uniform vec3 camera_pos;
 
 out vec4 out_color;
@@ -87,19 +87,19 @@ vec3 get_lighting(vec3 V, vec3 L, vec3 N, float distance, float roughness, float
     return radiance * (1 - metallic) * NdotL + specular;
 }
 
-float desaturate(vec3 col) {
-    return dot(col, vec3(0.2126, 0.7152, 0.0722));
-}
+// float desaturate(vec3 col) {
+//     return dot(col, vec3(0.2126, 0.7152, 0.0722));
+// }
 
-vec3 reinhard(vec3 col) {
-    return col / (1.0 + desaturate(col));
-}
+// vec3 reinhard(vec3 col) {
+//     return col / (1.0 + desaturate(col));
+// }
 
 void main() {
-    vec3 position = texture(frame_position, screen_uv).rgb;
-    vec3 albedo = texture(frame_albedo, screen_uv).rgb;
-    vec3 normal = texture(frame_normal, screen_uv).rgb;
-    vec3 rough_metal = texture(frame_rough_metal, screen_uv).rgb;
+    vec3 position = texture(frame_position, v_uv).rgb;
+    vec3 albedo = texture(frame_albedo, v_uv).rgb;
+    vec3 normal = texture(frame_normal, v_uv).rgb;
+    vec3 rough_metal = texture(frame_rough_metal, v_uv).rgb;
 
     float roughness = rough_metal.r;
     float metallic = rough_metal.g;
@@ -125,5 +125,5 @@ void main() {
     vec3 k = light.color * get_lighting(view_dir, light_dir, normal, light_distance, roughness, metallic);
 
     vec3 reflectance = albedo * k;
-    out_color = vec4(reinhard(exposure * reflectance), 1.0);
+    out_color = vec4(reflectance, 1.0);
 }
