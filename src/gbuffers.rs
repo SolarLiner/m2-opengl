@@ -75,7 +75,6 @@ impl GeometryBuffers {
         fbo.attach_color(2, &normal)?;
         fbo.attach_color(3, &rough_metal)?;
         fbo.attach_depth(&out_depth)?;
-        fbo.enable_depth_test(DepthTestFunction::Less)?;
         fbo.assert_complete()?;
         fbo.clear_color([0., 0., 0., 1.])?;
         fbo.clear_depth(1.)?;
@@ -124,6 +123,10 @@ impl GeometryBuffers {
         material: &Material,
         meshes: &mut [Mesh<Vertex>],
     ) -> Result<()> {
+        self.fbo.viewport(0, 0, camera.projection.width as _, camera.projection.height as _);
+        self.fbo.disable_blending()?;
+        self.fbo.disable_scissor()?;
+        self.fbo.enable_depth_test(DepthTestFunction::Less)?;
         self.fbo.enable_buffers([0, 1, 2, 3])?;
         self.fbo.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
         // self.pos.with_binding(|| self.albedo.with_binding(|| self.normal.with_binding(|| self.rough_metal.with_binding(|| material.draw_meshes(&self.fbo, camera, meshes)))))?;

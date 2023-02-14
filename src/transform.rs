@@ -9,6 +9,20 @@ pub struct Transform {
     pub scale: Vec3,
 }
 
+impl Transform {
+    pub fn right(&self) -> Vec3 {
+        self.rotation.mul_vec3(Vec3::X)
+    }
+    
+    pub fn up(&self) -> Vec3 {
+        self.rotation.mul_vec3(Vec3::Y)
+    }
+
+    pub fn forward(&self) -> Vec3 {
+        self.rotation.mul_vec3(-Vec3::Z)
+    }
+}
+
 impl Default for Transform {
     fn default() -> Self {
         Self {

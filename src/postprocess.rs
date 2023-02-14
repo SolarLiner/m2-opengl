@@ -3,6 +3,7 @@ use std::{num::NonZeroU32};
 use violette_low::{framebuffer::Framebuffer, texture::Texture, program::UniformLocation};
 use winit::{dpi::PhysicalSize};
 use eyre::Result;
+use violette_low::framebuffer::DepthTestFunction;
 
 use crate::screen_draw::ScreenDraw;
 
@@ -52,14 +53,8 @@ impl Postprocess {
         self.texture.clear_resize(width, height, NonZeroU32::new(1).unwrap())?;
         Ok(())
     }
-    
-    pub fn draw(&mut self, frame: &Framebuffer) -> Result<()> {
-        // self.texture.generate_mipmaps()?;
-        // let data = self.texture.get_mipmap(self.texture.num_mipmaps()-1)?;
-        // let exposure = data[0].add(data[1]).add(data[2]).recip().max(1e-3);
-        let exposure = 1.;
-        self.set_exposure(exposure)?;
 
+    pub fn draw(&mut self, frame: &Framebuffer) -> Result<()> {
         self.draw.set_uniform(self.draw_texture, self.texture.as_uniform(0)?)?;
         self.draw.draw(frame)?;
         Ok(())

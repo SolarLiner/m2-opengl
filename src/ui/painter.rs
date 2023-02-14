@@ -12,7 +12,7 @@ use violette_low::{
     texture::{Texture, TextureFormat},
     vertex::{AsVertexAttributes, VertexAttributes},
 };
-use winit::dpi::PhysicalSize;
+use winit::dpi::{LogicalPosition, PhysicalSize};
 
 use crate::mesh::Mesh;
 
@@ -103,8 +103,8 @@ impl UiImpl {
         let size = self.prepare_painting(frame, size, ppp)?;
 
         for prim in primitives {
-            let (x, y, w, h) = to_gl_rect(prim.clip_rect, size.cast(), ppp);
-            frame.enable_scissor(x, y, w, h)?;
+            // let (x, y, w, h) = to_gl_rect(prim.clip_rect, size.cast(), ppp);
+            // frame.enable_scissor(x, y, w, h)?;
 
             match &prim.primitive {
                 Primitive::Mesh(mesh) => {
@@ -112,8 +112,8 @@ impl UiImpl {
                 }
                 Primitive::Callback(callback) => {
                     if callback.rect.is_positive() {
-                        let (x,y,w,h) = to_gl_rect(callback.rect, size.cast(), ppp);
-                        frame.viewport(x, y, w, h);
+                        // let (x,y,w,h) = to_gl_rect(callback.rect, size.cast(), ppp);
+                        // frame.viewport(x, y, w, h);
 
                         let info = egui::PaintCallbackInfo {
                             viewport: callback.rect,
@@ -245,13 +245,12 @@ impl UiImpl {
 }
 
 fn to_gl_rect(rect: egui::Rect, size: PhysicalSize<f32>, ppp: f32) -> (i32, i32, i32, i32) {
-    let min = vec2(rect.min.x, rect.min.y) * ppp;
-    let max = vec2(rect.max.x, rect.max.y) * ppp;
-
-    let min = min
+    let min = LogicalPosition::new(rect.min.x, rect.min.y).to_physical::<f32>(ppp as _);
+    let max = LogicalPosition::new(rect.max.x, rect.max.y).to_physical::<f32>(ppp as _);
+    let min = Vec2::from_array(min.into())
         .clamp(Vec2::ZERO, vec2(size.width, size.height))
         .as_ivec2();
-    let max = max
+    let max = Vec2::from_array(max.into())
         .clamp(Vec2::ZERO, vec2(size.width, size.height))
         .as_ivec2();
 
