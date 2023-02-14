@@ -66,7 +66,7 @@ impl ScreenDraw {
     #[tracing::instrument(skip_all)]
     pub fn draw(&self, framebuffer: &Framebuffer) -> Result<()> {
         framebuffer.disable_depth_test()?;
-        framebuffer.draw_elements(&self.program, &SCREEN_VAO, DrawMode::Triangles, ..)?;
+        framebuffer.draw_elements(&self.program, &SCREEN_VAO, DrawMode::Triangles, 0..6)?;
         Ok(())
     }
 }

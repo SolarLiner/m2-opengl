@@ -5,17 +5,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use eyre::{Context, eyre, Result};
-use glutin::{
-    surface::{SurfaceAttributesBuilder, WindowSurface},
-    config::{
-        Api,
-        ConfigTemplateBuilder
-    },
-    context::{ContextApi, ContextAttributesBuilder, Version},
-    prelude::*
-};
+use eyre::{eyre, Context, Result};
 use glutin::display::GetGlDisplay;
+use glutin::{
+    config::{Api, ConfigTemplateBuilder},
+    context::{ContextApi, ContextAttributesBuilder, Version},
+    prelude::*,
+    surface::{SurfaceAttributesBuilder, WindowSurface},
+};
 use glutin_winit::DisplayBuilder;
 use raw_window_handle::HasRawWindowHandle;
 use tracing_subscriber::{
@@ -24,19 +21,22 @@ use tracing_subscriber::{
 use tracing_tracy::TracyLayer;
 use winit::{
     dpi::PhysicalSize,
-    event::{ElementState, StartCause, VirtualKeyCode, WindowEvent, Event, KeyboardInput},
+    event::{ElementState, Event, KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
     event_loop::EventLoopBuilder,
     window::{Fullscreen, WindowBuilder},
 };
+
+use crate::ui::{painter::UiImpl, Ui};
 
 pub mod camera;
 pub mod gbuffers;
 pub mod light;
 pub mod material;
 pub mod mesh;
+pub mod postprocess;
 pub mod screen_draw;
 pub mod transform;
-pub mod postprocess;
+pub mod ui;
 
 pub trait Application: Sized + Send + Sync {
     fn window_features(wb: WindowBuilder) -> WindowBuilder {
@@ -48,6 +48,7 @@ pub trait Application: Sized + Send + Sync {
     /// /!\ Does not run on the main thread. OpenGL calls are unsafe here.
     fn tick(&mut self, _dt: Duration) {}
     fn render(&mut self);
+    fn ui(&mut self, ctx: &egui::Context) {}
 }
 
 pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
@@ -175,6 +176,8 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
     let app = App::new(inner_size.cast()).context("Cannot run app")?;
     let app = Arc::new(Mutex::new(app));
 
+    let mut ui = Ui::new(&event_loop)?;
+
     std::thread::spawn({
         let app = app.clone();
         move || {
@@ -197,13 +200,21 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
 
         match event {
             Event::RedrawRequested(_) => {
+                let next_run = {
+                    let _span = tracing::debug_span!("ui").entered();
+                    ui.run(&window, {
+                        let app = app.clone();
+                        move |cx| app.lock().unwrap().ui(cx)
+                    })
+                };
                 let mut app = app.lock().unwrap();
                 let frame_start = Instant::now();
                 app.render();
+                ui.draw(&window).unwrap();
                 gl_surface.swap_buffers(&context).unwrap();
                 let frame_time = frame_start.elapsed().as_secs_f32();
                 tracing::debug!(%frame_time);
-                next_frame_time = frame_start + Duration::from_nanos(16_666_667);
+                next_frame_time = frame_start + Duration::from_nanos(16_666_667).min(next_run);
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested
@@ -239,7 +250,15 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
                     app.lock().unwrap().resize(new_size);
                     window.request_redraw();
                 }
-                event => app.lock().unwrap().interact(event),
+                event => {
+                    let response = ui.on_event(&event);
+                    if !response.consumed {
+                        app.lock().unwrap().interact(event);
+                    }
+                    if response.repaint {
+                        window.request_redraw();
+                    }
+                },
             },
             Event::NewEvents(StartCause::ResumeTimeReached { .. }) => window.request_redraw(),
             _ => {}

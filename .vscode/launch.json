@@ -63,7 +63,28 @@
                 "WINIT_UNIX_BACKEND": "x11",
                 "RUST_LOG": "gl=trace,debug"
             }
-        },
+        },{
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'hello_triangle'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=hello_triangle",
+                    "--package=m2-opengl"
+                ],
+                "filter": {
+                    "name": "hello_triangle",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "WINIT_UNIX_BACKEND": "x11",
+                "RUST_LOG": "gl=trace,debug"
+            }
+        }
         {
             "type": "lldb",
             "request": "launch",

@@ -24,8 +24,8 @@ use crate::transform::Transform;
 pub struct Mesh<Vertex> {
     pub transform: Transform,
     array: VertexArray,
-    _vertices: ArrayBuffer<Vertex>,
-    _indices: ElementBuffer<u32>,
+    vertices: ArrayBuffer<Vertex>,
+    indices: ElementBuffer<u32>,
 }
 
 impl<Vertex: Pod + AsVertexAttributes> Mesh<Vertex> {
@@ -43,10 +43,27 @@ impl<Vertex: Pod + AsVertexAttributes> Mesh<Vertex> {
         vao.with_element_buffer(&indices)?;
         Ok(Self {
             transform: Transform::default(),
-            _vertices: vertices,
+            vertices,
             array: vao,
-            _indices: indices,
+            indices,
         })
+    }
+
+    pub fn empty() -> Result<Self> {
+        let vertices = Buffer::new();
+        let indices = Buffer::new();
+        let mut vao = VertexArray::new();
+        vao.with_vertex_buffer(&vertices)?;
+        vao.with_element_buffer(&indices)?;
+        Ok(Self {transform: Transform::default(), vertices, array: vao, indices })
+    }
+
+    pub fn vertices(&mut self) -> &mut ArrayBuffer<Vertex> {
+        &mut self.vertices
+    }
+
+    pub fn indices(&mut self) -> &mut ElementBuffer<u32> {
+        &mut self.indices
     }
 
     pub fn reset_transform(&mut self) {
@@ -60,7 +77,7 @@ impl<Vertex: Pod + AsVertexAttributes> Mesh<Vertex> {
 
     pub fn draw(&self, program: &Program, framebuffer: &Framebuffer, wireframe: bool) -> Result<()> {
         framebuffer
-            .draw_elements(program, &self.array, if wireframe {DrawMode::Lines} else {DrawMode::Triangles}, ..)
+            .draw_elements(program, &self.array, if wireframe {DrawMode::Lines} else {DrawMode::Triangles}, 0..self.indices.len() as i32)
             .context("Cannot draw mesh")?;
         Ok(())
     }
