@@ -2,8 +2,8 @@ use std::f32::consts::{PI, TAU};
 use std::{ops::Range, time::Duration};
 
 use eyre::{Context, Result};
-use glam::{vec2, vec3, Quat, Vec2, Vec3};
-use winit::event::MouseScrollDelta;
+use glam::{vec2, vec3, Quat, Vec2, Vec3, Mat3};
+use winit::event::{ModifiersState, MouseScrollDelta};
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
@@ -33,7 +33,6 @@ struct OrbitCameraController {
     sensitivity: f32,
     focus: Vec3,
     radius: f32,
-    y_range: Range<f32>,
 }
 
 impl Default for OrbitCameraController {
@@ -43,13 +42,12 @@ impl Default for OrbitCameraController {
             sensitivity: 1.,
             focus: Vec3::ZERO,
             radius: 5.,
-            y_range: -80f32..80.,
         }
     }
 }
 
 impl OrbitCameraController {
-    pub fn orbit(&mut self, camera: &Camera, input: Vec2) {
+    pub fn pan(&mut self, camera: &Camera, input: Vec2) {
         let window_size = vec2(camera.projection.width, camera.projection.height);
         let input =
             self.sensitivity * input / window_size * vec2(window_size.x / window_size.y, 1.);
@@ -59,7 +57,7 @@ impl OrbitCameraController {
         self.focus += translation;
     }
 
-    pub fn pan(&mut self, camera: &Camera, input: Vec2) {
+    pub fn orbit(&mut self, camera: &Camera, input: Vec2) {
         let window_size = vec2(camera.projection.width, camera.projection.height);
         let input = input * self.sensitivity;
         let dx = input.x / window_size.x * TAU;
@@ -70,13 +68,16 @@ impl OrbitCameraController {
     }
 
     pub fn scroll(&mut self, camera: &Camera, amt: f32) {
-        self.radius = f32::max(0.05, (1. - amt) * self.radius * 0.2);
+        self.radius -= amt * self.radius * 0.05 * self.sensitivity;
+        self.radius = self.radius.max(0.05);
+        // self.radius = f32::max(0.05, (1. - amt) * self.radius * 0.2 * self.sensitivity);
     }
 
     pub fn update(&mut self, dt: Duration, camera: &mut Camera) {
+        let rot_matrix = Mat3::from_quat(self.tgt_rotation);
         camera.transform.rotation = self.tgt_rotation;
         camera.transform.position =
-            self.focus + camera.transform.rotation.mul_vec3(Vec3::Z * self.radius);
+            self.focus + rot_matrix.mul_vec3(Vec3::Z * self.radius);
     }
 }
 
@@ -88,11 +89,6 @@ enum DebugTexture {
     RoughMetal,
 }
 
-enum Dragging {
-    Left,
-    Right,
-}
-
 struct App {
     camera: Camera,
     mesh: Mesh<Vertex>,
@@ -100,13 +96,12 @@ struct App {
     geom_pass: GeometryBuffers,
     post_process: Postprocess,
     material: Material,
-    dragging: Option<Dragging>,
-    rot_target: Quat,
+    ctrl_pressed: bool,
+    dragging: Option<MouseButton>,
     last_mouse_pos: Vec2,
     debug_mode: Option<DebugTexture>,
     exposure: f32,
     camera_controller: OrbitCameraController,
-    mouse_input_delta: Vec2,
 }
 
 impl Application for App {
@@ -150,8 +145,6 @@ impl Application for App {
         geo_fbo.enable_depth_test(DepthTestFunction::Less)?;
         geo_fbo.clear_color([0., 0., 0., 1.])?;
         geo_fbo.clear_depth(1.)?;
-
-        let rot_target = camera.transform.rotation;
         violette_low::culling(Some(Cull::Back));
 
         let size = size.cast();
@@ -166,11 +159,10 @@ impl Application for App {
             geom_pass,
             post_process,
             dragging: None,
-            rot_target,
+            ctrl_pressed: false,
             last_mouse_pos: Vec2::ONE / 2.,
             debug_mode: None,
             camera_controller: OrbitCameraController::default(),
-            mouse_input_delta: Vec2::ZERO,
         })
     }
     fn resize(&mut self, size: PhysicalSize<u32>) {
@@ -186,10 +178,10 @@ impl Application for App {
                 let position = position.cast();
                 let position = Vec2::new(position.x, position.y);
                 match self.dragging {
-                    Some(Dragging::Left) => self
+                    Some(MouseButton::Left) => self
                         .camera_controller
                         .orbit(&self.camera, position - self.last_mouse_pos),
-                    Some(Dragging::Right) => self
+                    Some(MouseButton::Right) => self
                         .camera_controller
                         .pan(&self.camera, position - self.last_mouse_pos),
                     _ => {}
@@ -199,8 +191,8 @@ impl Application for App {
             WindowEvent::MouseInput { button, state, .. } => {
                 if state == ElementState::Pressed {
                     self.dragging = match button {
-                        MouseButton::Left => Some(Dragging::Left),
-                        MouseButton::Right => Some(Dragging::Right),
+                        MouseButton::Right | MouseButton::Left if self.ctrl_pressed => Some(MouseButton::Right),
+                        MouseButton::Left => Some(MouseButton::Left),
                         _ => None,
                     }
                 } else {
@@ -213,6 +205,7 @@ impl Application for App {
                     self.camera_controller.scroll(&self.camera, delta.y as _)
                 }
             },
+            WindowEvent::ModifiersChanged(state) => self.ctrl_pressed = state.contains(ModifiersState::CTRL),
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
@@ -308,6 +301,10 @@ impl Application for App {
 
     fn ui(&mut self, ctx: &egui::Context) {
         egui::Window::new("Camera controls").show(ctx, |ui| {
+            ui.label(format!("Position {}", self.camera_controller.focus));
+            if ui.button("Reset position").clicked() {
+                self.camera_controller.focus *= 0.;
+            }
             let sensitivity = ui.label("Sensitivity:");
             ui.add(
                 egui::DragValue::new(&mut self.camera_controller.sensitivity)
@@ -316,13 +313,13 @@ impl Application for App {
             .labelled_by(sensitivity.id);
             let pos_label = ui.label("Radius:");
             ui.add(
-                egui::DragValue::new(&mut self.camera_controller.radius).clamp_range(0f32..=50.),
+                egui::DragValue::new(&mut self.camera_controller.radius).clamp_range(0f32..=50.).speed(0.3),
             )
             .labelled_by(pos_label.id);
             let exposure_label = ui.label("Exposure:");
             if ui
                 .add(
-                    egui::Slider::new(&mut self.exposure, 1e-6..=1.)
+                    egui::Slider::new(&mut self.exposure, 1e-6..=10.)
                         .logarithmic(true)
                         .show_value(true)
                         .custom_formatter(|v,_| format!("{:+1.1} EV", v.log2()))
