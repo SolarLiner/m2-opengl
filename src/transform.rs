@@ -10,6 +10,10 @@ pub struct Transform {
 }
 
 impl Transform {
+    pub fn left(&self) -> Vec3 {
+        -self.right()
+    }
+
     pub fn right(&self) -> Vec3 {
         self.rotation.mul_vec3(Vec3::X)
     }
@@ -18,9 +22,13 @@ impl Transform {
         self.rotation.mul_vec3(Vec3::Y)
     }
 
+    pub fn down(&self) -> Vec3 { -self.up() }
+
     pub fn forward(&self) -> Vec3 {
         self.rotation.mul_vec3(-Vec3::Z)
     }
+
+    pub fn backward(&self) -> Vec3 { -self.forward() }
 }
 
 impl Default for Transform {
