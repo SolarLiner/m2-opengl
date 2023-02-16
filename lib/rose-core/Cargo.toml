@@ -26,6 +26,3 @@ bytemuck.workspace = true
 eyre.workspace = true
 glam.workspace = true
 tracing.workspace = true
-
-[profile.dev.package.image]
-opt-level = 3
