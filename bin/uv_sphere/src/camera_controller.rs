@@ -18,7 +18,7 @@ impl Default for OrbitCameraController {
             tgt_rotation: Quat::IDENTITY,
             sensitivity: 1.,
             focus: Vec3::ZERO,
-            radius: 5.,
+            radius: 3.,
         }
     }
 }
@@ -54,6 +54,7 @@ impl OrbitCameraController {
         let rot_matrix = Mat3::from_quat(self.tgt_rotation);
         camera.transform.rotation = self.tgt_rotation;
         camera.transform.position = self.focus + rot_matrix.mul_vec3(Vec3::Z * self.radius);
+        camera.transform = camera.transform.looking_at(self.focus);
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {

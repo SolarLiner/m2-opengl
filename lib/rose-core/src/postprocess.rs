@@ -12,6 +12,8 @@ pub struct Postprocess {
     draw_exposure: UniformLocation,
     fbo: Framebuffer,
     texture: Texture<[f32; 3]>,
+    draw_bloom_strength: UniformLocation,
+    draw_bloom_size: UniformLocation,
 }
 
 impl Postprocess {
@@ -33,7 +35,9 @@ impl Postprocess {
         let draw = ScreenDraw::load("assets/shaders/postprocess.frag.glsl")?;
         let draw_texture = draw.uniform("frame").unwrap();
         let draw_exposure = draw.uniform("exposure").unwrap();
-        Ok(Self { draw, draw_texture, draw_exposure, fbo, texture })
+        let draw_bloom_strength = draw.uniform("bloom_strength").unwrap();
+        let draw_bloom_size = draw.uniform("bloom_size").unwrap();
+        Ok(Self { draw, draw_texture, draw_exposure, draw_bloom_size, draw_bloom_strength, fbo, texture })
     }
 
     pub fn framebuffer(&self) -> &Framebuffer {
@@ -42,6 +46,16 @@ impl Postprocess {
 
     pub fn set_exposure(&self, exposure: f32) -> Result<()> {
         self.draw.set_uniform(self.draw_exposure, exposure)?;
+        Ok(())
+    }
+
+    pub fn set_bloom_strength(&self, strength: f32) -> Result<()> {
+        self.draw.set_uniform(self.draw_bloom_strength, strength)?;
+        Ok(())
+    }
+
+    pub fn set_bloom_size(&self, size: f32) -> Result<()> {
+        self.draw.set_uniform(self.draw_bloom_size, size)?;
         Ok(())
     }
 

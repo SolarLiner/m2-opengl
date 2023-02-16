@@ -21,10 +21,11 @@ pub use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::{
     event::{ElementState, Event, KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
     event_loop::EventLoopBuilder,
-    window::{Fullscreen, WindowBuilder},
+    window::Fullscreen,
 };
 
 pub use winit::event as events;
+pub use winit::window::WindowBuilder;
 
 #[allow(unused_variables)]
 pub trait Application: Sized + Send + Sync {

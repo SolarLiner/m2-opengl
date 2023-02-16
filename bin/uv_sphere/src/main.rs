@@ -4,30 +4,30 @@ use std::{
 };
 
 use eyre::{Context, Result};
-use glam::{vec2, vec3, Mat3, Quat, Vec2, Vec3, UVec2};
+use glam::{vec2, vec3, Mat3, Quat, UVec2, Vec2, Vec3};
 
+use rose_core::camera::Projection;
 use rose_core::{
     camera::Camera,
     gbuffers::GeometryBuffers,
-    light::{Light, LightBuffer, GpuLight},
+    light::{GpuLight, Light, LightBuffer},
     material::{Material, Vertex},
     mesh::{Mesh, MeshBuilder},
     postprocess::Postprocess,
     transform::Transform,
 };
-use rose_core::camera::Projection;
 use rose_platform::{
     events::{
         ElementState, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta, VirtualKeyCode,
         WindowEvent,
     },
-    Application, PhysicalSize,
+    Application, PhysicalSize, WindowBuilder,
 };
 use violette::{
-    Cull,
     framebuffer::Framebuffer,
+    framebuffer::{ClearBuffer, DepthTestFunction},
     texture::Texture,
-    framebuffer::{ClearBuffer, DepthTestFunction}
+    Cull,
 };
 
 mod camera_controller;
@@ -52,13 +52,19 @@ struct App {
     last_mouse_pos: Vec2,
     debug_mode: Option<DebugTexture>,
     exposure: f32,
+    bloom_strength: f32,
+    bloom_size: f32,
     camera_controller: camera_controller::OrbitCameraController,
 }
 
 impl Application for App {
+    fn window_features(wb: WindowBuilder) -> WindowBuilder {
+        wb.with_inner_size(PhysicalSize::new(1024, 1024))
+    }
+
     #[tracing::instrument(target = "App::new")]
     fn new(size: PhysicalSize<f32>) -> Result<Self> {
-        let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 32)?;
+        let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 64)?;
         let material = Material::create(
             Texture::load_rgb32f("assets/textures/moon_color.png")?,
             Texture::load_rgb32f("assets/textures/moon_normal.png")?,
@@ -89,7 +95,7 @@ impl Application for App {
         let size = UVec2::from_array(size.cast::<u32>().into());
         let geom_pass = GeometryBuffers::new(size)?;
         let post_process = Postprocess::new(size)?;
-        post_process.set_exposure(1e-3)?;
+        post_process.set_exposure(1e-1)?;
         post_process.framebuffer().clear_color([0., 0., 0., 1.])?;
         post_process.framebuffer().clear_depth(1.)?;
 
@@ -103,7 +109,9 @@ impl Application for App {
         Framebuffer::backbuffer().viewport(0, 0, sizei.x, sizei.y);
 
         Ok(Self {
-            exposure: 1e-3,
+            exposure: 1e-1,
+            bloom_size: 1e-2,
+            bloom_strength: 1e-2,
             camera,
             mesh,
             lights,
@@ -218,24 +226,20 @@ impl Application for App {
         backbuffer.do_clear(ClearBuffer::COLOR)?;
 
         // 2-pass rendering: Fill up the G-Buffers
-        self.geom_pass
-            .draw_meshes(
-                &self.camera,
-                &self.material,
-                std::array::from_mut(&mut self.mesh),
-            )
-            ?;
+        self.geom_pass.draw_meshes(
+            &self.camera,
+            &self.material,
+            std::array::from_mut(&mut self.mesh),
+        )?;
 
         // 2-pass rendering: Perform defferred shading and draw to screen
         match self.debug_mode {
             None => {
                 let frame = self.post_process.framebuffer();
-                frame
-                    .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
+                frame.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
                 self.geom_pass
                     .draw_screen(frame, &self.camera, &self.lights)
-                    .context("Cannot draw to screen")
-                    ?;
+                    .context("Cannot draw to screen")?;
 
                 // Post-processing
                 self.post_process.draw(backbuffer)
@@ -276,6 +280,14 @@ impl Application for App {
                 .changed()
             {
                 self.post_process.set_exposure(self.exposure).unwrap();
+            }
+
+            if ui.add(egui::Slider::new(&mut self.bloom_size, 1e-4..=1f32).logarithmic(true).show_value(true).text("Bloom size")).changed() {
+                self.post_process.set_bloom_size(self.bloom_size).unwrap();
+            }
+
+            if ui.add(egui::Slider::new(&mut self.bloom_strength, 1e-4..=1f32).logarithmic(true).show_value(true).text("Bloom strength")).changed() {
+                self.post_process.set_bloom_strength(self.bloom_strength).unwrap();
             }
         });
         egui::Window::new("Debug textures").show(ctx, |ui| {
