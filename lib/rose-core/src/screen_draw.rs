@@ -24,6 +24,7 @@ static SCREEN_VAO: Lazy<VertexArray> = Lazy::new(|| {
     vao
 });
 
+#[derive(Debug)]
 pub struct ScreenDraw {
     program: Program,
 }

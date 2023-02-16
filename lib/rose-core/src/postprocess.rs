@@ -6,6 +6,7 @@ use eyre::Result;
 
 use crate::screen_draw::ScreenDraw;
 
+#[derive(Debug)]
 pub struct Postprocess {
     draw: ScreenDraw,
     draw_texture: UniformLocation,

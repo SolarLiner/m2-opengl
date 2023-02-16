@@ -16,7 +16,7 @@ use violette::{
 };
 use violette_derive::VertexAttributes;
 
-use crate::{camera::Camera, mesh::Mesh};
+use crate::{camera::Camera, mesh::Mesh, transform::Transformed};
 
 #[derive(Debug, Default, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, VertexAttributes)]
 #[repr(C)]
@@ -217,14 +217,15 @@ impl Material {
         Ok(self)
     }
 
-    pub fn draw_meshes(
+    #[tracing::instrument(skip(meshes), fields(meshes=meshes.len()))]
+    pub fn draw_meshes<MC: std::ops::Deref<Target = Mesh<Vertex>>>(
         &self,
         framebuffer: &Framebuffer,
         camera: &Camera,
-        meshes: &mut [Mesh<Vertex>],
+        meshes: &mut [Transformed<MC>],
     ) -> Result<()> {
         let mut ordering = (0..meshes.len()).collect::<Vec<_>>();
-        ordering.sort_by_cached_key(|ix| meshes[*ix].distance_to_camera(camera));
+        ordering.sort_by_cached_key(|ix| meshes[*ix].transform.distance_to_camera(camera));
         let mat_view_proj = camera.projection.matrix() * camera.transform.matrix();
         self.program
             .set_uniform(self.uniform_view_proj, mat_view_proj)?;

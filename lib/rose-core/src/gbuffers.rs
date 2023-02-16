@@ -4,7 +4,7 @@ use glam::UVec2;
 use eyre::{Context, Result};
 
 use violette::{
-    base::resource::{Resource},
+    base::resource::Resource,
     framebuffer::{
         Blend,
         ClearBuffer,
@@ -17,10 +17,11 @@ use violette::{
 
 use crate::{
     camera::Camera, material::{Material, Vertex}, mesh::Mesh,
-    screen_draw::ScreenDraw,
+    screen_draw::ScreenDraw, transform::Transformed,
 };
 use crate::light::LightBuffer;
 
+#[derive(Debug)]
 pub struct GeometryBuffers {
     screen_pass: ScreenDraw,
     debug_texture: ScreenDraw,
@@ -117,13 +118,13 @@ impl GeometryBuffers {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn draw_meshes(
+    pub fn draw_meshes<MC: std::ops::Deref<Target=Mesh<Vertex>>>(
         &self,
         camera: &Camera,
         material: &Material,
-        meshes: &mut [Mesh<Vertex>],
+        meshes: &mut [Transformed<MC>],
     ) -> Result<()> {
-        self.fbo.viewport(0, 0, camera.projection.width as _, camera.projection.height as _);
+        // self.fbo.viewport(0, 0, camera.projection.width as _, camera.projection.height as _);
         self.fbo.disable_blending()?;
         self.fbo.disable_scissor()?;
         self.fbo.enable_depth_test(DepthTestFunction::Less)?;

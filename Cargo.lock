@@ -1187,6 +1187,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "many-spheres"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "egui",
+ "eyre",
+ "glam",
+ "rand",
+ "rose-core",
+ "rose-platform",
+ "rose-renderer",
+ "rose-ui",
+ "tracing",
+ "violette",
+]
+
+[[package]]
 name = "matchers"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1803,6 +1820,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rose-renderer"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "eyre",
+ "glam",
+ "rose-core",
+ "tracing",
+ "violette",
+ "violette-derive",
+]
+
+[[package]]
 name = "rose-ui"
 version = "0.1.0"
 dependencies = [
@@ -2280,6 +2310,7 @@ dependencies = [
  "glam",
  "rose-core",
  "rose-platform",
+ "rose-renderer",
  "rose-ui",
  "tracing",
  "violette",

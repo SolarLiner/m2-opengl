@@ -7,16 +7,53 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'violette-low'",
+            "name": "Debug executable 'hello_triangle'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=hello_triangle",
+                    "--package=hello_triangle"
+                ],
+                "filter": {
+                    "name": "hello_triangle",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'hello_triangle'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=hello_triangle",
+                    "--package=hello_triangle"
+                ],
+                "filter": {
+                    "name": "hello_triangle",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'rose-core'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=violette-low"
+                    "--package=rose-core"
                 ],
                 "filter": {
-                    "name": "violette-low",
+                    "name": "rose-core",
                     "kind": "lib"
                 }
             },
@@ -26,16 +63,129 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in library 'm2-opengl'",
+            "name": "Debug unit tests in library 'violette'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
                     "--lib",
-                    "--package=m2-opengl"
+                    "--package=violette"
                 ],
                 "filter": {
-                    "name": "m2-opengl",
+                    "name": "violette",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'works'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=works",
+                    "--package=violette-derive"
+                ],
+                "filter": {
+                    "name": "works",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'rose-platform'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=rose-platform"
+                ],
+                "filter": {
+                    "name": "rose-platform",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'rose-ui'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=rose-ui"
+                ],
+                "filter": {
+                    "name": "rose-ui",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'many-spheres'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=many-spheres",
+                    "--package=many-spheres"
+                ],
+                "filter": {
+                    "name": "many-spheres",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'many-spheres'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=many-spheres",
+                    "--package=many-spheres"
+                ],
+                "filter": {
+                    "name": "many-spheres",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'rose-renderer'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=rose-renderer"
+                ],
+                "filter": {
+                    "name": "rose-renderer",
                     "kind": "lib"
                 }
             },
@@ -50,7 +200,7 @@
                 "args": [
                     "build",
                     "--bin=uv_sphere",
-                    "--package=m2-opengl"
+                    "--package=uv_sphere"
                 ],
                 "filter": {
                     "name": "uv_sphere",
@@ -60,31 +210,10 @@
             "args": [],
             "cwd": "${workspaceFolder}",
             "env": {
-                "WINIT_UNIX_BACKEND": "x11",
-                "RUST_LOG": "gl=trace,debug"
+                "RUST_LOG": "debug",
+                "WINIT_UNIX_BACKEND": "x11"
             }
-        },{
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug executable 'hello_triangle'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=hello_triangle",
-                    "--package=m2-opengl"
-                ],
-                "filter": {
-                    "name": "hello_triangle",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "WINIT_UNIX_BACKEND": "x11",
-                "RUST_LOG": "gl=trace,debug"
-            }
-        }
+        },
         {
             "type": "lldb",
             "request": "launch",
@@ -94,7 +223,7 @@
                     "test",
                     "--no-run",
                     "--bin=uv_sphere",
-                    "--package=m2-opengl"
+                    "--package=uv_sphere"
                 ],
                 "filter": {
                     "name": "uv_sphere",

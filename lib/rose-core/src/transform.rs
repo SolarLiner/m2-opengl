@@ -1,6 +1,9 @@
 use std::ops::Mul;
 
+use float_ord::FloatOrd;
 use glam::{Mat4, Quat, Vec3};
+
+use crate::camera::Camera;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Transform {
@@ -17,18 +20,27 @@ impl Transform {
     pub fn right(&self) -> Vec3 {
         self.rotation.mul_vec3(Vec3::X)
     }
-    
+
     pub fn up(&self) -> Vec3 {
         self.rotation.mul_vec3(Vec3::Y)
     }
 
-    pub fn down(&self) -> Vec3 { -self.up() }
+    pub fn down(&self) -> Vec3 {
+        -self.up()
+    }
 
     pub fn forward(&self) -> Vec3 {
         self.rotation.mul_vec3(-Vec3::Z)
     }
 
-    pub fn backward(&self) -> Vec3 { -self.forward() }
+    pub fn backward(&self) -> Vec3 {
+        -self.forward()
+    }
+
+    pub fn distance_to_camera(&self, camera: &Camera) -> FloatOrd<f32> {
+        let dist = self.position.distance(camera.transform.position);
+        FloatOrd(dist)
+    }
 }
 
 impl Default for Transform {
@@ -102,3 +114,35 @@ impl Transform {
         Mat4::from_rotation_translation(self.rotation, self.position)
     }
 }
+
+/// Wrapper for values with transforms
+#[derive(Debug, Clone, Copy)]
+pub struct Transformed<T> {
+    pub value: T,
+    pub transform: Transform,
+}
+
+impl<T> std::ops::Deref for Transformed<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl<T> std::ops::DerefMut for Transformed<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
+pub trait TransformExt: Sized {
+    fn transformed(self, transform: Transform) -> Transformed<Self> {
+        Transformed {
+            value: self,
+            transform,
+        }
+    }
+}
+
+impl<T: Sized> TransformExt for T {}

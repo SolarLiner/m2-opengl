@@ -1,0 +1,16 @@
+[package]
+name = "rose-renderer"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+
+[dependencies]
+violette = { path = "../violette" }
+violette-derive = { path = "../violette-derive" }
+rose-core = { path = "../rose-core" }
+
+bytemuck.workspace = true
+eyre.workspace = true
+glam.workspace = true
+tracing.workspace = true

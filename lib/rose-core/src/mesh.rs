@@ -22,7 +22,6 @@ use crate::transform::Transform;
 
 #[derive(Debug)]
 pub struct Mesh<Vertex> {
-    pub transform: Transform,
     array: VertexArray,
     vertices: ArrayBuffer<Vertex>,
     indices: ElementBuffer<u32>,
@@ -42,7 +41,6 @@ impl<Vertex: Pod> Mesh<Vertex> where Vertex: VertexAttributes {
         vao.with_vertex_buffer(&vertices)?;
         vao.with_element_buffer(&indices)?;
         Ok(Self {
-            transform: Transform::default(),
             vertices,
             array: vao,
             indices,
@@ -55,7 +53,7 @@ impl<Vertex: Pod> Mesh<Vertex> where Vertex: VertexAttributes {
         let mut vao = VertexArray::new();
         vao.with_vertex_buffer(&vertices)?;
         vao.with_element_buffer(&indices)?;
-        Ok(Self {transform: Transform::default(), vertices, array: vao, indices })
+        Ok(Self {vertices, array: vao, indices })
     }
 
     pub fn vertices(&mut self) -> &mut ArrayBuffer<Vertex> {
@@ -66,24 +64,11 @@ impl<Vertex: Pod> Mesh<Vertex> where Vertex: VertexAttributes {
         &mut self.indices
     }
 
-    pub fn reset_transform(&mut self) {
-        self.transform = Transform::default();
-    }
-
-    pub fn transformed(mut self, transform: Transform) -> Self {
-        self.transform = transform * self.transform;
-        self
-    }
-
     pub fn draw(&self, program: &Program, framebuffer: &Framebuffer, wireframe: bool) -> Result<()> {
         framebuffer
             .draw_elements(program, &self.array, if wireframe {DrawMode::Lines} else {DrawMode::Triangles}, 0..self.indices.len() as i32)
             .context("Cannot draw mesh")?;
         Ok(())
-    }
-
-    pub fn distance_to_camera(&self, camera: &crate::camera::Camera) -> FloatOrd<f32> {
-        FloatOrd(self.transform.position.distance(camera.transform.position))
     }
 }
 

@@ -10,7 +10,7 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use violette::{
-    buffer::{Buffer, UniformBuffer},
+    buffer::{Buffer, UniformBuffer, BufferAccess},
 };
 
 #[derive(Debug, Copy, Clone, FromPrimitive)]
@@ -89,6 +89,16 @@ pub struct GpuLight {
     color: std140::Vec3,
 }
 
+impl From<<GpuLight as AsStd140>::Output> for GpuLight {
+    fn from(value: <GpuLight as AsStd140>::Output) -> Self {
+        Self {
+            kind: value.kind,
+            pos_dir: value.pos_dir,
+            color: value.color,
+        }
+    }
+}
+
 impl From<Light> for GpuLight {
     fn from(l: Light) -> Self {
         Self {
@@ -107,6 +117,12 @@ impl GpuLight {
             .map(|v| v.as_std140())
             .collect::<Vec<_>>();
         Buffer::with_data(&data).context("Cannot create light buffer")
+    }
+
+    pub fn download_buffer(buf: &LightBuffer) -> Result<Vec<Self>> {
+        let slice = buf.slice(..);
+        let lights = slice.get(BufferAccess::MAP_READ)?.iter().copied().map(|gl| gl.into()).collect::<Vec<_>>();
+        Ok(lights)
     }
 }
 
