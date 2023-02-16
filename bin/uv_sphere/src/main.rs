@@ -70,13 +70,13 @@ impl OrbitCameraController {
         self.tgt_rotation = (yaw * self.tgt_rotation) * pitch;
     }
 
-    pub fn scroll(&mut self, camera: &Camera, amt: f32) {
+    pub fn scroll(&mut self, _camera: &Camera, amt: f32) {
         self.radius -= amt * self.radius * 0.05 * self.sensitivity;
         self.radius = self.radius.max(0.05);
         // self.radius = f32::max(0.05, (1. - amt) * self.radius * 0.2 * self.sensitivity);
     }
 
-    pub fn update(&mut self, dt: Duration, camera: &mut Camera) {
+    pub fn update(&mut self, _dt: Duration, camera: &mut Camera) {
         let rot_matrix = Mat3::from_quat(self.tgt_rotation);
         camera.transform.rotation = self.tgt_rotation;
         camera.transform.position = self.focus + rot_matrix.mul_vec3(Vec3::Z * self.radius);
