@@ -12,6 +12,7 @@ rose-core = { path = "../../lib/rose-core" }
 rose-platform = { path = "../../lib/rose-platform", features = ["ui"] }
 rose-ui = { path = "../../lib/rose-ui" }
 violette = { path = "../../lib/violette" }
+violette-derive = { path = "../../lib/violette-derive" }
 
 bytemuck.workspace = true
 egui.workspace = true

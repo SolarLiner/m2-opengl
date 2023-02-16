@@ -11,16 +11,13 @@ use violette::{
     framebuffer::{ClearBuffer, Framebuffer},
     program::{Program, UniformLocation},
     shader::{FragmentShader, VertexShader},
-    vertex::AsVertexAttributes,
 };
+use violette_derive::VertexAttributes;
 
-#[derive(Debug, Clone, Copy, Zeroable, Pod)]
+#[derive(Debug, Default, Clone, Copy, Zeroable, Pod, VertexAttributes)]
 #[repr(C)]
-struct Vertex(Vec2, Vec3);
+struct Vertex { pos: Vec2, color: Vec3 }
 
-impl AsVertexAttributes for Vertex {
-    type Attr = (Vec2, Vec3);
-}
 
 struct TriangleApp {
     mesh_scale: f32,
@@ -40,9 +37,9 @@ impl Application for TriangleApp {
             .link()?;
         let mesh = Mesh::new(
             [
-                Vertex(vec2(-0.5, -0.5), vec3(1., 0., 0.)),
-                Vertex(vec2(0., 0.5), vec3(0., 1., 0.)),
-                Vertex(vec2(0.5, -0.5), vec3(0., 0., 1.)),
+                Vertex { pos: vec2(-0.5, -0.5), color: vec3(1., 0., 0.) },
+                Vertex { pos: vec2(0., 0.5), color: vec3(0., 1., 0.) },
+                Vertex { pos: vec2(0.5, -0.5), color: vec3(0., 0., 1.) },
             ],
             [0, 1, 2],
         )?;

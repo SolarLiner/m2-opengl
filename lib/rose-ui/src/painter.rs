@@ -1,19 +1,19 @@
 use std::{collections::HashMap, num::NonZeroU32};
 
-use bytemuck::{Pod, Zeroable, offset_of};
+use bytemuck::{offset_of, Pod, Zeroable};
 use egui::epaint::{self, Primitive};
 use eyre::Result;
-use glam::{vec2, Vec2};
+use glam::{vec2, Vec2, Vec4};
+use rose_core::mesh::Mesh;
 use violette::{
     base::GlType,
     framebuffer::{Blend, Framebuffer},
     gl,
     program::{Program, UniformLocation},
     texture::{Texture, TextureFormat},
-    vertex::VertexAttributes,
+    vertex::{VertexAttributes, VertexDesc},
 };
 use winit::dpi::{LogicalPosition, PhysicalSize};
-use rose_core::mesh::Mesh;
 
 pub type UiTexture = Texture<EguiColor>;
 
@@ -40,17 +40,14 @@ impl TextureFormat for EguiColor {
 #[repr(transparent)]
 struct Vertex(epaint::Vertex);
 
-// impl AsVertexAttributes for Vertex {
-//     type Attr = (Vec2, Vec2, Normalized<Vec4>);
-// }
-
 impl VertexAttributes for Vertex {
-    const COUNT: usize = 3;
-
-    unsafe fn vertex_attributes() {
-        gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, std::mem::size_of::<Self>() as _, offset_of!(epaint::Vertex, pos) as _);
-        gl::VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, std::mem::size_of::<Self>() as _, offset_of!(epaint::Vertex, uv) as _);
-        gl::VertexAttribPointer(2, 4, gl::UNSIGNED_BYTE, gl::TRUE, std::mem::size_of::<Self>() as _, offset_of!(epaint::Vertex, color) as _);
+    fn attributes() -> &'static [violette::vertex::VertexDesc] {
+        vec![
+            VertexDesc::from_gl_type::<Vec2>(offset_of!(epaint::Vertex, pos)),
+            VertexDesc::from_gl_type::<Vec2>(offset_of!(epaint::Vertex, uv)),
+            VertexDesc::from_gl_type::<[u8; 4]>(offset_of!(epaint::Vertex, color)).normalized(),
+        ]
+        .leak()
     }
 }
 
@@ -142,12 +139,12 @@ impl UiImpl {
         self.mesh
             .vertices()
             .set(vertices, violette::buffer::BufferUsageHint::Dynamic)?;
-        self.mesh.indices().set(
-            &mesh.indices,
-            violette::buffer::BufferUsageHint::Dynamic,
-        )?;
+        self.mesh
+            .indices()
+            .set(&mesh.indices, violette::buffer::BufferUsageHint::Dynamic)?;
         if let Some(texture) = self.texture(mesh.texture_id) {
-            self.program.set_uniform(self.uniform_sampler, texture.as_uniform(0)?)?;
+            self.program
+                .set_uniform(self.uniform_sampler, texture.as_uniform(0)?)?;
         }
         self.mesh.draw(&self.program, frame, false)
     }
@@ -203,11 +200,7 @@ impl UiImpl {
         self.replace_texture(id, texture)
     }
 
-    pub fn replace_texture(
-        &mut self,
-        id: egui::TextureId,
-        texture: UiTexture,
-    ) -> egui::TextureId {
+    pub fn replace_texture(&mut self, id: egui::TextureId, texture: UiTexture) -> egui::TextureId {
         if let Some(old_texture) = self.textures.insert(id, texture) {
             self.tex_trash_bin.push(old_texture);
         }
@@ -234,10 +227,8 @@ impl UiImpl {
         frame.enable_blending(Blend::One, Blend::OneMinusSrcAlpha)?;
         let logical_size = size.to_logical::<f32>(ppp as _);
         frame.viewport(0, 0, size.width as _, size.height as _);
-        self.program.set_uniform::<[f32; 2]>(
-            self.uniform_screen_size,
-            logical_size.into(),
-        )?;
+        self.program
+            .set_uniform::<[f32; 2]>(self.uniform_screen_size, logical_size.into())?;
 
         Ok(size)
     }

@@ -1,5 +1,6 @@
 use std::{collections::BTreeSet, ops::Not, path::Path};
 
+use bytemuck::offset_of;
 use either::Either;
 use eyre::{Context, ContextCompat, Result};
 
@@ -11,18 +12,30 @@ use violette::{
     shader::Shader,
     shader::VertexShader,
     texture::{Texture, TextureUnit},
-    vertex::AsVertexAttributes,
+    vertex::{VertexAttributes, VertexDesc},
 };
+use violette_derive::VertexAttributes;
 
 use crate::{camera::Camera, mesh::Mesh};
 
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Debug, Default, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, VertexAttributes)]
 #[repr(C)]
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
     pub uv: Vec2,
 }
+
+// impl VertexAttributes for Vertex {
+//     fn attributes() -> &'static [VertexDesc] {
+//         vec![
+//             VertexDesc::from_gl_type::<Vec3>(offset_of!(Self, position)),
+//             VertexDesc::from_gl_type::<Vec3>(offset_of!(Self, normal)),
+//             VertexDesc::from_gl_type::<Vec2>(offset_of!(Self, uv)),
+//         ]
+//         .leak()
+//     }
+// }
 
 impl Vertex {
     pub fn new(position: Vec3, normal: Vec3, uv: Vec2) -> Self {
@@ -34,10 +47,7 @@ impl Vertex {
     }
 }
 
-impl AsVertexAttributes for Vertex {
-    type Attr = (Vec3, Vec3, Vec2);
-}
-
+#[derive(Debug)]
 pub enum TextureSlot<const N: usize> {
     Texture(Texture<[f32; N]>),
     Color([f32; N]),
@@ -130,6 +140,7 @@ impl ShaderBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct Material {
     program: Program,
     uniform_color: UniformLocation,

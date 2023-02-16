@@ -11,7 +11,7 @@ use violette::{
     },
     vertex::{
         DrawMode,
-        AsVertexAttributes,
+        VertexAttributes,
         VertexArray
     }
 };
@@ -28,7 +28,7 @@ pub struct Mesh<Vertex> {
     indices: ElementBuffer<u32>,
 }
 
-impl<Vertex: Pod + AsVertexAttributes> Mesh<Vertex> {
+impl<Vertex: Pod> Mesh<Vertex> where Vertex: VertexAttributes {
     pub fn new(
         vertices: impl IntoIterator<Item = Vertex>,
         indices: impl IntoIterator<Item = u32>,
@@ -96,7 +96,7 @@ impl<Vtx, Ctor> MeshBuilder<Vtx, Ctor> {
     pub fn new(ctor: Ctor) -> Self { Self { ctor, __phantom: PhantomData } }
 }
 
-impl<Vertex: Pod + AsVertexAttributes, Ctor: Fn(Vec3, Vec3, Vec2) -> Vertex> MeshBuilder<Vertex, Ctor> {
+impl<Vertex: Pod, Ctor: Fn(Vec3, Vec3, Vec2) -> Vertex> MeshBuilder<Vertex, Ctor> where Vertex: VertexAttributes {
     pub fn uv_sphere(&self, radius: f32, nlon: usize, nlat: usize) -> Result<Mesh<Vertex>> {
         use std::f32::consts::*;
         let mut vertices = Vec::with_capacity(nlon * nlat + 2);
