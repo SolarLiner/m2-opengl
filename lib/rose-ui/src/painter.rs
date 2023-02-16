@@ -3,7 +3,7 @@ use std::{collections::HashMap, num::NonZeroU32};
 use bytemuck::{offset_of, Pod, Zeroable};
 use egui::epaint::{self, Primitive};
 use eyre::Result;
-use glam::{vec2, Vec2, Vec4};
+use glam::{vec2, Vec2};
 use rose_core::mesh::Mesh;
 use violette::{
     base::GlType,

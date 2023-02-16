@@ -3,17 +3,16 @@ use std::{collections::HashMap, sync::Weak};
 use eyre::Result;
 use glam::{UVec2, Vec3};
 use rose_core::{
-    camera::{Camera, Projection},
+    camera::{Camera},
     gbuffers::GeometryBuffers,
     light::{GpuLight, Light, LightBuffer},
-    material::{Material, Vertex},
+    material::{Material},
     postprocess::Postprocess,
-    transform::{Transform, TransformExt, Transformed},
+    transform::{TransformExt, Transformed},
     utils::thread_guard::ThreadGuard,
 };
 use tracing::span::EnteredSpan;
 use violette::{
-    buffer::BufferAccess,
     framebuffer::{ClearBuffer, Framebuffer},
 };
 

@@ -1,35 +1,28 @@
 use std::{
-    f32::consts::{PI, TAU},
-    sync::{Arc, Mutex},
+    sync::{Arc},
     time::Duration,
 };
 
 use camera_controller::OrbitCameraController;
-use eyre::{Context, Result};
-use glam::{vec2, vec3, Mat3, Quat, UVec2, Vec2, Vec3};
+use eyre::{Result};
+use glam::{vec3, UVec2, Vec2, Vec3};
 
 use rose_core::{
-    camera::{Camera, Projection},
-    gbuffers::GeometryBuffers,
-    light::{GpuLight, Light},
+    light::{Light},
     material::{Material, Vertex},
     mesh::MeshBuilder,
-    postprocess::Postprocess,
     transform::{Transform, TransformExt},
 };
 use rose_platform::{
     events::{
-        ElementState, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta, VirtualKeyCode,
+        ElementState, ModifiersState, MouseButton, MouseScrollDelta,
         WindowEvent,
     },
     Application, PhysicalSize, WindowBuilder,
 };
 use rose_renderer::{Mesh, Renderer};
 use violette::{
-    framebuffer::Framebuffer,
-    framebuffer::{ClearBuffer, DepthTestFunction},
     texture::Texture,
-    Cull,
 };
 
 mod camera_controller;
@@ -52,7 +45,7 @@ impl Application for App {
 
     #[tracing::instrument(target = "App::new")]
     fn new(size: PhysicalSize<f32>) -> Result<Self> {
-        let sizef = Vec2::from_array(size.into());
+        let _sizef = Vec2::from_array(size.into());
         let size = UVec2::from_array(size.cast::<u32>().into());
         let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 64)?;
         let material = Material::create(

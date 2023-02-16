@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, ops::Not, path::Path};
 
-use bytemuck::offset_of;
+
 use either::Either;
 use eyre::{Context, ContextCompat, Result};
 
@@ -12,7 +12,6 @@ use violette::{
     shader::Shader,
     shader::VertexShader,
     texture::{Texture, TextureUnit},
-    vertex::{VertexAttributes, VertexDesc},
 };
 use violette_derive::VertexAttributes;
 

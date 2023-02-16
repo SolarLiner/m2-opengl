@@ -77,7 +77,7 @@ impl OrbitCameraController {
             .labelled_by(pos_label.id);
     }
 
-    pub fn set_orientation(&mut self, camera_mut: &mut Camera, orientation_radians: Vec2) {
+    pub fn set_orientation(&mut self, _camera_mut: &mut Camera, orientation_radians: Vec2) {
         self.tgt_rotation = Quat::from_rotation_y(orientation_radians.x) * Quat::from_rotation_x(orientation_radians.y);
     }
 }

@@ -1,8 +1,8 @@
 extern crate proc_macro;
 use darling::{FromField, FromDeriveInput, ast, ToTokens};
-use proc_macro2::{Span, TokenStream};
+
 use quote::quote;
-use syn::{parse_macro_input, token::Struct};
+use syn::{parse_macro_input};
 
 #[derive(Debug, Clone, FromField)]
 #[darling(attributes(attribute))]
@@ -27,7 +27,7 @@ pub fn derive_vertex_attributes(item: proc_macro::TokenStream) -> proc_macro::To
 
     let ident = input.ident;
 
-    let input = attributes.iter().enumerate().map(|(i, attr)| {
+    let input = attributes.iter().enumerate().map(|(_i, attr)| {
         let ty = &attr.ty;
         let ident = attr.ident.clone().expect("Tuple structs are not supported");
         quote!(::violette::vertex::VertexDesc::from_gl_type::<#ty>(::bytemuck::offset_of!(Self, #ident)))
