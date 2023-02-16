@@ -1,9 +1,9 @@
 use std::{num::NonZeroU32};
 
-use violette_low::{framebuffer::Framebuffer, texture::Texture, program::UniformLocation};
+use violette::{framebuffer::Framebuffer, texture::Texture, program::UniformLocation};
 use winit::{dpi::PhysicalSize};
 use eyre::Result;
-use violette_low::framebuffer::DepthTestFunction;
+use violette::framebuffer::DepthTestFunction;
 
 use crate::screen_draw::ScreenDraw;
 
@@ -21,11 +21,11 @@ impl Postprocess {
         let Some(height) = NonZeroU32::new(size.height) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();
         let fbo = Framebuffer::new();
-        let texture = Texture::new(width, height, nonzero_one, violette_low::texture::Dimension::D2);
-        texture.wrap_r(violette_low::texture::TextureWrap::MirroredRepeat)?;
-        texture.wrap_s(violette_low::texture::TextureWrap::MirroredRepeat)?;
-        texture.filter_min(violette_low::texture::SampleMode::Nearest)?;
-        texture.filter_mag(violette_low::texture::SampleMode::Linear)?;
+        let texture = Texture::new(width, height, nonzero_one, violette::texture::Dimension::D2);
+        texture.wrap_r(violette::texture::TextureWrap::MirroredRepeat)?;
+        texture.wrap_s(violette::texture::TextureWrap::MirroredRepeat)?;
+        texture.filter_min(violette::texture::SampleMode::Nearest)?;
+        texture.filter_mag(violette::texture::SampleMode::Linear)?;
         texture.reserve_memory()?;
         fbo.attach_color(0, &texture)?;
         fbo.assert_complete()?;

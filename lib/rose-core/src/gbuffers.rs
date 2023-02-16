@@ -1,9 +1,9 @@
 use std::num::NonZeroU32;
+use glam::UVec2;
 
 use eyre::{Context, Result};
-use winit::dpi::PhysicalSize;
 
-use violette_low::{
+use violette::{
     base::resource::{Resource},
     framebuffer::{
         Blend,
@@ -40,9 +40,9 @@ pub struct GeometryBuffers {
 }
 
 impl GeometryBuffers {
-    pub fn new(size: PhysicalSize<u32>) -> Result<Self> {
-        let Some(width) = NonZeroU32::new(size.width) else { eyre::bail!("Zero width resize"); };
-        let Some(height) = NonZeroU32::new(size.height) else { eyre::bail!("Zero height resize"); };
+    pub fn new(size: UVec2) -> Result<Self> {
+        let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width resize"); };
+        let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();
         let pos = Texture::new(width, height, nonzero_one, Dimension::D2);
             pos.filter_min(SampleMode::Linear)?;
@@ -198,7 +198,7 @@ impl GeometryBuffers {
         Ok(())
     }
 
-    pub fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+    pub fn resize(&mut self, size: UVec2) -> Result<()> {
         let Some(width) = NonZeroU32::new(size.width) else { eyre::bail!("Zero width resize"); };
         let Some(height) = NonZeroU32::new(size.height) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();

@@ -1,18 +1,19 @@
 use std::{collections::HashMap, num::NonZeroU32};
 
 use bytemuck::{Pod, Zeroable, offset_of};
-use egui::{epaint::{self, Primitive}, Color32, Context};
+use egui::epaint::{self, Primitive};
 use eyre::Result;
-use glam::{vec2, Vec2, Vec4};
-use violette_low::{
-    base::{GlType, Normalized},
+use glam::{vec2, Vec2};
+use violette::{
+    base::GlType,
     framebuffer::{Blend, Framebuffer},
     gl,
     program::{Program, UniformLocation},
     texture::{Texture, TextureFormat},
-    vertex::{AsVertexAttributes, VertexAttributes},
+    vertex::VertexAttributes,
 };
 use winit::dpi::{LogicalPosition, PhysicalSize};
+use rose_core::mesh::Mesh;
 
 use crate::mesh::Mesh;
 
@@ -24,8 +25,8 @@ pub struct EguiColor(pub egui::Color32);
 
 impl GlType for EguiColor {
     const GL_TYPE: gl::types::GLenum = gl::UNSIGNED_BYTE;
-    const NORMALIZED: bool = true;
     const NUM_COMPONENTS: usize = 4;
+    const NORMALIZED: bool = true;
     const STRIDE: usize = std::mem::size_of::<Self>();
 }
 
@@ -142,10 +143,10 @@ impl UiImpl {
         let vertices = bytemuck::cast_slice(&mesh.vertices);
         self.mesh
             .vertices()
-            .set(vertices, violette_low::buffer::BufferUsageHint::Dynamic)?;
+            .set(vertices, violette::buffer::BufferUsageHint::Dynamic)?;
         self.mesh.indices().set(
             &mesh.indices,
-            violette_low::buffer::BufferUsageHint::Dynamic,
+            violette::buffer::BufferUsageHint::Dynamic,
         )?;
         if let Some(texture) = self.texture(mesh.texture_id) {
             self.program.set_uniform(self.uniform_sampler, texture.as_uniform(0)?)?;
@@ -168,19 +169,19 @@ impl UiImpl {
                     width,
                     height,
                     NonZeroU32::new(1).unwrap(),
-                    violette_low::texture::Dimension::D2,
+                    violette::texture::Dimension::D2,
                 )
             });
         texture.filter_min(match delta.options.minification {
-            egui::TextureFilter::Nearest => violette_low::texture::SampleMode::Nearest,
-            egui::TextureFilter::Linear => violette_low::texture::SampleMode::Linear,
+            egui::TextureFilter::Nearest => violette::texture::SampleMode::Nearest,
+            egui::TextureFilter::Linear => violette::texture::SampleMode::Linear,
         })?;
         texture.filter_mag(match delta.options.minification {
-            egui::TextureFilter::Nearest => violette_low::texture::SampleMode::Nearest,
-            egui::TextureFilter::Linear => violette_low::texture::SampleMode::Linear,
+            egui::TextureFilter::Nearest => violette::texture::SampleMode::Nearest,
+            egui::TextureFilter::Linear => violette::texture::SampleMode::Linear,
         })?;
-        texture.wrap_s(violette_low::texture::TextureWrap::ClampEdge)?;
-        texture.wrap_t(violette_low::texture::TextureWrap::ClampEdge)?;
+        texture.wrap_s(violette::texture::TextureWrap::ClampEdge)?;
+        texture.wrap_t(violette::texture::TextureWrap::ClampEdge)?;
 
         match &delta.image {
             egui::ImageData::Color(image) => {
@@ -227,7 +228,7 @@ impl UiImpl {
         size: PhysicalSize<u32>,
         ppp: f32,
     ) -> Result<PhysicalSize<u32>> {
-        violette_low::culling(None);
+        violette::culling(None);
         frame.disable_depth_test()?;
         unsafe {
             gl::ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);

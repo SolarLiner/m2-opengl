@@ -5,10 +5,14 @@
       <sourceFolder url="file://$MODULE_DIR$/math/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/shell/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/violette/violette-low/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/bin/hello_triangle/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/shell/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/violette/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/rose-core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/rose-platform/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/rose-ui/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/violette/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/violette/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

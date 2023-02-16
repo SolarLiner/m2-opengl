@@ -3,7 +3,7 @@ use std::{ops, path::Path};
 use eyre::{Context, Result};
 use once_cell::sync::Lazy;
 
-use violette_low::{
+use violette::{
     buffer::{
         Buffer,
         ElementBuffer,
@@ -14,7 +14,7 @@ use violette_low::{
         VertexArray,
     },
 };
-use violette_low::framebuffer::Framebuffer;
+use violette::framebuffer::Framebuffer;
 
 const INDICES: [u32; 6] = [/* Face 1: */ 0, 2, 1, /* Face 2: */ 0, 3, 2];
 static SCREEN_INDEX_BUFFER: Lazy<ElementBuffer<u32>> = Lazy::new(|| Buffer::with_data(&INDICES).unwrap());

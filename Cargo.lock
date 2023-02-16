@@ -1252,6 +1252,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2540771e65fc8cb83cd6e8a237f70c319bd5c29f78ed1084ba5d50eeac86f7f9"
 
 [[package]]
+name = "hello_triangle"
+version = "0.1.0"
+dependencies = [
+ "eyre",
+ "rose-core",
+ "rose-platform",
+ "rose-ui",
+]
+
+[[package]]
 name = "hermit-abi"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1421,36 +1431,6 @@ dependencies = [
  "scoped-tls",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "m2-opengl"
-version = "0.1.0"
-dependencies = [
- "bevy_app",
- "bevy_ecs",
- "bytemuck",
- "color-eyre",
- "crevice",
- "egui",
- "egui-winit",
- "either",
- "eyre",
- "float-ord",
- "glam",
- "glutin",
- "glutin-winit",
- "image",
- "num-derive",
- "num-traits",
- "once_cell",
- "rand",
- "raw-window-handle 0.5.0",
- "tracing",
- "tracing-subscriber",
- "tracing-tracy",
- "violette-low",
- "winit",
 ]
 
 [[package]]
@@ -2087,6 +2067,62 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
 
 [[package]]
+name = "rose-core"
+version = "0.1.0"
+dependencies = [
+ "bevy_app",
+ "bevy_ecs",
+ "bytemuck",
+ "color-eyre",
+ "crevice",
+ "either",
+ "eyre",
+ "float-ord",
+ "glam",
+ "glutin",
+ "glutin-winit",
+ "image",
+ "num-derive",
+ "num-traits",
+ "once_cell",
+ "rand",
+ "raw-window-handle 0.5.0",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-tracy",
+ "violette",
+]
+
+[[package]]
+name = "rose-platform"
+version = "0.1.0"
+dependencies = [
+ "color-eyre",
+ "eyre",
+ "glam",
+ "glutin",
+ "glutin-winit",
+ "rose-core",
+ "rose-ui",
+ "violette",
+ "winit",
+]
+
+[[package]]
+name = "rose-ui"
+version = "0.1.0"
+dependencies = [
+ "egui",
+ "egui-winit",
+ "eyre",
+ "glam",
+ "rose-core",
+ "tracing",
+ "violette",
+ "winit",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2585,7 +2621,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
-name = "violette-low"
+name = "violette"
 version = "0.1.0"
 dependencies = [
  "bitflags",

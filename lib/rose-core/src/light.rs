@@ -10,7 +10,7 @@ use glam::Vec3;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use violette_low::{
+use violette::{
     buffer::{Buffer, UniformBuffer},
 };
 

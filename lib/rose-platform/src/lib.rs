@@ -6,48 +6,41 @@ use std::{
 };
 
 use eyre::{eyre, Context, Result};
-use glutin::display::GetGlDisplay;
 use glutin::{
+    display::GetGlDisplay,
     config::{Api, ConfigTemplateBuilder},
     context::{ContextApi, ContextAttributesBuilder, Version},
     prelude::*,
-    surface::{SurfaceAttributesBuilder, WindowSurface},
+    surface::{SurfaceAttributesBuilder, WindowSurface}
 };
 use glutin_winit::DisplayBuilder;
-use raw_window_handle::HasRawWindowHandle;
-use tracing_subscriber::{
-    fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
-};
-use tracing_tracy::TracyLayer;
+use winit::event::KeyboardInput;
 use winit::{
-    dpi::PhysicalSize,
-    event::{ElementState, Event, KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, StartCause, VirtualKeyCode, WindowEvent},
     event_loop::EventLoopBuilder,
     window::{Fullscreen, WindowBuilder},
 };
 
-use crate::ui::{painter::UiImpl, Ui};
+pub use winit::dpi::{PhysicalSize, LogicalSize};
 
-pub mod camera;
-pub mod gbuffers;
-pub mod light;
-pub mod material;
-pub mod mesh;
-pub mod postprocess;
-pub mod screen_draw;
-pub mod transform;
-pub mod ui;
-
+#[allow(unused_variables)]
 pub trait Application: Sized + Send + Sync {
     fn window_features(wb: WindowBuilder) -> WindowBuilder {
         wb
     }
     fn new(size: PhysicalSize<f32>) -> Result<Self>;
-    fn resize(&mut self, _size: PhysicalSize<u32>) {}
-    fn interact(&mut self, _event: WindowEvent) {}
+    fn resize(&mut self, _size: PhysicalSize<u32>) -> Result<()> {
+        Ok(())
+    }
+    fn interact(&mut self, _event: WindowEvent) -> Result<()> {
+        Ok(())
+    }
     /// /!\ Does not run on the main thread. OpenGL calls are unsafe here.
-    fn tick(&mut self, _dt: Duration) {}
-    fn render(&mut self);
+    fn tick(&mut self, _dt: Duration) -> Result<()> {
+        Ok(())
+    }
+    fn render(&mut self) -> Result<()>;
+    #[cfg(feature = "ui")]
     fn ui(&mut self, ctx: &egui::Context) {}
 }
 
@@ -140,12 +133,12 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
     let context = not_current_gl_context
         .make_current(&gl_surface)
         .context("Cannot make OpenGL context current")?;
-    violette_low::load_with(|sym| {
+    violette::load_with(|sym| {
         let sym = CString::new(sym).unwrap();
         gl_display.get_proc_address(sym.as_c_str()).cast()
     });
-    violette_low::debug::set_message_callback(|data| {
-        use violette_low::debug::CallbackSeverity::*;
+    violette::debug::set_message_callback(|data| {
+        use violette::debug::CallbackSeverity::*;
         match data.severity {
             Notification => {
                 tracing::debug!(target: "gl", source=?data.source, message=%data.message, r#type=?data.r#type)
@@ -162,21 +155,21 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
         };
     });
 
-    let gl_version = violette_low::get_string(violette_low::gl::VERSION)
-        .unwrap_or_else(|_| "<None>".to_string());
+    let gl_version =
+        violette::get_string(violette::gl::VERSION).unwrap_or_else(|_| "<None>".to_string());
     let gl_vendor =
-        violette_low::get_string(violette_low::gl::VENDOR).unwrap_or_else(|_| "<None>".to_string());
-    let gl_renderer = violette_low::get_string(violette_low::gl::RENDERER)
+        violette::get_string(violette::gl::VENDOR).unwrap_or_else(|_| "<None>".to_string());
+    let gl_renderer =
+        violette::get_string(violette::gl::RENDERER).unwrap_or_else(|_| "<None>".to_string());
+    let gl_shading_language_version = violette::get_string(violette::gl::SHADING_LANGUAGE_VERSION)
         .unwrap_or_else(|_| "<None>".to_string());
-    let gl_shading_language_version =
-        violette_low::get_string(violette_low::gl::SHADING_LANGUAGE_VERSION)
-            .unwrap_or_else(|_| "<None>".to_string());
     tracing::info!(target: "gl", version=%gl_version, vendor=%gl_vendor, render=%gl_renderer, shading_language=%gl_shading_language_version);
 
     let app = App::new(inner_size.cast()).context("Cannot run app")?;
     let app = Arc::new(Mutex::new(app));
 
-    let mut ui = Ui::new(&event_loop)?;
+    #[cfg(feature = "ui")]
+    let mut ui = rose_ui::Ui::new(&event_loop)?;
 
     std::thread::spawn({
         let app = app.clone();
@@ -185,7 +178,7 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
             loop {
                 let _span = tracing::trace_span!("loop_tick").entered();
                 let tick_start = Instant::now();
-                app.lock().unwrap().tick(last_tick.elapsed());
+                app.lock().unwrap().tick(last_tick.elapsed()).unwrap();
                 let tick_duration = tick_start.elapsed().as_secs_f32();
                 last_tick = Instant::now();
                 tracing::debug!(%tick_duration);
@@ -194,22 +187,26 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
         }
     });
 
-    let mut next_frame_time = Instant::now() + std::time::Duration::from_nanos(16_666_667);
+    let mut next_frame_time = Instant::now() + Duration::from_nanos(16_666_667);
     event_loop.run(move |event, _, control_flow| {
         control_flow.set_wait_until(next_frame_time);
 
         match event {
             Event::RedrawRequested(_) => {
+                #[cfg(feature = "ui")]
                 let next_run = {
                     let _span = tracing::debug_span!("ui").entered();
-                    ui.run(&window, {
+                    let next_run = ui.run(&window, {
                         let app = app.clone();
                         move |cx| app.lock().unwrap().ui(cx)
-                    })
+                    });
                 };
+                #[cfg(not(feature = "ui"))]
+                let next_run = Duration::from_nanos(16_666_667);
+
                 let mut app = app.lock().unwrap();
                 let frame_start = Instant::now();
-                app.render();
+                app.render().unwrap();
                 ui.draw(&window).unwrap();
                 gl_surface.swap_buffers(&context).unwrap();
                 let frame_time = frame_start.elapsed().as_secs_f32();
@@ -247,18 +244,18 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
                         new_size.width.try_into().unwrap(),
                         new_size.height.try_into().unwrap(),
                     );
-                    app.lock().unwrap().resize(new_size);
+                    app.lock().unwrap().resize(new_size).unwrap();
                     window.request_redraw();
                 }
                 event => {
                     let response = ui.on_event(&event);
                     if !response.consumed {
-                        app.lock().unwrap().interact(event);
+                        app.lock().unwrap().interact(event).unwrap();
                     }
                     if response.repaint {
                         window.request_redraw();
                     }
-                },
+                }
             },
             Event::NewEvents(StartCause::ResumeTimeReached { .. }) => window.request_redraw(),
             _ => {}

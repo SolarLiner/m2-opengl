@@ -1,14 +1,15 @@
 use bytemuck::{Pod, Zeroable};
 use eyre::Result;
 use glam::{vec2, vec3, Vec2, Vec3};
-use m2_opengl::{mesh::Mesh, Application};
-use violette_low::{
+use rose_core::{mesh::Mesh};
+use rose_platform::Application;
+use violette::{
     framebuffer::{ClearBuffer, Framebuffer},
     program::{Program, UniformLocation},
     shader::{FragmentShader, VertexShader},
     vertex::AsVertexAttributes,
 };
-use winit::dpi::PhysicalSize;
+use rose_platform::PhysicalSize;
 
 #[derive(Debug, Clone, Copy, Zeroable, Pod)]
 #[repr(C)]
@@ -79,5 +80,5 @@ impl Application for TriangleApp {
 }
 
 fn main() -> Result<()> {
-    m2_opengl::run::<TriangleApp>("Hello Triangle")
+    rose_platform::run::<TriangleApp>("Hello Triangle")
 }

@@ -1,7 +1,6 @@
 use std::ops::Range;
 
-use glam::Mat4;
-use winit::dpi::PhysicalSize;
+use glam::{Mat4, Vec2};
 
 use crate::transform::Transform;
 
@@ -25,9 +24,9 @@ impl Default for Projection {
 }
 
 impl Projection {
-    pub fn update(&mut self, size: PhysicalSize<f32>) {
-        self.width = size.width;
-        self.height = size.height;
+    pub fn update(&mut self, size: Vec2) {
+        self.width = size.x;
+        self.height = size.y;
     }
 
     pub fn matrix(&self) -> Mat4 {

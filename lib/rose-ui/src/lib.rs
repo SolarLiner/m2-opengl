@@ -3,7 +3,7 @@ use std::time::Duration;
 use egui::epaint;
 use egui_winit::winit::event_loop::EventLoopWindowTarget;
 use eyre::Result;
-use violette_low::framebuffer::Framebuffer;
+use violette::framebuffer::Framebuffer;
 
 use self::painter::UiImpl;
 
@@ -12,7 +12,7 @@ pub mod painter;
 pub struct Ui {
     ctx: egui::Context,
     winit: egui_winit::State,
-    painter: painter::UiImpl,
+    painter: UiImpl,
     shapes: Vec<epaint::ClippedShape>,
     tex_deltas: egui::TexturesDelta,
 }

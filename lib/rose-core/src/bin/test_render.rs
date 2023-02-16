@@ -5,7 +5,7 @@ use winit::dpi::PhysicalSize;
 
 use m2_opengl::Application;
 use m2_opengl::screen_draw::ScreenDraw;
-use violette_low::framebuffer::Framebuffer;
+use violette::framebuffer::Framebuffer;
 
 const DRAW_SOURCE: &str = r#"
 #version 330

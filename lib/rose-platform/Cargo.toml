@@ -1,0 +1,22 @@
+[package]
+name = "rose-platform"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+color-eyre = "0.6.2"
+glutin = "0.30.3"
+glutin-winit = "0.2.1"
+
+rose-core = { path = "../rose-core" }
+rose-ui = { path = "../rose-ui", optional = true }
+violette = { path = "../violette" }
+
+eyre.workspace = true
+glam.workspace = true
+winit.workspace = true
+
+[features]
+ui = ["rose-ui"]

@@ -21,7 +21,7 @@ use m2_opengl::{
     transform::Transform,
     Application,
 };
-use violette_low::{
+use violette::{
     framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer},
     texture::Texture,
     Cull,
@@ -145,7 +145,7 @@ impl Application for App {
         geo_fbo.enable_depth_test(DepthTestFunction::Less)?;
         geo_fbo.clear_color([0., 0., 0., 1.])?;
         geo_fbo.clear_depth(1.)?;
-        violette_low::culling(Some(Cull::Back));
+        violette::culling(Some(Cull::Back));
 
         let size = size.cast();
         Framebuffer::backbuffer().viewport(0, 0, size.width, size.height);

@@ -4,7 +4,7 @@ use either::Either;
 use eyre::{Context, ContextCompat, Result};
 
 use glam::{Vec2, Vec3};
-use violette_low::{
+use violette::{
     framebuffer::Framebuffer,
     gl,
     program::{Program, Uniform, UniformLocation},
