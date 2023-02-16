@@ -1,14 +1,20 @@
 [package]
 name = "rose-platform"
-version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+homepage.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 color-eyre = "0.6.2"
+egui = { version = "0.20.1", optional = true, features = ["bytemuck"] }
 glutin = "0.30.3"
 glutin-winit = "0.2.1"
+tracing-subscriber = { version = "0.3.11", features = ["env-filter", "json"] }
+tracing-tracy = "0.10.2"
+raw-window-handle = "0.5.0"
 
 rose-core = { path = "../rose-core" }
 rose-ui = { path = "../rose-ui", optional = true }
@@ -17,6 +23,7 @@ violette = { path = "../violette" }
 eyre.workspace = true
 glam.workspace = true
 winit.workspace = true
+tracing.workspace = true
 
 [features]
-ui = ["rose-ui"]
+ui = ["egui", "rose-ui"]

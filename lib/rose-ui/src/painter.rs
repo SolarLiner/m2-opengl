@@ -15,8 +15,6 @@ use violette::{
 use winit::dpi::{LogicalPosition, PhysicalSize};
 use rose_core::mesh::Mesh;
 
-use crate::mesh::Mesh;
-
 pub type UiTexture = Texture<EguiColor>;
 
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]

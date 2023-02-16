@@ -1,12 +1,13 @@
 [package]
 name = "rose-ui"
-version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+homepage.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui = { version = "0.20.1", features = ["bytemuck"] }
 egui-winit = "0.20.1"
 eyre = "0.6.8"
 glam = { version = "0.22.0", features = ["bytemuck", "rand", "num-traits"] }
@@ -14,3 +15,6 @@ tracing = "0.1.33"
 violette = { path = "../violette" }
 rose-core = { path = "../rose-core" }
 winit = "0.27.5"
+
+bytemuck.workspace = true
+egui.workspace = true

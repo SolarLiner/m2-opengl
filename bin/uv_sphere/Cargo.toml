@@ -1,5 +1,5 @@
 [package]
-name = "hello_triangle"
+name = "uv_sphere"
 edition.workspace = true
 version.workspace = true
 authors.workspace = true
@@ -17,3 +17,4 @@ bytemuck.workspace = true
 egui.workspace = true
 eyre.workspace = true
 glam.workspace = true
+tracing.workspace = true

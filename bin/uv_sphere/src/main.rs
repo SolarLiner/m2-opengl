@@ -1,30 +1,33 @@
-use std::f32::consts::{PI, TAU};
-use std::{ops::Range, time::Duration};
+use std::{
+    f32::consts::{PI, TAU},
+    time::Duration,
+};
 
 use eyre::{Context, Result};
-use glam::{vec2, vec3, Quat, Vec2, Vec3, Mat3};
-use winit::event::{ModifiersState, MouseScrollDelta};
-use winit::{
-    dpi::PhysicalSize,
-    event::{ElementState, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
-};
+use glam::{vec2, vec3, Mat3, Quat, Vec2, Vec3, UVec2};
 
-use m2_opengl::{
-    camera::{Camera, Projection},
+use rose_core::{
+    camera::Camera,
     gbuffers::GeometryBuffers,
-    light::{GpuLight, Light, LightBuffer},
-    material::Material,
-    material::Vertex,
-    mesh::Mesh,
-    mesh::MeshBuilder,
+    light::{Light, LightBuffer, GpuLight},
+    material::{Material, Vertex},
+    mesh::{Mesh, MeshBuilder},
     postprocess::Postprocess,
     transform::Transform,
-    Application,
+};
+use rose_core::camera::Projection;
+use rose_platform::{
+    events::{
+        ElementState, KeyboardInput, ModifiersState, MouseButton, MouseScrollDelta, VirtualKeyCode,
+        WindowEvent,
+    },
+    Application, PhysicalSize,
 };
 use violette::{
-    framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer},
-    texture::Texture,
     Cull,
+    framebuffer::Framebuffer,
+    texture::Texture,
+    framebuffer::{ClearBuffer, DepthTestFunction}
 };
 
 #[derive(Debug, Clone)]
@@ -76,8 +79,7 @@ impl OrbitCameraController {
     pub fn update(&mut self, dt: Duration, camera: &mut Camera) {
         let rot_matrix = Mat3::from_quat(self.tgt_rotation);
         camera.transform.rotation = self.tgt_rotation;
-        camera.transform.position =
-            self.focus + rot_matrix.mul_vec3(Vec3::Z * self.radius);
+        camera.transform.position = self.focus + rot_matrix.mul_vec3(Vec3::Z * self.radius);
     }
 }
 
@@ -135,8 +137,9 @@ impl Application for App {
                 ..Default::default()
             },
         };
-        let geom_pass = GeometryBuffers::new(size.cast())?;
-        let post_process = Postprocess::new(size.cast())?;
+        let size = UVec2::from_array(size.cast::<u32>().into());
+        let geom_pass = GeometryBuffers::new(size)?;
+        let post_process = Postprocess::new(size)?;
         post_process.set_exposure(1e-3)?;
         post_process.framebuffer().clear_color([0., 0., 0., 1.])?;
         post_process.framebuffer().clear_depth(1.)?;
@@ -147,8 +150,8 @@ impl Application for App {
         geo_fbo.clear_depth(1.)?;
         violette::culling(Some(Cull::Back));
 
-        let size = size.cast();
-        Framebuffer::backbuffer().viewport(0, 0, size.width, size.height);
+        let sizei = size.as_ivec2();
+        Framebuffer::backbuffer().viewport(0, 0, sizei.x, sizei.y);
 
         Ok(Self {
             exposure: 1e-3,
@@ -165,14 +168,18 @@ impl Application for App {
             camera_controller: OrbitCameraController::default(),
         })
     }
-    fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.camera.projection.update(size.cast());
-        self.geom_pass.resize(size).unwrap();
-        self.post_process.resize(size).unwrap();
-        Framebuffer::backbuffer().viewport(0, 0, size.width as _, size.height as _);
+    fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
+        let sizei = size.cast();
+        let size = UVec2::from_array(size.into());
+        let sizef = size.as_vec2();
+        self.camera.projection.update(sizef);
+        self.geom_pass.resize(size)?;
+        self.post_process.resize(size)?;
+        Framebuffer::backbuffer().viewport(0, 0, sizei.width, sizei.height);
+        Ok(())
     }
 
-    fn interact(&mut self, event: WindowEvent) {
+    fn interact(&mut self, event: WindowEvent) -> Result<()> {
         match event {
             WindowEvent::CursorMoved { position, .. } => {
                 let position = position.cast();
@@ -191,7 +198,9 @@ impl Application for App {
             WindowEvent::MouseInput { button, state, .. } => {
                 if state == ElementState::Pressed {
                     self.dragging = match button {
-                        MouseButton::Right | MouseButton::Left if self.ctrl_pressed => Some(MouseButton::Right),
+                        MouseButton::Right | MouseButton::Left if self.ctrl_pressed => {
+                            Some(MouseButton::Right)
+                        }
                         MouseButton::Left => Some(MouseButton::Left),
                         _ => None,
                     }
@@ -205,7 +214,9 @@ impl Application for App {
                     self.camera_controller.scroll(&self.camera, delta.y as _)
                 }
             },
-            WindowEvent::ModifiersChanged(state) => self.ctrl_pressed = state.contains(ModifiersState::CTRL),
+            WindowEvent::ModifiersChanged(state) => {
+                self.ctrl_pressed = state.contains(ModifiersState::CTRL)
+            }
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
@@ -223,10 +234,12 @@ impl Application for App {
             },
             _ => {}
         }
+        Ok(())
     }
     #[tracing::instrument(target = "App::tick", skip(self))]
-    fn tick(&mut self, dt: Duration) {
+    fn tick(&mut self, dt: Duration) -> Result<()> {
         self.camera_controller.update(dt, &mut self.camera);
+        Ok(())
     }
 
     #[cfg(never)]
@@ -250,10 +263,10 @@ impl Application for App {
     }
 
     #[tracing::instrument(target = "App::render", skip_all)]
-    fn render(&mut self) {
+    fn render(&mut self) -> Result<()> {
         let backbuffer = &Framebuffer::backbuffer();
         backbuffer.disable_scissor().unwrap();
-        backbuffer.do_clear(ClearBuffer::COLOR).unwrap();
+        backbuffer.do_clear(ClearBuffer::COLOR)?;
 
         // 2-pass rendering: Fill up the G-Buffers
         self.geom_pass
@@ -262,19 +275,18 @@ impl Application for App {
                 &self.material,
                 std::array::from_mut(&mut self.mesh),
             )
-            .unwrap();
+            ?;
 
         // 2-pass rendering: Perform defferred shading and draw to screen
         match self.debug_mode {
             None => {
                 let frame = self.post_process.framebuffer();
                 frame
-                    .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)
-                    .unwrap();
+                    .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
                 self.geom_pass
                     .draw_screen(frame, &self.camera, &self.lights)
                     .context("Cannot draw to screen")
-                    .unwrap();
+                    ?;
 
                 // Post-processing
                 self.post_process.draw(backbuffer)
@@ -295,8 +307,8 @@ impl Application for App {
                 .geom_pass
                 .debug_rough_metal(&Framebuffer::backbuffer())
                 .context("Cannot draw to screen"),
-        }
-        .unwrap();
+        }?;
+        Ok(())
     }
 
     fn ui(&mut self, ctx: &egui::Context) {
@@ -313,7 +325,9 @@ impl Application for App {
             .labelled_by(sensitivity.id);
             let pos_label = ui.label("Radius:");
             ui.add(
-                egui::DragValue::new(&mut self.camera_controller.radius).clamp_range(0f32..=50.).speed(0.3),
+                egui::DragValue::new(&mut self.camera_controller.radius)
+                    .clamp_range(0f32..=50.)
+                    .speed(0.3),
             )
             .labelled_by(pos_label.id);
             let exposure_label = ui.label("Exposure:");
@@ -322,7 +336,7 @@ impl Application for App {
                     egui::Slider::new(&mut self.exposure, 1e-6..=10.)
                         .logarithmic(true)
                         .show_value(true)
-                        .custom_formatter(|v,_| format!("{:+1.1} EV", v.log2()))
+                        .custom_formatter(|v, _| format!("{:+1.1} EV", v.log2()))
                         .text("Exposure"),
                 )
                 .labelled_by(exposure_label.id)
@@ -379,5 +393,5 @@ impl Application for App {
 }
 
 fn main() -> Result<()> {
-    m2_opengl::run::<App>("UV Sphere")
+    rose_platform::run::<App>("UV Sphere")
 }

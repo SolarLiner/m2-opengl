@@ -6,6 +6,7 @@
       <sourceFolder url="file://$MODULE_DIR$/shell/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/bin/hello_triangle/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/uv_sphere/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/shell/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/violette/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-core/src" isTestSource="false" />

@@ -78,7 +78,7 @@ impl GeometryBuffers {
         fbo.assert_complete()?;
         fbo.clear_color([0., 0., 0., 1.])?;
         fbo.clear_depth(1.)?;
-        fbo.viewport(0, 0, size.width as _, size.height as _);
+        fbo.viewport(0, 0, size.x as _, size.y as _);
 
         let screen_pass = ScreenDraw::load("assets/shaders/defferred.frag.glsl")
             .context("Cannot load screen shader pass")?;
@@ -199,8 +199,8 @@ impl GeometryBuffers {
     }
 
     pub fn resize(&mut self, size: UVec2) -> Result<()> {
-        let Some(width) = NonZeroU32::new(size.width) else { eyre::bail!("Zero width resize"); };
-        let Some(height) = NonZeroU32::new(size.height) else { eyre::bail!("Zero height resize"); };
+        let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width resize"); };
+        let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();
         self.fbo
             .viewport(0, 0, width.get() as _, height.get() as _);

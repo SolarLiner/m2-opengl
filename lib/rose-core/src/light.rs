@@ -1,5 +1,4 @@
 use eyre::{Context, Result};
-use color_eyre::eyre;
 use crevice::{
     std140::{
         self,

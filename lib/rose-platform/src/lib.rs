@@ -7,21 +7,24 @@ use std::{
 
 use eyre::{eyre, Context, Result};
 use glutin::{
-    display::GetGlDisplay,
     config::{Api, ConfigTemplateBuilder},
     context::{ContextApi, ContextAttributesBuilder, Version},
+    display::GetGlDisplay,
     prelude::*,
-    surface::{SurfaceAttributesBuilder, WindowSurface}
+    surface::{SurfaceAttributesBuilder, WindowSurface},
 };
 use glutin_winit::DisplayBuilder;
-use winit::event::KeyboardInput;
+use raw_window_handle::HasRawWindowHandle;
+use tracing_subscriber::{fmt::format::FmtSpan, prelude::*, EnvFilter};
+use tracing_tracy::TracyLayer;
+pub use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::{
-    event::{ElementState, Event, StartCause, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
     event_loop::EventLoopBuilder,
     window::{Fullscreen, WindowBuilder},
 };
 
-pub use winit::dpi::{PhysicalSize, LogicalSize};
+pub use winit::event as events;
 
 #[allow(unused_variables)]
 pub trait Application: Sized + Send + Sync {
@@ -196,10 +199,10 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
                 #[cfg(feature = "ui")]
                 let next_run = {
                     let _span = tracing::debug_span!("ui").entered();
-                    let next_run = ui.run(&window, {
+                    ui.run(&window, {
                         let app = app.clone();
                         move |cx| app.lock().unwrap().ui(cx)
-                    });
+                    })
                 };
                 #[cfg(not(feature = "ui"))]
                 let next_run = Duration::from_nanos(16_666_667);

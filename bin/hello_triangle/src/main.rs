@@ -1,15 +1,18 @@
 use bytemuck::{Pod, Zeroable};
 use eyre::Result;
 use glam::{vec2, vec3, Vec2, Vec3};
-use rose_core::{mesh::Mesh};
-use rose_platform::Application;
+
+use rose_core::mesh::Mesh;
+use rose_platform::{
+    Application,
+    PhysicalSize
+};
 use violette::{
     framebuffer::{ClearBuffer, Framebuffer},
     program::{Program, UniformLocation},
     shader::{FragmentShader, VertexShader},
     vertex::AsVertexAttributes,
 };
-use rose_platform::PhysicalSize;
 
 #[derive(Debug, Clone, Copy, Zeroable, Pod)]
 #[repr(C)]
@@ -28,7 +31,7 @@ struct TriangleApp {
 }
 
 impl Application for TriangleApp {
-    fn new(size: winit::dpi::PhysicalSize<f32>) -> Result<Self> {
+    fn new(size: PhysicalSize<f32>) -> Result<Self> {
         let vert_shader = VertexShader::load("assets/shaders_old/triangle.vert.glsl")?;
         let frag_shader = FragmentShader::load("assets/shaders_old/triangle.frag.glsl")?;
         let mat_program = Program::new()
@@ -54,20 +57,23 @@ impl Application for TriangleApp {
         })
     }
 
-    fn resize(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+    fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         let size = size.cast();
         self.size = size;
         Framebuffer::backbuffer().viewport(0, 0, size.width, size.height);
+        Ok(())
     }
 
-    fn render(&mut self) {
+    fn render(&mut self) -> Result<()> {
         let frame = &*Framebuffer::backbuffer();
         frame.viewport(0, 0, self.size.width, self.size.height);
-        frame.disable_scissor().unwrap();
-        frame.disable_depth_test().unwrap();
-        frame.do_clear(ClearBuffer::COLOR).unwrap();
-        self.mat_program.set_uniform(self.uniform_scale, self.mesh_scale).unwrap();
-        self.mesh.draw(&self.mat_program, frame, false).unwrap();
+        frame.disable_scissor()?;
+        frame.disable_depth_test()?;
+        frame.do_clear(ClearBuffer::COLOR)?;
+        self.mat_program
+            .set_uniform(self.uniform_scale, self.mesh_scale)?;
+        self.mesh.draw(&self.mat_program, frame, false)?;
+        Ok(())
     }
 
     fn ui(&mut self, ctx: &egui::Context) {

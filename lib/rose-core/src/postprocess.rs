@@ -1,9 +1,8 @@
 use std::{num::NonZeroU32};
+use glam::UVec2;
 
 use violette::{framebuffer::Framebuffer, texture::Texture, program::UniformLocation};
-use winit::{dpi::PhysicalSize};
 use eyre::Result;
-use violette::framebuffer::DepthTestFunction;
 
 use crate::screen_draw::ScreenDraw;
 
@@ -16,9 +15,9 @@ pub struct Postprocess {
 }
 
 impl Postprocess {
-    pub fn new(size: PhysicalSize<u32>) -> Result<Self> {
-        let Some(width) = NonZeroU32::new(size.width) else { eyre::bail!("Zero width resize"); };
-        let Some(height) = NonZeroU32::new(size.height) else { eyre::bail!("Zero height resize"); };
+    pub fn new(size: UVec2) -> Result<Self> {
+        let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width resize"); };
+        let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();
         let fbo = Framebuffer::new();
         let texture = Texture::new(width, height, nonzero_one, violette::texture::Dimension::D2);
@@ -29,7 +28,7 @@ impl Postprocess {
         texture.reserve_memory()?;
         fbo.attach_color(0, &texture)?;
         fbo.assert_complete()?;
-        fbo.viewport(0, 0, size.width as _, size.height as _);
+        fbo.viewport(0, 0, size.x as _, size.y as _);
 
         let draw = ScreenDraw::load("assets/shaders/postprocess.frag.glsl")?;
         let draw_texture = draw.uniform("frame").unwrap();
@@ -46,10 +45,10 @@ impl Postprocess {
         Ok(())
     }
 
-    pub fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
-        self.fbo.viewport(0, 0, size.width as _, size.height as _);
-        let Some(width) = NonZeroU32::new(size.width) else { eyre::bail!("Zero width resize"); };
-        let Some(height) = NonZeroU32::new(size.height) else { eyre::bail!("Zero height resize"); };
+    pub fn resize(&mut self, size: UVec2) -> Result<()> {
+        self.fbo.viewport(0, 0, size.x as _, size.y as _);
+        let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width resize"); };
+        let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
         self.texture.clear_resize(width, height, NonZeroU32::new(1).unwrap())?;
         Ok(())
     }
