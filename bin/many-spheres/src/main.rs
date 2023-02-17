@@ -1,8 +1,14 @@
-use std::{f32::consts::TAU, sync::Arc, time::{Instant, Duration}};
+use std::{
+    f32::consts::TAU,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use camera_controller::OrbitCameraController;
-use glam::{vec2, Vec2, Vec3};
+use glam::{vec2, vec3, UVec2, Vec2, Vec3};
+use rand::{seq::SliceRandom, Rng};
 use rose_core::{
+    light::Light,
     material::{Material, Vertex},
     mesh::MeshBuilder,
     transform::{Transform, TransformExt},
@@ -35,6 +41,17 @@ impl Application for ManySpheres {
         let sizef = Vec2::from_array(size.into());
         let size = sizef.as_uvec2();
         let mut renderer = Renderer::new(size)?;
+
+        renderer.add_lights([
+            Light::Ambient {
+                color: vec3(0.1, 0.2, 0.4),
+            },
+            Light::Directional {
+                color: Vec3::ONE,
+                dir: -Vec3::ONE.normalize(),
+            },
+        ])?;
+
         let mut camera_controller = OrbitCameraController::default();
         camera_controller.set_orientation(
             renderer.camera_mut(),
@@ -42,15 +59,24 @@ impl Application for ManySpheres {
         );
         camera_controller.update(Default::default(), renderer.camera_mut());
 
-        let mesh = Arc::new(MeshBuilder::new(Vertex::new).uv_sphere(0.1, 12, 24)?);
-        let material = Arc::new(Material::create([0.1, 0.4, 0.8], None, [0.2, 0.])?);
+        let mesh = Arc::new(MeshBuilder::new(Vertex::new).uv_sphere(0.1, 6, 12)?);
+        let materials = [
+            [0.1, 0.4, 0.8],
+            [0.8, 0.1, 0.4],
+            [0.8, 0.4, 0.1],
+            [0.6, 0.6, 0.6],
+        ]
+        .map(|color| Material::create(color, None, [0.2, 0.]).unwrap())
+        .map(Arc::new);
 
-        let spheres = (0..10)
+        let mut rng = rand::thread_rng();
+        let spheres = (0..50)
             .map(|_| {
-                let orig_pos = rand::random::<Vec3>() * 3.;
-                let phase = rand::random::<f32>() * TAU;
-                let amplitude = 1. + rand::random::<f32>();
-                let freq = 0.1 + rand::random::<f32>() * 0.9;
+                let orig_pos = (2. * rng.gen::<Vec3>() - 1.) * 3.;
+                let phase = rng.gen::<f32>() * TAU;
+                let amplitude = rng.gen_range(0.1..=2.);
+                let freq = rng.gen_range(0.1..=1.);
+                let material = materials.choose(&mut rand::thread_rng()).unwrap();
                 Sphere {
                     mesh: mesh.clone(),
                     material: material.clone(),
@@ -74,12 +100,18 @@ impl Application for ManySpheres {
         })
     }
 
-    fn tick(&mut self, _dt: Duration) -> eyre::Result<()> {
+    fn resize(&mut self, size: rose_platform::PhysicalSize<u32>) -> eyre::Result<()> {
+        self.renderer.resize(UVec2::from_array(size.into()))
+    }
+
+    fn tick(&mut self, dt: Duration) -> eyre::Result<()> {
         let t = self.start.elapsed().as_secs_f32();
         for sphere in &mut self.spheres {
             let offset_y = f32::sin(sphere.phase + sphere.freq * t * TAU) * sphere.amplitude;
             sphere.transform.position = sphere.orig_pos + Vec3::Y * offset_y;
         }
+        self.camera_controller
+            .update(dt, self.renderer.camera_mut());
         Ok(())
     }
 
@@ -92,6 +124,53 @@ impl Application for ManySpheres {
             );
         }
         self.renderer.flush()
+    }
+
+    fn ui(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                self.camera_controller.ui_toolbar(ui);
+                self.renderer.ui_toolbar(ui);
+                let pp_iface = self.renderer.post_process_interface();
+                ui.menu_button("Scene", |ui| {
+                    ui.horizontal(|ui| {
+                        let exposure_label = ui.label("Exposure:");
+                        ui.add(
+                            egui::Slider::new(&mut pp_iface.exposure, 1e-6..=10.)
+                                .logarithmic(true)
+                                .show_value(true)
+                                .custom_formatter(|v, _| format!("{:+1.1} EV", v.log2()))
+                                .text("Exposure"),
+                        )
+                        .labelled_by(exposure_label.id);
+                    });
+
+                    ui.horizontal(|ui| {
+                        let bloom_size_label = ui.label("Bloom size:");
+                        ui.add(
+                            egui::Slider::new(&mut pp_iface.bloom.size, 1e-4..=1f32)
+                                .logarithmic(true)
+                                .show_value(true)
+                                .text("Bloom size"),
+                        )
+                        .labelled_by(bloom_size_label.id);
+                    });
+
+                    ui.horizontal(|ui| {
+                        let bloom_strength_label = ui.label("Bloom strength:");
+                        ui.add(
+                            egui::Slider::new(&mut pp_iface.bloom.strength, 1e-4..=1f32)
+                                .logarithmic(true)
+                                .show_value(true)
+                                .text("Bloom strength"),
+                        )
+                        .labelled_by(bloom_strength_label.id);
+                    });
+                });
+            });
+        });
+        self.camera_controller.ui(ctx);
+        self.renderer.ui(ctx);
     }
 }
 

@@ -1,29 +1,21 @@
-use std::{
-    sync::{Arc},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use camera_controller::OrbitCameraController;
-use eyre::{Result};
+use eyre::Result;
 use glam::{vec3, UVec2, Vec2, Vec3};
 
 use rose_core::{
-    light::{Light},
+    light::Light,
     material::{Material, Vertex},
     mesh::MeshBuilder,
     transform::{Transform, TransformExt},
 };
 use rose_platform::{
-    events::{
-        ElementState, ModifiersState, MouseButton, MouseScrollDelta,
-        WindowEvent,
-    },
+    events::{ElementState, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent},
     Application, PhysicalSize, WindowBuilder,
 };
 use rose_renderer::{Mesh, Renderer};
-use violette::{
-    texture::Texture,
-};
+use violette::texture::Texture;
 
 mod camera_controller;
 
@@ -115,10 +107,12 @@ impl Application for App {
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => match delta {
-                MouseScrollDelta::LineDelta(_, y) => self.camera_controller.scroll(self.renderer.camera_mut(), y),
-                MouseScrollDelta::PixelDelta(delta) => {
-                    self.camera_controller.scroll(self.renderer.camera_mut(), delta.y as _)
+                MouseScrollDelta::LineDelta(_, y) => {
+                    self.camera_controller.scroll(self.renderer.camera_mut(), y)
                 }
+                MouseScrollDelta::PixelDelta(delta) => self
+                    .camera_controller
+                    .scroll(self.renderer.camera_mut(), delta.y as _),
             },
             WindowEvent::ModifiersChanged(state) => {
                 self.ctrl_pressed = state.contains(ModifiersState::CTRL)
@@ -137,44 +131,59 @@ impl Application for App {
     #[tracing::instrument(target = "App::render", skip_all)]
     fn render(&mut self) -> Result<()> {
         self.renderer.begin_render()?;
-        self.renderer
-            .submit_mesh(Arc::downgrade(&self.material), Arc::downgrade(&self.mesh).transformed(self.transform));
+        self.renderer.submit_mesh(
+            Arc::downgrade(&self.material),
+            Arc::downgrade(&self.mesh).transformed(self.transform),
+        );
         self.renderer.flush()?;
         Ok(())
     }
 
     fn ui(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Camera controls").show(ctx, |ui| {
-            self.camera_controller.ui(ui);
-            let pp_iface = self.renderer.post_process_interface();
-            let exposure_label = ui.label("Exposure:");
-            ui.add(
-                egui::Slider::new(&mut pp_iface.exposure, 1e-6..=10.)
-                    .logarithmic(true)
-                    .show_value(true)
-                    .custom_formatter(|v, _| format!("{:+1.1} EV", v.log2()))
-                    .text("Exposure"),
-            )
-            .labelled_by(exposure_label.id);
+        egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                self.camera_controller.ui_toolbar(ui);
+                self.renderer.ui_toolbar(ui);
+                ui.menu_button("Scene", |ui| {
+                    ui.horizontal(|ui| {
+                        let pp_iface = self.renderer.post_process_interface();
+                        let exposure_label = ui.label("Exposure:");
+                        ui.add(
+                            egui::Slider::new(&mut pp_iface.exposure, 1e-6..=10.)
+                                .logarithmic(true)
+                                .show_value(true)
+                                .custom_formatter(|v, _| format!("{:+1.1} EV", v.log2()))
+                                .text("Exposure"),
+                        )
+                        .labelled_by(exposure_label.id);
 
-            let bloom_size_label = ui.label("Bloom size:");
-            ui.add(
-                egui::Slider::new(&mut pp_iface.bloom.size, 1e-4..=1f32)
-                    .logarithmic(true)
-                    .show_value(true)
-                    .text("Bloom size"),
-            )
-            .labelled_by(bloom_size_label.id);
+                        ui.horizontal(|ui| {
+                            let bloom_size_label = ui.label("Bloom size:");
+                            ui.add(
+                                egui::Slider::new(&mut pp_iface.bloom.size, 1e-4..=1f32)
+                                    .logarithmic(true)
+                                    .show_value(true)
+                                    .text("Bloom size"),
+                            )
+                            .labelled_by(bloom_size_label.id);
+                        });
 
-            let bloom_strength_label = ui.label("Bloom strength:");
-            ui.add(
-                egui::Slider::new(&mut pp_iface.bloom.strength, 1e-4..=1f32)
-                    .logarithmic(true)
-                    .show_value(true)
-                    .text("Bloom strength"),
-            )
-            .labelled_by(bloom_strength_label.id);
+                        ui.horizontal(|ui| {
+                            let bloom_strength_label = ui.label("Bloom strength:");
+                            ui.add(
+                                egui::Slider::new(&mut pp_iface.bloom.strength, 1e-4..=1f32)
+                                    .logarithmic(true)
+                                    .show_value(true)
+                                    .text("Bloom strength"),
+                            )
+                            .labelled_by(bloom_strength_label.id);
+                        });
+                    });
+                });
+            });
         });
+        self.camera_controller.ui(ctx);
+        self.renderer.ui(ctx);
     }
 }
 

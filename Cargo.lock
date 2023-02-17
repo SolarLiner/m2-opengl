@@ -1824,9 +1824,11 @@ name = "rose-renderer"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "egui",
  "eyre",
  "glam",
  "rose-core",
+ "rose-ui",
  "tracing",
  "violette",
  "violette-derive",

@@ -11,7 +11,7 @@ homepage.workspace = true
 rose-core = { path = "../../lib/rose-core" }
 rose-platform = { path = "../../lib/rose-platform", features = ["ui"] }
 rose-ui = { path = "../../lib/rose-ui" }
-rose-renderer = { path = "../../lib/rose-renderer" }
+rose-renderer = { path = "../../lib/rose-renderer", features = ["debug-ui"] }
 violette = { path = "../../lib/violette" }
 
 bytemuck.workspace = true
