@@ -1,10 +1,12 @@
+mod autoexposure;
+
 use std::{num::NonZeroU32};
 use glam::UVec2;
 
 use violette::{framebuffer::Framebuffer, texture::Texture, program::UniformLocation};
 use eyre::Result;
 
-use crate::screen_draw::ScreenDraw;
+use rose_core::screen_draw::ScreenDraw;
 
 #[derive(Debug)]
 pub struct Postprocess {

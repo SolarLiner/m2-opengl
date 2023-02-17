@@ -15,11 +15,7 @@ use violette::{
     texture::{DepthStencil, Dimension, SampleMode, Texture},
 };
 
-use crate::{
-    camera::Camera, material::{Material, Vertex}, mesh::Mesh,
-    screen_draw::ScreenDraw, transform::Transformed,
-};
-use crate::light::LightBuffer;
+use rose_core::light::LightBuffer;
 
 #[derive(Debug)]
 pub struct GeometryBuffers {

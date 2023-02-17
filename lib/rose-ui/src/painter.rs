@@ -32,7 +32,7 @@ impl TextureFormat for EguiColor {
     type Subpixel = Self;
     const COUNT: usize = 1;
     const FORMAT: gl::types::GLenum = gl::RGBA;
-    const INTERNAL_FORMAT: gl::types::GLenum = gl::SRGB8_ALPHA8;
+    const TYPE: gl::types::GLenum = gl::SRGB8_ALPHA8;
     const NORMALIZED: bool = true;
 }
 
