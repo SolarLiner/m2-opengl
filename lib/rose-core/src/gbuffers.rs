@@ -129,35 +129,34 @@ impl GeometryBuffers {
         self.fbo.disable_scissor()?;
         self.fbo.enable_depth_test(DepthTestFunction::Less)?;
         self.fbo.enable_buffers([0, 1, 2, 3])?;
-        self.fbo.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
         // self.pos.with_binding(|| self.albedo.with_binding(|| self.normal.with_binding(|| self.rough_metal.with_binding(|| material.draw_meshes(&self.fbo, camera, meshes)))))?;
         material.draw_meshes(&self.fbo, camera, meshes)?;
 
         Ok(())
     }
 
-    pub fn debug_position(&mut self, frame: &Framebuffer) -> Result<()> {
+    pub fn debug_position(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.pos.as_uniform(0)?;
         self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
         Ok(())
     }
 
-    pub fn debug_albedo(&mut self, frame: &Framebuffer) -> Result<()> {
+    pub fn debug_albedo(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.albedo.as_uniform(0)?;
         self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
         Ok(())
     }
 
-    pub fn debug_normal(&mut self, frame: &Framebuffer) -> Result<()> {
+    pub fn debug_normal(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.normal.as_uniform(0)?;
         self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
         Ok(())
     }
 
-    pub fn debug_rough_metal(&mut self, frame: &Framebuffer) -> Result<()> {
+    pub fn debug_rough_metal(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.rough_metal.as_uniform(0)?;
         self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
@@ -166,7 +165,7 @@ impl GeometryBuffers {
 
     #[tracing::instrument(skip_all)]
     pub fn draw_screen(
-        &mut self,
+        &self,
         frame: &Framebuffer,
         camera: &Camera,
         lights: &LightBuffer,

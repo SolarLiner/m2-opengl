@@ -2,23 +2,19 @@ use std::marker::PhantomData;
 
 use bytemuck::Pod;
 
-use glam::{vec2, vec3, Vec2, Vec3};
 use eyre::{Context, Result};
+use glam::{vec2, vec3, Vec2, Vec3};
 
 use violette::{
-    buffer::{
-        Buffer,
-    },
-    vertex::{
-        DrawMode,
-        VertexAttributes,
-        VertexArray
-    }
+    buffer::Buffer,
+    vertex::{DrawMode, VertexArray, VertexAttributes},
 };
 
-use violette::{buffer::{ArrayBuffer, ElementBuffer}, framebuffer::Framebuffer, program::Program};
-
-
+use violette::{
+    buffer::{ArrayBuffer, ElementBuffer},
+    framebuffer::Framebuffer,
+    program::Program,
+};
 
 #[derive(Debug)]
 pub struct Mesh<Vertex> {
@@ -27,7 +23,10 @@ pub struct Mesh<Vertex> {
     indices: ElementBuffer<u32>,
 }
 
-impl<Vertex: Pod> Mesh<Vertex> where Vertex: VertexAttributes {
+impl<Vertex: Pod> Mesh<Vertex>
+where
+    Vertex: VertexAttributes,
+{
     pub fn new(
         vertices: impl IntoIterator<Item = Vertex>,
         indices: impl IntoIterator<Item = u32>,
@@ -53,7 +52,11 @@ impl<Vertex: Pod> Mesh<Vertex> where Vertex: VertexAttributes {
         let mut vao = VertexArray::new();
         vao.with_vertex_buffer(&vertices)?;
         vao.with_element_buffer(&indices)?;
-        Ok(Self {vertices, array: vao, indices })
+        Ok(Self {
+            vertices,
+            array: vao,
+            indices,
+        })
     }
 
     pub fn vertices(&mut self) -> &mut ArrayBuffer<Vertex> {
@@ -64,9 +67,23 @@ impl<Vertex: Pod> Mesh<Vertex> where Vertex: VertexAttributes {
         &mut self.indices
     }
 
-    pub fn draw(&self, program: &Program, framebuffer: &Framebuffer, wireframe: bool) -> Result<()> {
+    pub fn draw(
+        &self,
+        program: &Program,
+        framebuffer: &Framebuffer,
+        wireframe: bool,
+    ) -> Result<()> {
         framebuffer
-            .draw_elements(program, &self.array, if wireframe {DrawMode::Lines} else {DrawMode::Triangles}, 0..self.indices.len() as i32)
+            .draw_elements(
+                program,
+                &self.array,
+                if wireframe {
+                    DrawMode::Lines
+                } else {
+                    DrawMode::Triangles
+                },
+                0..self.indices.len() as i32,
+            )
             .context("Cannot draw mesh")?;
         Ok(())
     }
@@ -74,14 +91,22 @@ impl<Vertex: Pod> Mesh<Vertex> where Vertex: VertexAttributes {
 
 pub struct MeshBuilder<Vertex, Ctor> {
     ctor: Ctor,
-    __phantom: PhantomData<Vertex>
+    __phantom: PhantomData<Vertex>,
 }
 
 impl<Vtx, Ctor> MeshBuilder<Vtx, Ctor> {
-    pub fn new(ctor: Ctor) -> Self { Self { ctor, __phantom: PhantomData } }
+    pub fn new(ctor: Ctor) -> Self {
+        Self {
+            ctor,
+            __phantom: PhantomData,
+        }
+    }
 }
 
-impl<Vertex: Pod, Ctor: Fn(Vec3, Vec3, Vec2) -> Vertex> MeshBuilder<Vertex, Ctor> where Vertex: VertexAttributes {
+impl<Vertex: Pod, Ctor: Fn(Vec3, Vec3, Vec2) -> Vertex> MeshBuilder<Vertex, Ctor>
+where
+    Vertex: VertexAttributes,
+{
     pub fn uv_sphere(&self, radius: f32, nlon: usize, nlat: usize) -> Result<Mesh<Vertex>> {
         use std::f32::consts::*;
         let mut vertices = Vec::with_capacity(nlon * nlat + 2);
@@ -91,7 +116,7 @@ impl<Vertex: Pod, Ctor: Fn(Vec3, Vec3, Vec2) -> Vertex> MeshBuilder<Vertex, Ctor
         let lat_step = PI / (nlat - 1) as f32;
         let lon_step = TAU / (nlon - 1) as f32;
 
-        vertices.push((self.ctor)(Vec3::Y, Vec3::Y, vec2(0.5, 1.)));
+        vertices.push((self.ctor)(Vec3::Y * radius, Vec3::Y, vec2(0.5, 1.)));
         for j in 1..nlat {
             let phi = FRAC_PI_2 - j as f32 * lat_step;
             for i in 0..nlon {
@@ -104,7 +129,7 @@ impl<Vertex: Pod, Ctor: Fn(Vec3, Vec3, Vec2) -> Vertex> MeshBuilder<Vertex, Ctor
                 vertices.push((self.ctor)(position, normal, uv));
             }
         }
-        vertices.push((self.ctor)(-Vec3::Y, -Vec3::Y, vec2(0.5, 0.0)));
+        vertices.push((self.ctor)(-Vec3::Y * radius, -Vec3::Y, vec2(0.5, 1.)));
 
         // Indices: first row connected to north pole
         for i in 0..nlon {
