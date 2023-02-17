@@ -67,6 +67,7 @@ pub struct UiImpl {
     mesh: Mesh<Vertex>,
     textures: HashMap<egui::TextureId, UiTexture>,
     tex_trash_bin: Vec<UiTexture>,
+    current_fbo: Option<*const Framebuffer>,
 }
 
 impl UiImpl {
@@ -86,6 +87,7 @@ impl UiImpl {
             mesh,
             textures: HashMap::new(),
             tex_trash_bin: Vec::default(),
+            current_fbo: None,
         })
     }
 
@@ -96,11 +98,13 @@ impl UiImpl {
         ppp: f32,
         primitives: &[egui::ClippedPrimitive],
     ) -> Result<()> {
-        let size = self.prepare_painting(frame, size, ppp)?;
+        self.current_fbo.replace(frame);
+        let _ = self.prepare_painting(frame, size, ppp)?;
+        let sizef = size.cast();
 
         for prim in primitives {
-            // let (x, y, w, h) = to_gl_rect(prim.clip_rect, size.cast(), ppp);
-            // frame.enable_scissor(x, y, w, h)?;
+            let (x, y, w, h) = to_gl_rect(prim.clip_rect, sizef, ppp);
+            frame.enable_scissor(x, y, w, h)?;
 
             match &prim.primitive {
                 Primitive::Mesh(mesh) => {
@@ -108,8 +112,8 @@ impl UiImpl {
                 }
                 Primitive::Callback(callback) => {
                     if callback.rect.is_positive() {
-                        // let (x,y,w,h) = to_gl_rect(callback.rect, size.cast(), ppp);
-                        // frame.viewport(x, y, w, h);
+                        let (x, y, w, h) = to_gl_rect(callback.rect, sizef, ppp);
+                        frame.viewport(x, y, w, h);
 
                         let info = egui::PaintCallbackInfo {
                             viewport: callback.rect,
@@ -120,12 +124,16 @@ impl UiImpl {
                         if let Some(callback) = callback.callback.downcast_ref::<UiCallback>() {
                             (callback.0)(info, self);
                         }
+                        frame.viewport(0, 0, size.width as _, size.height as _);
                     }
                 }
             }
 
-            self.tex_trash_bin.clear();
         }
+        frame.disable_scissor()?;
+        frame.viewport(0, 0, size.width as _, size.height as _);
+        self.tex_trash_bin.clear();
+        self.current_fbo.take();
         Ok(())
     }
 
@@ -138,10 +146,10 @@ impl UiImpl {
         let vertices = bytemuck::cast_slice(&mesh.vertices);
         self.mesh
             .vertices()
-            .set(vertices, violette::buffer::BufferUsageHint::Dynamic)?;
+            .set(vertices, violette::buffer::BufferUsageHint::Stream)?;
         self.mesh
             .indices()
-            .set(&mesh.indices, violette::buffer::BufferUsageHint::Dynamic)?;
+            .set(&mesh.indices, violette::buffer::BufferUsageHint::Stream)?;
         if let Some(texture) = self.texture(mesh.texture_id) {
             self.program
                 .set_uniform(self.uniform_sampler, texture.as_uniform(0)?)?;
@@ -213,6 +221,11 @@ impl UiImpl {
         }
     }
 
+    pub fn framebuffer(&self) -> &Framebuffer {
+        // Safety: This is valid because the FBO is removed at the end of the draw call
+        unsafe { &*self.current_fbo.unwrap() }
+    }
+
     fn prepare_painting(
         &self,
         frame: &Framebuffer,
@@ -235,14 +248,23 @@ impl UiImpl {
 }
 
 fn to_gl_rect(rect: egui::Rect, size: PhysicalSize<f32>, ppp: f32) -> (i32, i32, i32, i32) {
-    let min = LogicalPosition::new(rect.min.x, rect.min.y).to_physical::<f32>(ppp as _);
-    let max = LogicalPosition::new(rect.max.x, rect.max.y).to_physical::<f32>(ppp as _);
-    let min = Vec2::from_array(min.into())
-        .clamp(Vec2::ZERO, vec2(size.width, size.height))
-        .as_ivec2();
-    let max = Vec2::from_array(max.into())
-        .clamp(Vec2::ZERO, vec2(size.width, size.height))
-        .as_ivec2();
+    // let min = LogicalPosition::new(rect.min.x, rect.min.y).to_physical::<f32>(ppp as _);
+    // let max = LogicalPosition::new(rect.max.x, rect.max.y).to_physical::<f32>(ppp as _);
+    // let min = Vec2::from_array(min.into())
+    //     .clamp(Vec2::ZERO, vec2(size.width, size.height))
+    //     .as_ivec2();
+    // let max = Vec2::from_array(max.into())
+    //     .clamp(Vec2::ZERO, vec2(size.width, size.height))
+    //     .as_ivec2();
 
-    (min.x, min.y, max.x, max.y)
+    // (min.x, min.y, max.x, max.y)
+    let pos = Vec2::from_array(rect.left_bottom().into()) * ppp;
+    let bias = Vec2::Y * size.height;
+    let scale = vec2(1., -1.);
+    let pos = pos * scale + bias;
+    let size = Vec2::from_array(rect.size().into()) * ppp;
+
+    let pos = pos.as_ivec2();
+    let size = size.as_ivec2();
+    (pos.x, pos.y, size.x, size.y)
 }
