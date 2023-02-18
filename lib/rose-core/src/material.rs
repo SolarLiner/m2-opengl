@@ -1,10 +1,9 @@
 use std::{collections::BTreeSet, ops::Not, path::Path};
 
-
 use either::Either;
 use eyre::{Context, ContextCompat, Result};
-
 use glam::{Vec2, Vec3};
+
 use violette::{
     framebuffer::Framebuffer,
     gl,
@@ -216,7 +215,7 @@ impl Material {
         Ok(self)
     }
 
-    #[tracing::instrument(skip(meshes), fields(meshes=meshes.len()))]
+    #[tracing::instrument(skip(self,meshes), fields(meshes=meshes.len()))]
     pub fn draw_meshes<MC: std::ops::Deref<Target = Mesh<Vertex>>>(
         &self,
         framebuffer: &Framebuffer,

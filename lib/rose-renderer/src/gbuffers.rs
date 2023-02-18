@@ -15,17 +15,26 @@ use violette::{
     texture::{DepthStencil, Dimension, SampleMode, Texture},
 };
 
-use rose_core::light::LightBuffer;
+use rose_core::{
+    light::LightBuffer,
+    screen_draw::ScreenDraw
+};
+use rose_core::camera::Camera;
+use rose_core::material::{Material, Vertex};
+use rose_core::mesh::Mesh;
+use rose_core::transform::Transformed;
 
 #[derive(Debug)]
 pub struct GeometryBuffers {
     screen_pass: ScreenDraw,
     debug_texture: ScreenDraw,
-    fbo: Framebuffer,
+    deferred_fbo: Framebuffer,
+    output_fbo: Framebuffer,
     pos: Texture<[f32; 3]>,
     albedo: Texture<[f32; 3]>,
     normal: Texture<[f32; 3]>,
     rough_metal: Texture<[f32; 2]>,
+    out_color: Texture<[f32; 3]>,
     out_depth: Texture<DepthStencil<f32, ()>>,
     uniform_camera_pos: UniformLocation,
     uniform_frame_pos: UniformLocation,
@@ -61,21 +70,31 @@ impl GeometryBuffers {
         rough_metal.filter_mag(SampleMode::Linear)?;
         rough_metal.reserve_memory()?;
 
+        let out_color = Texture::new(width, height, nonzero_one, Dimension::D2);
+        out_color.filter_min(SampleMode::Linear)?;
+        out_color.filter_mag(SampleMode::Linear)?;
+        out_color.reserve_memory()?;
+
         let out_depth = Texture::new(width, height, nonzero_one, Dimension::D2);
         out_depth.filter_min(SampleMode::Linear)?;
         out_depth.filter_mag(SampleMode::Linear)?;
         out_depth.reserve_memory()?;
 
-        let fbo = Framebuffer::new();
-        fbo.attach_color(0, &pos)?;
-        fbo.attach_color(1, &albedo)?;
-        fbo.attach_color(2, &normal)?;
-        fbo.attach_color(3, &rough_metal)?;
-        fbo.attach_depth(&out_depth)?;
-        fbo.assert_complete()?;
-        fbo.clear_color([0., 0., 0., 1.])?;
-        fbo.clear_depth(1.)?;
-        fbo.viewport(0, 0, size.x as _, size.y as _);
+        let deferred_fbo = Framebuffer::new();
+        deferred_fbo.attach_color(0, &pos)?;
+        deferred_fbo.attach_color(1, &albedo)?;
+        deferred_fbo.attach_color(2, &normal)?;
+        deferred_fbo.attach_color(3, &rough_metal)?;
+        deferred_fbo.attach_depth(&out_depth)?;
+        deferred_fbo.assert_complete()?;
+        deferred_fbo.clear_color([0., 0., 0., 1.])?;
+        deferred_fbo.clear_depth(1.)?;
+        deferred_fbo.viewport(0, 0, size.x as _, size.y as _);
+
+        let output_fbo = Framebuffer::new();
+        output_fbo.attach_color(0, &out_color)?;
+        output_fbo.assert_complete()?;
+        output_fbo.disable_depth_test()?;
 
         let screen_pass = ScreenDraw::load("assets/shaders/defferred.frag.glsl")
             .context("Cannot load screen shader pass")?;
@@ -91,11 +110,13 @@ impl GeometryBuffers {
         let uniform_block_light = screen_pass.uniform_block("Light", 0).unwrap();
 
         Ok(Self {
-            fbo,
+            deferred_fbo,
+            output_fbo,
             pos,
             albedo,
             normal,
             rough_metal,
+            out_color,
             out_depth,
             uniform_camera_pos,
             debug_uniform_in_texture,
@@ -110,7 +131,7 @@ impl GeometryBuffers {
     }
 
     pub fn framebuffer(&self) -> &Framebuffer {
-        &self.fbo
+        &self.deferred_fbo
     }
 
     #[tracing::instrument(skip_all)]
@@ -120,13 +141,11 @@ impl GeometryBuffers {
         material: &Material,
         meshes: &mut [Transformed<MC>],
     ) -> Result<()> {
-        // self.fbo.viewport(0, 0, camera.projection.width as _, camera.projection.height as _);
-        self.fbo.disable_blending()?;
-        self.fbo.disable_scissor()?;
-        self.fbo.enable_depth_test(DepthTestFunction::Less)?;
-        self.fbo.enable_buffers([0, 1, 2, 3])?;
-        // self.pos.with_binding(|| self.albedo.with_binding(|| self.normal.with_binding(|| self.rough_metal.with_binding(|| material.draw_meshes(&self.fbo, camera, meshes)))))?;
-        material.draw_meshes(&self.fbo, camera, meshes)?;
+        self.deferred_fbo.disable_blending()?;
+        self.deferred_fbo.disable_scissor()?;
+        self.deferred_fbo.enable_depth_test(DepthTestFunction::Less)?;
+        self.deferred_fbo.enable_buffers([0, 1, 2, 3])?;
+        material.draw_meshes(&self.deferred_fbo, camera, meshes)?;
 
         Ok(())
     }
@@ -160,19 +179,17 @@ impl GeometryBuffers {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn draw_screen(
+    pub fn process(
         &self,
-        frame: &Framebuffer,
         camera: &Camera,
         lights: &LightBuffer,
-    ) -> Result<()> {
+    ) -> Result<&Texture<[f32;3]>> {
         self.screen_pass.set_uniform(self.uniform_camera_pos, camera.transform.position)?;
-
-        frame.disable_depth_test()?;
-        frame.enable_blending(Blend::One, Blend::One)?;
-        frame.do_clear(ClearBuffer::COLOR)?;
+        self.output_fbo.enable_blending(Blend::One, Blend::One)?;
+        self.output_fbo.clear_color([0., 0., 0., 1.])?;
+        self.output_fbo.do_clear(ClearBuffer::COLOR)?;
         if lights.is_empty() {
-            return Ok(());
+            return Ok(&self.out_color);
         }
 
         let unit_pos = self.pos.as_uniform(0)?;
@@ -187,23 +204,26 @@ impl GeometryBuffers {
         for light_ix in 0..lights.len() {
             self.screen_pass
                 .bind_block(self.uniform_block_light, &lights.slice(light_ix..=light_ix))?;
-            self.screen_pass.draw(frame)?;
+            self.screen_pass.draw(&self.output_fbo)?;
         }
 
         self.rough_metal.unbind();
-        Ok(())
+        Ok(&self.out_color)
     }
 
     pub fn resize(&mut self, size: UVec2) -> Result<()> {
         let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width resize"); };
         let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();
-        self.fbo
+        self.deferred_fbo
+            .viewport(0, 0, width.get() as _, height.get() as _);
+        self.output_fbo
             .viewport(0, 0, width.get() as _, height.get() as _);
         self.pos.clear_resize(width, height, nonzero_one)?;
         self.albedo.clear_resize(width, height, nonzero_one)?;
         self.normal.clear_resize(width, height, nonzero_one)?;
         self.rough_metal.clear_resize(width, height, nonzero_one)?;
+        self.out_color.clear_resize(width, height, nonzero_one)?;
         self.out_depth.clear_resize(width, height, nonzero_one)?;
         Ok(())
     }

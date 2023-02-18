@@ -1,9 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use camera_controller::OrbitCameraController;
 use eyre::Result;
 use glam::{vec3, UVec2, Vec2, Vec3};
 
+use camera_controller::OrbitCameraController;
 use rose_core::{
     light::Light,
     material::{Material, Vertex},
@@ -12,7 +12,7 @@ use rose_core::{
 };
 use rose_platform::{
     events::{ElementState, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent},
-    Application, PhysicalSize, WindowBuilder,
+    Application, PhysicalSize, RenderContext, TickContext, UiContext, WindowBuilder,
 };
 use rose_renderer::{Mesh, Renderer};
 use violette::texture::Texture;
@@ -122,68 +122,95 @@ impl Application for App {
         Ok(())
     }
     #[tracing::instrument(target = "App::tick", skip(self))]
-    fn tick(&mut self, dt: Duration) -> Result<()> {
+    fn tick(&mut self, ctx: TickContext) -> Result<()> {
         self.camera_controller
-            .update(dt, self.renderer.camera_mut());
+            .update(ctx.dt, self.renderer.camera_mut());
         Ok(())
     }
 
     #[tracing::instrument(target = "App::render", skip_all)]
-    fn render(&mut self) -> Result<()> {
+    fn render(&mut self, ctx: RenderContext) -> Result<()> {
         self.renderer.begin_render()?;
         self.renderer.submit_mesh(
             Arc::downgrade(&self.material),
             Arc::downgrade(&self.mesh).transformed(self.transform),
         );
-        self.renderer.flush()?;
+        self.renderer.flush(ctx.dt)?;
         Ok(())
     }
 
-    fn ui(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
+    fn ui(&mut self, ctx: UiContext) {
+        egui::TopBottomPanel::top("top_menu").show(ctx.egui, |ui| {
             ui.horizontal(|ui| {
-                self.camera_controller.ui_toolbar(ui);
-                self.renderer.ui_toolbar(ui);
                 ui.menu_button("Scene", |ui| {
+                    let pp_iface = self.renderer.post_process_interface();
                     ui.horizontal(|ui| {
-                        let pp_iface = self.renderer.post_process_interface();
                         let exposure_label = ui.label("Exposure:");
                         ui.add(
-                            egui::Slider::new(&mut pp_iface.exposure, 1e-6..=10.)
+                            egui::Slider::new(&mut pp_iface.exposure, 1e-6..=100.)
                                 .logarithmic(true)
                                 .show_value(true)
                                 .custom_formatter(|v, _| format!("{:+1.1} EV", v.log2()))
                                 .text("Exposure"),
                         )
                         .labelled_by(exposure_label.id);
+                    });
 
-                        ui.horizontal(|ui| {
-                            let bloom_size_label = ui.label("Bloom size:");
-                            ui.add(
-                                egui::Slider::new(&mut pp_iface.bloom.size, 1e-4..=1f32)
-                                    .logarithmic(true)
-                                    .show_value(true)
-                                    .text("Bloom size"),
-                            )
-                            .labelled_by(bloom_size_label.id);
-                        });
+                    ui.horizontal(|ui| {
+                        let bloom_size_label = ui.label("Bloom size:");
+                        ui.add(
+                            egui::Slider::new(&mut pp_iface.bloom.size, 1e-4..=1f32)
+                                .logarithmic(true)
+                                .show_value(true)
+                                .text("Bloom size"),
+                        )
+                        .labelled_by(bloom_size_label.id);
+                    });
 
-                        ui.horizontal(|ui| {
-                            let bloom_strength_label = ui.label("Bloom strength:");
-                            ui.add(
-                                egui::Slider::new(&mut pp_iface.bloom.strength, 1e-4..=1f32)
-                                    .logarithmic(true)
-                                    .show_value(true)
-                                    .text("Bloom strength"),
-                            )
-                            .labelled_by(bloom_strength_label.id);
-                        });
+                    ui.horizontal(|ui| {
+                        let bloom_strength_label = ui.label("Bloom strength:");
+                        ui.add(
+                            egui::Slider::new(&mut pp_iface.bloom.strength, 1e-4..=1f32)
+                                .logarithmic(true)
+                                .show_value(true)
+                                .text("Bloom strength"),
+                        )
+                        .labelled_by(bloom_strength_label.id);
                     });
                 });
+                self.camera_controller.ui_toolbar(ui);
+                self.renderer.ui_toolbar(ui);
             });
         });
-        self.camera_controller.ui(ctx);
-        self.renderer.ui(ctx);
+        self.camera_controller.ui(ctx.egui);
+        self.renderer.ui(ctx.egui);
+
+        egui::Window::new("FPS")
+            .frame(egui::Frame::none().fill(egui::Color32::from_black_alpha(10)))
+            .collapsible(false)
+            .title_bar(false)
+            .show(ctx.egui, |ui| {
+                ui.label(format!("{:>3.1} FPS", ctx.stats.fps_average()));
+                egui::plot::Plot::new("fps")
+                    .view_aspect(2.)
+                    .height(30.)
+                    .include_y(0.)
+                    .show(ui, |ui| {
+                        ui.line(egui::plot::Line::new(
+                            ctx.stats
+                                .fps_history()
+                                .enumerate()
+                                .map(|(i, y)| [i as _, y as f64])
+                                .collect::<Vec<_>>(),
+                        ));
+                    });
+                ui.label(format!(
+                    "50% {:>2.1} | 90% {:>2.1} | 99% {:>2.1}",
+                    ctx.stats.percentile(50),
+                    ctx.stats.percentile(90),
+                    ctx.stats.percentile(99)
+                ));
+            });
     }
 }
 

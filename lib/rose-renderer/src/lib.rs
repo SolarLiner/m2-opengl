@@ -6,16 +6,17 @@ use std::{
 
 use eyre::Result;
 use glam::{UVec2, Vec3};
+use tracing::span::EnteredSpan;
+
+use gbuffers::GeometryBuffers;
+use postprocess::Postprocess;
 use rose_core::{
     camera::Camera,
     light::{GpuLight, Light, LightBuffer},
     material::Material,
-    transform::{Transformed, TransformExt},
+    transform::{TransformExt, Transformed},
     utils::thread_guard::ThreadGuard,
 };
-use tracing::span::EnteredSpan;
-use gbuffers::GeometryBuffers;
-use postprocess::Postprocess;
 use violette::framebuffer::{ClearBuffer, Framebuffer};
 
 pub mod gbuffers;
@@ -112,14 +113,15 @@ impl Renderer {
     pub fn begin_render(&mut self) -> Result<()> {
         self.render_span
             .replace(tracing::debug_span!("render").entered());
-        self.begin_scene_at.replace(Instant::now());
+        let now = Instant::now();
+        tracing::trace!(message = "Begin render", ?now);
+        self.begin_scene_at.replace(now);
         let backbuffer = Framebuffer::backbuffer();
         backbuffer.clear_color(Vec3::ZERO.extend(1.).to_array())?;
         backbuffer.clear_depth(1.)?;
         backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
 
-        self.post_process
-            .set_exposure(self.post_process_iface.exposure)?;
+        self.post_process.luminance_bias = self.post_process_iface.exposure;
         self.post_process
             .set_bloom_size(self.post_process_iface.bloom.size)?;
         self.post_process
@@ -133,7 +135,7 @@ impl Renderer {
         Ok(())
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(skip_all)]
     pub fn submit_mesh(&mut self, material: Weak<Material>, mesh: Transformed<Weak<Mesh>>) {
         let mesh_ptr = Weak::as_ptr(&mesh) as usize;
         let material_ptr = Weak::as_ptr(&material) as usize;
@@ -156,8 +158,8 @@ impl Renderer {
             .or_insert_with(|| vec![mesh]);
     }
 
-    #[tracing::instrument]
-    pub fn flush(&mut self) -> Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub fn flush(&mut self, dt: Duration) -> Result<()> {
         let render_start = Instant::now();
         let geom_pass = self.geom_pass.read().unwrap();
         for (mat_ix, meshes) in self.queued_meshes.drain() {
@@ -173,8 +175,9 @@ impl Renderer {
             geom_pass.draw_meshes(&self.camera, &material, &mut meshes)?;
         }
 
-        geom_pass.draw_screen(self.post_process.framebuffer(), &self.camera, &self.lights)?;
-        self.post_process.draw(&Framebuffer::backbuffer())?;
+        let shaded_tex = geom_pass.process(&self.camera, &self.lights)?;
+        self.post_process
+            .draw(&Framebuffer::backbuffer(), shaded_tex, dt)?;
         self.last_render_duration.replace(render_start.elapsed());
         self.last_scene_duration
             .replace(self.begin_scene_at.take().unwrap().elapsed());
@@ -189,7 +192,7 @@ impl Renderer {
 
     #[cfg(feature = "debug-ui")]
     pub fn ui(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("render-stats")
+        egui::TopBottomPanel::bottom("renderer-stats")
             .frame(
                 egui::Frame::none()
                     .inner_margin(egui::style::Margin::same(5.))
@@ -198,17 +201,18 @@ impl Renderer {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(format!(
-                        "Scene processing: {:2.2} ms",
-                        self.last_scene_duration
-                            .map(|d| d.as_secs_f64() * 1e3)
-                            .unwrap_or(0.)
+                        "Scene processing: {:5?}",
+                        self.last_scene_duration.unwrap_or_default()
                     ));
                     ui.separator();
                     ui.label(format!(
-                        "Render time: {:2.2} ms",
-                        self.last_render_duration
-                            .map(|d| d.as_secs_f64() * 1e3)
-                            .unwrap_or(0.)
+                        "Render time: {:5?}",
+                        self.last_render_duration.unwrap_or_default()
+                    ));
+                    ui.separator();
+                    ui.label(format!(
+                        "Average luminance: {:>2.2} EV",
+                        self.post_process.average_luminance().log2()
                     ));
                 });
             });

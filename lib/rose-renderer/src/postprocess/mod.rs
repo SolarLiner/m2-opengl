@@ -1,22 +1,27 @@
-mod autoexposure;
+use std::num::NonZeroU32;
+use std::time::Duration;
 
-use std::{num::NonZeroU32};
+use eyre::Result;
 use glam::UVec2;
 
-use violette::{framebuffer::Framebuffer, texture::Texture, program::UniformLocation};
-use eyre::Result;
-
 use rose_core::screen_draw::ScreenDraw;
+use violette::texture::{SampleMode, TextureWrap};
+use violette::{framebuffer::Framebuffer, program::UniformLocation, texture::Texture};
+
+use crate::postprocess::autoexposure::AutoExposure;
+
+mod autoexposure;
 
 #[derive(Debug)]
 pub struct Postprocess {
     draw: ScreenDraw,
-    draw_texture: UniformLocation,
-    draw_exposure: UniformLocation,
-    fbo: Framebuffer,
+    auto_exposure: AutoExposure,
+    uniform_texture: UniformLocation,
+    uniform_avg_luminance: UniformLocation,
     texture: Texture<[f32; 3]>,
-    draw_bloom_strength: UniformLocation,
-    draw_bloom_size: UniformLocation,
+    uniform_bloom_strength: UniformLocation,
+    uniform_bloom_size: UniformLocation,
+    pub luminance_bias: f32,
 }
 
 impl Postprocess {
@@ -24,55 +29,68 @@ impl Postprocess {
         let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width resize"); };
         let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();
-        let fbo = Framebuffer::new();
         let texture = Texture::new(width, height, nonzero_one, violette::texture::Dimension::D2);
-        texture.wrap_r(violette::texture::TextureWrap::MirroredRepeat)?;
-        texture.wrap_s(violette::texture::TextureWrap::MirroredRepeat)?;
-        texture.filter_min(violette::texture::SampleMode::Nearest)?;
-        texture.filter_mag(violette::texture::SampleMode::Linear)?;
+        texture.wrap_r(TextureWrap::MirroredRepeat)?;
+        texture.wrap_s(TextureWrap::MirroredRepeat)?;
+        texture.filter_min(SampleMode::Nearest)?;
+        texture.filter_mag(SampleMode::Linear)?;
         texture.reserve_memory()?;
-        fbo.attach_color(0, &texture)?;
-        fbo.assert_complete()?;
-        fbo.viewport(0, 0, size.x as _, size.y as _);
 
         let draw = ScreenDraw::load("assets/shaders/postprocess.frag.glsl")?;
         let draw_texture = draw.uniform("frame").unwrap();
-        let draw_exposure = draw.uniform("exposure").unwrap();
+        let avg_luminance = draw.uniform("luminance_average").unwrap();
         let draw_bloom_strength = draw.uniform("bloom_strength").unwrap();
         let draw_bloom_size = draw.uniform("bloom_size").unwrap();
-        Ok(Self { draw, draw_texture, draw_exposure, draw_bloom_size, draw_bloom_strength, fbo, texture })
-    }
-
-    pub fn framebuffer(&self) -> &Framebuffer {
-        &self.fbo
-    }
-
-    pub fn set_exposure(&self, exposure: f32) -> Result<()> {
-        self.draw.set_uniform(self.draw_exposure, exposure)?;
-        Ok(())
+        Ok(Self {
+            draw,
+            auto_exposure: AutoExposure::new(size)?,
+            uniform_texture: draw_texture,
+            uniform_avg_luminance: avg_luminance,
+            uniform_bloom_size: draw_bloom_size,
+            uniform_bloom_strength: draw_bloom_strength,
+            texture,
+            luminance_bias: 1.,
+        })
     }
 
     pub fn set_bloom_strength(&self, strength: f32) -> Result<()> {
-        self.draw.set_uniform(self.draw_bloom_strength, strength)?;
+        self.draw
+            .set_uniform(self.uniform_bloom_strength, strength)?;
         Ok(())
     }
 
     pub fn set_bloom_size(&self, size: f32) -> Result<()> {
-        self.draw.set_uniform(self.draw_bloom_size, size)?;
+        self.draw.set_uniform(self.uniform_bloom_size, size)?;
         Ok(())
     }
 
     pub fn resize(&mut self, size: UVec2) -> Result<()> {
-        self.fbo.viewport(0, 0, size.x as _, size.y as _);
         let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width resize"); };
         let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
-        self.texture.clear_resize(width, height, NonZeroU32::new(1).unwrap())?;
+        self.texture
+            .clear_resize(width, height, NonZeroU32::new(1).unwrap())?;
+        self.auto_exposure.resize(size)?;
         Ok(())
     }
 
-    pub fn draw(&mut self, frame: &Framebuffer) -> Result<()> {
-        self.draw.set_uniform(self.draw_texture, self.texture.as_uniform(0)?)?;
+    #[tracing::instrument(skip_all)]
+    pub fn draw(&mut self, frame: &Framebuffer, input: &Texture<[f32; 3]>, dt: Duration) -> Result<()> {
+        let accomodate = dt.as_secs_f32() * 100.;
+        let lerp = accomodate / (1. + accomodate);
+        tracing::debug!(?accomodate, ?lerp);
+        let avg_luminance = self.auto_exposure.process(input, lerp)?;
+        self.draw.set_uniform(
+            self.uniform_avg_luminance,
+            avg_luminance / self.luminance_bias,
+        )?;
+        self.draw
+            .set_uniform(self.uniform_texture, input.as_uniform(0)?)?;
         self.draw.draw(frame)?;
         Ok(())
+    }
+
+    #[cfg(feature = "debug-ui")]
+    pub fn average_luminance(&self) -> f32 {
+        self.auto_exposure.average_luminance()
     }
 }
