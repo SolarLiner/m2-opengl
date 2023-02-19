@@ -7,7 +7,7 @@ use std::{
     thread::JoinHandle,
 };
 
-use egui::{emath::Numeric, Response, RichText, Ui, Widget};
+use egui::{emath::Numeric, Response, RichText, Ui, Widget, WidgetText};
 use egui_extras::Column;
 use egui_gizmo::{Gizmo, GizmoMode};
 use eyre::Result;
@@ -30,12 +30,12 @@ use rose_renderer::{Mesh, Renderer};
 use violette::texture::{AsTextureFormat, Texture};
 
 use crate::{
-    read_mesh::ObjectData,
+    io::ObjectData,
     scene::{Entity, Scene},
 };
-use crate::read_mesh::LoadMeshExt;
+use crate::io::LoadMeshExt;
 
-mod read_mesh;
+mod io;
 mod scene;
 // mod persistence;
 
@@ -258,7 +258,7 @@ impl Sandbox {
                     });
                 }
                 UiMessage::LoadMesh { filepath, respond } => {
-                    match read_mesh::load_mesh_dynamic(filepath) {
+                    match io::load_mesh_dynamic(filepath) {
                         Ok(data) => {
                             self.invoke_respond(respond, data);
                         }
@@ -309,23 +309,11 @@ impl Sandbox {
         }
     }
 
-    fn poll_load_mesh_dialog(&mut self) {
-        let load_file_done = self
-            .load_file_join
-            .as_ref()
-            .map(|handle| handle.is_finished())
-            .unwrap_or(false);
-        if load_file_done {
-            let handle = self.load_file_join.take().unwrap();
-            for obj in handle.join().unwrap() {
-                self.render_events.send(RenderMessage::LoadMesh(obj));
-            }
-        }
-    }
-
     fn ui_menubar(&mut self, ctx: &UiContext) {
         egui::TopBottomPanel::top("top-menu").show(ctx.egui, |ui| {
             ui.horizontal(|ui| {
+                egui::widgets::global_dark_light_mode_switch(ui);
+                ui.separator();
                 ui.menu_button("File", |ui| {
                     ui.menu_button("Add object", |ui| {
                         ui.menu_button("Sphere", |ui| {
@@ -385,10 +373,9 @@ impl Sandbox {
             let table_builder = egui_extras::TableBuilder::new(ui)
                 .columns(Column::auto(), 2)
                 .column(Column::auto().resizable(true))
-                .column(Column::auto())
-                .column(Column::remainder().at_least(150.))
-                .striped(true)
-                .resizable(true);
+                .column(Column::auto().resizable(true).at_least(100.))
+                .column(Column::remainder().at_least(150.).resizable(true))
+                .striped(true).resizable(true);
 
             if let Some(selection) = self.selected {
                 table_builder.scroll_to_row(selection as _, None)
@@ -460,6 +447,56 @@ impl Sandbox {
             });
         });
     }
+
+    fn ui_object_properties(&mut self, ui: &mut Ui) {
+        let mut scene = self.scene.write().unwrap();
+        if let Some(selected) = self.selected.and_then(|ix| scene.get_mut(ix)) {
+            ui.group(|ui| {
+                ui.collapsing("Transform", |ui| {
+                    egui::Grid::new("selected-transform").striped(true).num_columns(4).show(ui, |ui| {
+                        ui.strong("Position");
+                        ui.add(egui::DragValue::new(&mut selected.transform.position.x).prefix("x: ").fixed_decimals(2));
+                        ui.add(egui::DragValue::new(&mut selected.transform.position.y).prefix("y: ").fixed_decimals(2));
+                        ui.add(egui::DragValue::new(&mut selected.transform.position.z).prefix("z: ").fixed_decimals(2));
+                        ui.end_row();
+
+                        ui.strong("Rotation");
+                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.x).prefix("x: ").fixed_decimals(2));
+                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.y).prefix("y: ").fixed_decimals(2));
+                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.z).prefix("z: ").fixed_decimals(2));
+                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.w).prefix("w: ").fixed_decimals(2));
+                        ui.end_row();
+
+                        ui.strong("Scale");
+                        ui.add(egui::DragValue::new(&mut selected.transform.scale.x).prefix("x: ").fixed_decimals(2));
+                        ui.add(egui::DragValue::new(&mut selected.transform.scale.y).prefix("y: ").fixed_decimals(2));
+                        ui.add(egui::DragValue::new(&mut selected.transform.scale.z).prefix("z: ").fixed_decimals(2));
+                        ui.end_row();
+                    });
+                });
+            });
+        }
+    }
+
+    fn ui_gizmo(&mut self, ctx: UiContext) {
+        let mut scene = self.scene.write().unwrap();
+        let camera = self.renderer.camera_mut();
+        if let Some(inst) = self.selected.and_then(|i| scene.get_mut(i)) {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::none())
+                .show(ctx.egui, |ui| {
+                    let gizmo = Gizmo::new("manipulator")
+                        .view_matrix(camera.transform.matrix().to_cols_array_2d())
+                        .projection_matrix(camera.projection.matrix().to_cols_array_2d())
+                        .model_matrix(inst.transform.matrix().to_cols_array_2d())
+                        .mode(self.gizmo_mode);
+                    if let Some(response) = gizmo.interact(ui) {
+                        inst.transform =
+                            Transform::from_matrix(Mat4::from_cols_array_2d(&response.transform));
+                    }
+                });
+        }
+    }
 }
 
 impl Application for Sandbox {
@@ -482,11 +519,14 @@ impl Application for Sandbox {
             .named("Point light");
 
         for file in std::env::args().skip(1) {
-            let Ok(loader) = read_mesh::load_mesh_dynamic(&file) else {
-                tracing::error!("Cannot load file {}", file);
-                continue;
+            let loader = match io::load_mesh_dynamic(&file) {
+                Ok(loader) => loader,
+                Err(err) => {
+                    let err_display = err.chain().skip(1).fold(err.to_string(), |str, err| format!("{}\n\t{}", str, err));
+                    tracing::error!("Cannot load file {}: {}", file, err_display);
+                    continue;
+                }
             };
-
             if let Err(err) = loader.insert_into_scene(&mut scene) {
                 tracing::error!("Cannot insert object into scene: {}", err);
             }
@@ -533,7 +573,6 @@ impl Application for Sandbox {
     #[tracing::instrument(skip_all)]
     fn tick(&mut self, ctx: TickContext) -> Result<()> {
         self.process_ui_messages();
-        self.poll_load_mesh_dialog();
         self.camera_controller
             .update(ctx.dt, self.renderer.camera_mut());
 
@@ -572,6 +611,7 @@ impl Application for Sandbox {
 
         egui::SidePanel::left("left-panel").show(ctx.egui, |ui| {
             self.objects_panel(ui);
+            self.ui_object_properties(ui);
         });
 
         egui::Window::new("Add light").resizable(true).open(&mut self.ui_add_light).show(ctx.egui, |ui| {
@@ -605,23 +645,7 @@ impl Application for Sandbox {
             });
         });
 
-        let mut scene = self.scene.write().unwrap();
-        let camera = self.renderer.camera_mut();
-        if let Some(inst) = self.selected.and_then(|i| scene.get_mut(i)) {
-            egui::CentralPanel::default()
-                .frame(egui::Frame::none())
-                .show(ctx.egui, |ui| {
-                    let gizmo = Gizmo::new("manipulator")
-                        .view_matrix(camera.transform.matrix().to_cols_array_2d())
-                        .projection_matrix(camera.projection.matrix().to_cols_array_2d())
-                        .model_matrix(inst.transform.matrix().to_cols_array_2d())
-                        .mode(self.gizmo_mode);
-                    if let Some(response) = gizmo.interact(ui) {
-                        inst.transform =
-                            Transform::from_matrix(Mat4::from_cols_array_2d(&response.transform));
-                    }
-                });
-        }
+        self.ui_gizmo(ctx);
     }
 }
 

@@ -1,9 +1,11 @@
+use std::cell::RefCell;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock, Weak},
     time::{Duration, Instant},
 };
 
+use egui::vec2;
 use eyre::Result;
 use glam::{UVec2, Vec4};
 use tracing::span::EnteredSpan;
@@ -209,11 +211,11 @@ impl Renderer {
     #[cfg(feature = "debug-ui")]
     pub fn ui(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("renderer-stats")
-            .frame(
-                egui::Frame::none()
-                    .inner_margin(egui::style::Margin::same(5.))
-                    .stroke(egui::Stroke::NONE),
-            )
+            // .frame(
+            //     egui::Frame::none()
+            //         .inner_margin(egui::style::Margin::same(5.))
+            //         .stroke(egui::Stroke::NONE),
+            // )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(format!(
@@ -241,29 +243,76 @@ impl Renderer {
             .resizable(true)
             .open(&mut self.debug_window_open)
             .show(ctx, |ui| {
-                egui::Grid::new("debug_textures")
-                    .num_columns(2)
-                    .show(ui, |ui| {
-                        make_texture_frame(ui, "Position", {
-                            let geom_pass = self.geom_pass.clone();
-                            move |frame| geom_pass.read().unwrap().debug_position(frame).unwrap()
-                        });
-                        make_texture_frame(ui, "Albedo", {
-                            let geom_pass = self.geom_pass.clone();
-                            move |frame| geom_pass.read().unwrap().debug_albedo(frame).unwrap()
-                        });
-                        ui.end_row();
-
-                        make_texture_frame(ui, "Normal", {
-                            let geom_pass = self.geom_pass.clone();
-                            move |frame| geom_pass.read().unwrap().debug_normal(frame).unwrap()
-                        });
-                        make_texture_frame(ui, "Roughness / Metal", {
-                            let geom_pass = self.geom_pass.clone();
-                            move |frame| geom_pass.read().unwrap().debug_rough_metal(frame).unwrap()
-                        });
-                        ui.end_row();
-                    })
+                const GET_NAME: fn(usize) -> &'static str = |ix| match ix {
+                    0 => "Position",
+                    1 => "Albedo",
+                    2 => "Normal",
+                    3 => "Roughness/Metal",
+                    _ => "<None>",
+                };
+                thread_local! {
+                    static SELECTED_TEXTURE: RefCell<usize> = RefCell::new(usize::MAX);
+                }
+                SELECTED_TEXTURE.with(|key| {
+                    let ix = ui.horizontal(|ui| {
+                        let label = ui.label("Select debug texture");
+                        let ix = &mut *key.borrow_mut();
+                        egui::ComboBox::new("renderer-debug-texture", "Debug texture")
+                            .selected_text(GET_NAME(*ix))
+                            .show_index(ui, ix, 5, |ix| GET_NAME(ix).to_string())
+                            .labelled_by(label.id);
+                        *ix
+                    }).inner;
+                    const SIDE: f32 = 256.;
+                    let size = vec2(self.camera.projection.width, self.camera.projection.height);
+                    let size = if size.x > size.y {
+                        vec2(SIDE, size.y / size.x * SIDE)
+                    } else {
+                        vec2(SIDE * size.x / size.y, SIDE)
+                    };
+                    let (rect, _) =
+                        ui.allocate_at_least(size, egui::Sense::focusable_noninteractive());
+                    let painter = ui.painter();
+                    painter.rect_filled(rect, 0., egui::Rgba::from_gray(0.));
+                    let geom_pass = self.geom_pass.clone();
+                    painter.add(egui::PaintCallback {
+                        rect,
+                        callback: Arc::new(rose_ui::painter::UiCallback::new(move |info, ui| {
+                            let geom_pass = geom_pass.read().unwrap();
+                            let _ = match ix {
+                                0 => geom_pass.debug_position(ui.framebuffer()),
+                                1 => geom_pass.debug_albedo(ui.framebuffer()),
+                                2 => geom_pass.debug_normal(ui.framebuffer()),
+                                3 => geom_pass.debug_rough_metal(ui.framebuffer()),
+                                _ => Ok(()),
+                            }
+                            .is_ok();
+                        })),
+                    });
+                });
+                // egui::Grid::new("debug_textures")
+                //     .num_columns(2)
+                //     .show(ui, |ui| {
+                //         make_texture_frame(ui, "Position", {
+                //             let geom_pass = self.geom_pass.clone();
+                //             move |frame| geom_pass.read().unwrap().debug_position(frame).unwrap()
+                //         });
+                //         make_texture_frame(ui, "Albedo", {
+                //             let geom_pass = self.geom_pass.clone();
+                //             move |frame| geom_pass.read().unwrap().debug_albedo(frame).unwrap()
+                //         });
+                //         ui.end_row();
+                //
+                //         make_texture_frame(ui, "Normal", {
+                //             let geom_pass = self.geom_pass.clone();
+                //             move |frame| geom_pass.read().unwrap().debug_normal(frame).unwrap()
+                //         });
+                //         make_texture_frame(ui, "Roughness / Metal", {
+                //             let geom_pass = self.geom_pass.clone();
+                //             move |frame| geom_pass.read().unwrap().debug_rough_metal(frame).unwrap()
+                //         });
+                //         ui.end_row();
+                //     })
             });
     }
 }

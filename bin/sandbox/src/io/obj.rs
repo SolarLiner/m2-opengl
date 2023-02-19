@@ -1,44 +1,29 @@
-use std::{
-    collections::HashMap, fs::File, io::BufReader, ops::Deref, path::Path, path::PathBuf, sync::Arc,
-};
+use std::{collections::HashMap, fs::File, io::BufReader, ops::Deref, path::PathBuf};
 
-use eyre::{Context, Result};
+use eyre::WrapErr;
 use glam::{vec2, vec3, Vec2, Vec3};
-use obj::raw::object::Polygon;
-use obj::raw::{
-    material::{MtlColor, MtlTextureMap},
-    RawObj,
+use obj::{
+    raw::{
+        object::Polygon,
+        material::{MtlColor, MtlTextureMap},
+        RawObj
+    }
 };
-use once_cell::sync::Lazy;
 use smol::stream::StreamExt;
 use tracing::Instrument;
 
 use rose_core::{
-    transform::Transform,
-    material::{
-        TextureSlot,
-        Material,
-        Vertex
-    },
+    transform::TransformExt,
+    material::{Material, TextureSlot, Vertex},
     mesh::Mesh,
-    transform::TransformExt
+    transform::Transform
 };
 use violette::texture::Texture;
 
-use crate::scene::Scene;
-
-static WHITE_MATERIAL: Lazy<Arc<Material>> =
-    Lazy::new(|| Arc::new(Material::create([1.; 3], None, [0.3; 2]).unwrap()));
-
-pub trait ObjectData {
-    fn insert_into_scene(&self, scene: &mut Scene) -> Result<Vec<u64>>;
-}
-
-pub trait MeshLoader<D: ObjectData> {
-    type Meshes: IntoIterator<Item = D>;
-
-    fn meshes(&self) -> Self::Meshes;
-}
+use crate::{
+    io::{ObjectData, WHITE_MATERIAL},
+    scene::Scene,
+};
 
 pub struct WavefrontLoader {
     filepath: PathBuf,
@@ -48,7 +33,7 @@ pub struct WavefrontLoader {
 }
 
 impl WavefrontLoader {
-    pub async fn load(path: impl Into<PathBuf>) -> Result<Self> {
+    pub async fn load(path: impl Into<PathBuf>) -> eyre::Result<Self> {
         let filepath = path.into();
         let path = filepath.clone();
         let raw_obj: RawObj = smol::unblock(move || {
@@ -78,7 +63,11 @@ impl WavefrontLoader {
                 acc.extend(val.materials);
                 Ok(acc)
             })
-            .await?;
+            .await
+            .unwrap_or_else(|err| {
+                tracing::error!("Could not load material library: {}", err);
+                return Default::default();
+            });
         let images = smol::stream::iter(materials.values().flat_map(|mat| {
             let mut files = vec![];
             if let Some(map) = &mat.diffuse_map {
@@ -113,7 +102,7 @@ impl WavefrontLoader {
         })
     }
 
-    pub fn load_sync(path: impl Into<PathBuf>) -> Result<Self> {
+    pub fn load_sync(path: impl Into<PathBuf>) -> eyre::Result<Self> {
         smol::block_on(Self::load(path))
     }
 
@@ -122,7 +111,7 @@ impl WavefrontLoader {
         color: Option<&MtlColor>,
         texture: Option<&MtlTextureMap>,
         name: &str,
-    ) -> Result<TextureSlot<2>> {
+    ) -> eyre::Result<TextureSlot<2>> {
         Ok(if let Some(tex) = texture {
             self.convert_mat_texture2(tex)
                 .await
@@ -137,7 +126,7 @@ impl WavefrontLoader {
         })
     }
 
-    async fn convert_mat_texture2(&self, tex: &MtlTextureMap) -> Result<Texture<[f32; 2]>> {
+    async fn convert_mat_texture2(&self, tex: &MtlTextureMap) -> eyre::Result<Texture<[f32; 2]>> {
         let file = self.filepath.parent().unwrap().join(&tex.file);
         let image = smol::unblock(move || image::open(file))
             .await
@@ -157,7 +146,7 @@ impl WavefrontLoader {
         color: Option<&MtlColor>,
         texture: Option<&MtlTextureMap>,
         name: &str,
-    ) -> Result<TextureSlot<3>> {
+    ) -> eyre::Result<TextureSlot<3>> {
         Ok(if let Some(tex) = texture {
             self.convert_mat_texture3(tex)
                 .await
@@ -171,7 +160,7 @@ impl WavefrontLoader {
         })
     }
 
-    async fn convert_mat_texture3(&self, tex: &MtlTextureMap) -> Result<Texture<[f32; 3]>> {
+    async fn convert_mat_texture3(&self, tex: &MtlTextureMap) -> eyre::Result<Texture<[f32; 3]>> {
         let file = self.filepath.parent().unwrap().join(&tex.file);
         tracing::info!("Loading texture {}", file.display());
         let image = smol::unblock(move || image::open(file))
@@ -192,7 +181,7 @@ impl WavefrontLoader {
 }
 
 impl ObjectData for WavefrontLoader {
-    fn insert_into_scene(&self, scene: &mut Scene) -> Result<Vec<u64>> {
+    fn insert_into_scene(&self, scene: &mut Scene) -> eyre::Result<Vec<u64>> {
         let scene_materials: HashMap<_, _> = smol::block_on(
             smol::stream::iter(self.materials.iter())
                 .then(|(name, mat)| async move {
@@ -311,37 +300,4 @@ impl ObjectData for WavefrontLoader {
             })
             .collect())
     }
-}
-
-impl<T: ObjectData> ObjectData for Box<T> {
-    #[inline(always)]
-    fn insert_into_scene(&self, scene: &mut Scene) -> Result<Vec<u64>> {
-        T::insert_into_scene(&*self, scene)
-    }
-}
-
-pub trait LoadMeshExt: Sized {
-    fn load_object(&mut self, loader: &impl ObjectData) -> Result<Vec<u64>>;
-}
-
-impl LoadMeshExt for Scene {
-    fn load_object(&mut self, loader: &impl ObjectData) -> Result<Vec<u64>> {
-        loader.insert_into_scene(self)
-    }
-}
-
-#[tracing::instrument(skip_all, fields(path = %path.as_ref().display()))]
-pub fn load_mesh_dynamic(
-    path: impl AsRef<Path>,
-) -> Result<Box<dyn 'static + Sync + Send + ObjectData>> {
-    let path = path.as_ref();
-    tracing::info!("Loading mesh file");
-    let ext = path.extension().map(|s| s.to_string_lossy().to_string());
-    Ok(match ext.as_deref() {
-        Some("obj") => {
-            Box::new(WavefrontLoader::load_sync(path).context("Cannot load Wavefront OBJ")?)
-        }
-        Some(other) => eyre::bail!("Unknown extension {:?}", other),
-        None => eyre::bail!("Cannot determine file format (no extension in path)"),
-    })
 }
