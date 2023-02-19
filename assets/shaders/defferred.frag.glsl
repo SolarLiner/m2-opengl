@@ -115,7 +115,7 @@ void main() {
     vec3 light_dir;// <- world space
     if (light.kind == LIGHT_KIND_POINT) {
         light_distance = distance(light.pos_dir, position);// <- nominal
-        light_dir = normalize(position - light.pos_dir);// <- nominal, world space
+        light_dir = normalize(light.pos_dir - position);// <- nominal, world space
     } else {
         light_distance = 1.;
         light_dir = -light.pos_dir;// <- nominal, world space
