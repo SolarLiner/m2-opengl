@@ -73,11 +73,14 @@ impl AutoExposure {
     pub fn process(&mut self, in_texture: &Texture<[f32; 3]>, lerp: f32) -> Result<f32> {
         self.screen_draw
             .set_uniform(self.uniform_in_texture, in_texture.as_uniform(0)?)?;
-        self.fbo.do_clear(ClearBuffer::COLOR)?;
+        self.fbo.disable_blending()?; // TODO: Find the source of why this we can't just "set and forget" this setting
         self.screen_draw.draw(&self.fbo)?;
         self.target.generate_mipmaps()?;
-        let luminance_data = self.target.download(self.target.num_mipmaps() - 1)?;
-        let luminance_data = luminance_data[0].max(1e-32);
+        let last_mipmap = self.target.num_mipmaps() - 1;
+        tracing::debug!(message="Sampling last mipmap for average", mipmap=%last_mipmap);
+        let luminance_data = self.target.download(last_mipmap)?;
+        let luminance_data = luminance_data[0];
+        tracing::debug!(%luminance_data, ev=%luminance_data.log2());
         self.avg_luminance += (luminance_data - self.avg_luminance) * lerp;
         tracing::debug!(avg_luminance=?self.avg_luminance, luminance=?luminance_data);
         Ok(self.avg_luminance)

@@ -33,6 +33,7 @@ use crate::{
     read_mesh::ObjectData,
     scene::{Entity, Scene},
 };
+use crate::read_mesh::LoadMeshExt;
 
 mod read_mesh;
 mod scene;
@@ -472,11 +473,6 @@ impl Application for Sandbox {
         let mut scene = Scene::new();
         let default_material =
             scene.add_material(Material::create([1., 1., 1.], None, [0.3, 0.3])?);
-        let sphere = scene.add_mesh(MeshBuilder::new(Vertex::new).uv_sphere(1., 64, 32)?);
-        scene.instance_object(
-            default_material.clone(),
-            sphere.transformed(Transform::default()),
-        );
         let point_light = scene.add_light(Light::Point {
             color: Vec3::splat(3.5),
             position: Vec3::ZERO,
@@ -484,6 +480,18 @@ impl Application for Sandbox {
         scene
             .instance_light(point_light.transformed(Transform::translation(vec3(2., 3., -1.))))
             .named("Point light");
+
+        for file in std::env::args().skip(1) {
+            let Ok(loader) = read_mesh::load_mesh_dynamic(&file) else {
+                tracing::error!("Cannot load file {}", file);
+                continue;
+            };
+
+            if let Err(err) = loader.insert_into_scene(&mut scene) {
+                tracing::error!("Cannot insert object into scene: {}", err);
+            }
+        }
+
         let mut camera_controller = OrbitCameraController::default();
         camera_controller.set_orientation(
             renderer.camera_mut(),

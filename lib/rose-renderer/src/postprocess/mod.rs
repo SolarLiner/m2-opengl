@@ -78,7 +78,7 @@ impl Postprocess {
         let accomodate = dt.as_secs_f32() * 100.;
         let lerp = accomodate / (1. + accomodate);
         tracing::debug!(?accomodate, ?lerp);
-        let avg_luminance = self.auto_exposure.process(input, lerp)?;
+        let avg_luminance = self.auto_exposure.process(input, lerp).unwrap_or_else(|_| self.auto_exposure.average_luminance());
         self.draw.set_uniform(
             self.uniform_avg_luminance,
             avg_luminance / self.luminance_bias,
