@@ -77,7 +77,7 @@ impl AutoExposure {
         self.screen_draw.draw(&self.fbo)?;
         self.target.generate_mipmaps()?;
         let luminance_data = self.target.download(self.target.num_mipmaps() - 1)?;
-        let luminance_data = luminance_data[0];
+        let luminance_data = luminance_data[0].max(1e-32);
         self.avg_luminance += (luminance_data - self.avg_luminance) * lerp;
         tracing::debug!(avg_luminance=?self.avg_luminance, luminance=?luminance_data);
         Ok(self.avg_luminance)

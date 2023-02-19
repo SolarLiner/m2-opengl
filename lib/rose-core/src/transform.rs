@@ -122,6 +122,15 @@ pub struct Transformed<T> {
     pub transform: Transform,
 }
 
+impl<T> Transformed<T> {
+    pub fn map<U>(self, mapping: impl FnOnce(T) -> U) -> Transformed<U> {
+        Transformed {
+            value: mapping(self.value),
+            transform: self.transform,
+        }
+    }
+}
+
 impl<T> std::ops::Deref for Transformed<T> {
     type Target = T;
 

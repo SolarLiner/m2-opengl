@@ -5,7 +5,7 @@ use std::{
 };
 
 use eyre::Result;
-use glam::{UVec2, Vec3};
+use glam::{UVec2, Vec4};
 use tracing::span::EnteredSpan;
 
 use gbuffers::GeometryBuffers;
@@ -50,7 +50,11 @@ pub struct Renderer {
     begin_scene_at: Option<Instant>,
     last_scene_duration: Option<Duration>,
     last_render_duration: Option<Duration>,
+    last_render_submitted: usize,
+    last_render_rendered: usize,
 }
+
+impl Renderer {}
 
 impl Renderer {
     pub fn new(size: UVec2) -> Result<Self> {
@@ -77,6 +81,8 @@ impl Renderer {
             begin_scene_at: None,
             last_scene_duration: None,
             last_render_duration: None,
+            last_render_submitted: 0,
+            last_render_rendered: 0,
             debug_window_open: false,
         })
     }
@@ -110,14 +116,22 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn begin_render(&mut self) -> Result<()> {
+    pub fn set_light_buffer(&mut self, light_buffer: LightBuffer) {
+        self.lights = light_buffer;
+    }
+
+    pub fn begin_render(&mut self, clear_color: Vec4) -> Result<()> {
         self.render_span
             .replace(tracing::debug_span!("render").entered());
         let now = Instant::now();
         tracing::trace!(message = "Begin render", ?now);
         self.begin_scene_at.replace(now);
+
+        self.last_render_rendered = 0;
+        self.last_render_submitted = 0;
+
         let backbuffer = Framebuffer::backbuffer();
-        backbuffer.clear_color(Vec3::ZERO.extend(1.).to_array())?;
+        backbuffer.clear_color(clear_color.to_array())?;
         backbuffer.clear_depth(1.)?;
         backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
 
@@ -139,6 +153,7 @@ impl Renderer {
     pub fn submit_mesh(&mut self, material: Weak<Material>, mesh: Transformed<Weak<Mesh>>) {
         let mesh_ptr = Weak::as_ptr(&mesh) as usize;
         let material_ptr = Weak::as_ptr(&material) as usize;
+        self.last_render_submitted += 1;
         tracing::debug!(message="Submitting mesh", %mesh_ptr, %material_ptr);
         let mat_ix = if let Some(ix) = self
             .queued_materials
@@ -172,6 +187,7 @@ impl Renderer {
                 continue;
             };
 
+            self.last_render_rendered += meshes.len();
             geom_pass.draw_meshes(&self.camera, &material, &mut meshes)?;
         }
 
@@ -200,6 +216,11 @@ impl Renderer {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    ui.label(format!(
+                        "{:3} Objects submitted | {:3} objects rendered",
+                        self.last_render_submitted, self.last_render_rendered
+                    ));
+                    ui.separator();
                     ui.label(format!(
                         "Scene processing: {:5?}",
                         self.last_scene_duration.unwrap_or_default()

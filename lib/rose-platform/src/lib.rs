@@ -141,7 +141,7 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
         .with_transparency(true);
 
     let display_builder =
-        DisplayBuilder::new().with_window_builder(Some(WindowBuilder::new().with_title(title)));
+        DisplayBuilder::new().with_window_builder(Some(App::window_features(WindowBuilder::new()).with_title(title)));
 
     let (window, gl_config) = display_builder
         .build(&event_loop, template, |configs| {
@@ -237,7 +237,7 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
     let app = Arc::new(Mutex::new(app));
 
     #[cfg(feature = "ui")]
-    let mut ui = rose_ui::Ui::new(&event_loop)?;
+    let mut ui = rose_ui::Ui::new(&event_loop, &window)?;
 
     let start = Instant::now();
     std::thread::spawn({
