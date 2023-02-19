@@ -1,8 +1,9 @@
 use std::{
     cell::RefCell,
     path::PathBuf,
+    sync::mpsc::{sync_channel, Receiver, SyncSender},
+    sync::Mutex,
     sync::{Arc, RwLock, Weak},
-    thread,
     thread::JoinHandle,
 };
 
@@ -21,9 +22,9 @@ use rose_core::{
     mesh::MeshBuilder,
     transform::{Transform, TransformExt, Transformed},
 };
-use rose_platform::events::WindowEvent;
 use rose_platform::{
-    Application, PhysicalSize, RenderContext, TickContext, UiContext, WindowBuilder,
+    events::WindowEvent, Application, LogicalSize, PhysicalSize, RenderContext, TickContext,
+    UiContext, WindowBuilder,
 };
 use rose_renderer::{Mesh, Renderer};
 use violette::texture::{AsTextureFormat, Texture};
@@ -63,7 +64,7 @@ enum UiMessage {
     OpenMesh,
     LoadMesh {
         filepath: PathBuf,
-        respond: Respond<Box<dyn ObjectData>>,
+        respond: Respond<Box<dyn Send + Sync + ObjectData>>,
     },
     AddLight {
         light: Light,
@@ -99,14 +100,54 @@ enum RenderMessage {
     LoadMesh(Box<dyn Send + Sync + ObjectData>),
 }
 
+#[derive(Debug)]
+struct Combined<T> {
+    rx: Arc<Mutex<Receiver<T>>>,
+    tx: Arc<Mutex<SyncSender<T>>>,
+}
+
+impl<T> Clone for Combined<T> {
+    fn clone(&self) -> Self {
+        Self {
+            rx: self.rx.clone(),
+            tx: self.tx.clone(),
+        }
+    }
+}
+
+impl<T> Combined<T> {
+    pub fn new() -> Self {
+        let (tx, rx) = sync_channel(16);
+        Self {
+            tx: Arc::new(Mutex::new(tx)),
+            rx: Arc::new(Mutex::new(rx)),
+        }
+    }
+
+    pub fn send(&self, value: T) {
+        self.tx.lock().unwrap().send(value).unwrap();
+    }
+
+    pub fn extend(&self, values: impl IntoIterator<Item = T>) {
+        let tx = self.tx.lock().unwrap();
+        for value in values {
+            tx.send(value).unwrap();
+        }
+    }
+
+    pub fn next(&self) -> Option<T> {
+        self.rx.lock().unwrap().try_recv().ok()
+    }
+}
+
 struct Sandbox {
     renderer: Renderer,
     scene: Arc<RwLock<Scene>>,
     camera_controller: OrbitCameraController,
     camera_interaction_controller: OrbitCameraInteractionController,
     load_file_join: Option<JoinHandle<Vec<Box<dyn 'static + Send + Sync + ObjectData>>>>,
-    ui_events: Vec<UiMessage>,
-    render_events: Vec<RenderMessage>,
+    ui_events: Combined<UiMessage>,
+    render_events: Combined<RenderMessage>,
     default_material: Weak<Material>,
     selected: Option<u64>,
     total_ambient_lighting: Vec3,
@@ -126,7 +167,7 @@ impl Sandbox {
     }
 
     fn process_render_messages(&mut self) -> Result<()> {
-        for msg in std::mem::take(&mut self.render_events) {
+        while let Some(msg) = self.render_events.next() {
             match msg {
                 RenderMessage::AddSphere {
                     radius,
@@ -178,43 +219,59 @@ impl Sandbox {
                     )?);
                     self.invoke_respond(respond, material);
                 }
-                RenderMessage::LoadMesh(_) => {}
+                RenderMessage::LoadMesh(model) => {
+                    let mut scene = self.scene.write().unwrap();
+                    match model.insert_into_scene(&mut scene) {
+                        Ok(_) => {}
+                        Err(err) => {
+                            tracing::error!("Cannot insert into scene: {}", err)
+                        }
+                    }
+                }
             }
         }
         Ok(())
     }
 
     fn process_ui_messages(&mut self) {
-        for msg in std::mem::take(&mut self.ui_events) {
+        while let Some(msg) = self.ui_events.next() {
             match msg {
                 UiMessage::OpenMesh => {
-                    if self.load_file_join.is_none() {
-                        self.load_file_join.replace(thread::spawn(move || {
-                            let files = rfd::FileDialog::new()
-                                .add_filter("Wavefront files", &["obj"])
-                                .add_filter("All files", &["*"])
-                                .pick_files();
-                            files
-                                .into_iter()
-                                .flatten()
-                                .map(|file| read_mesh::load_mesh_dynamic(file))
-                                .filter_map(|result| match result {
-                                    Ok(it) => Some(it),
-                                    Err(err) => {
-                                        tracing::warn!("Error loading file: {}", err);
-                                        None
-                                    }
-                                })
-                                .collect()
-                        }));
-                    }
+                    let ui_events = self.ui_events.clone();
+                    std::thread::spawn(move || {
+                        let files = rfd::FileDialog::new()
+                            .add_filter("Wavefront files", &["obj"])
+                            .add_filter("All files", &["*"])
+                            .pick_files();
+                        let messages = files
+                            .into_iter()
+                            .flatten()
+                            .map(|filepath| UiMessage::LoadMesh {
+                                filepath,
+                                respond: Some(Box::new(|obj_data, _, render| {
+                                    render.push(RenderMessage::LoadMesh(obj_data))
+                                })),
+                            })
+                            .collect::<Vec<_>>();
+                        ui_events.extend(messages);
+                    });
                 }
                 UiMessage::LoadMesh { filepath, respond } => {
                     match read_mesh::load_mesh_dynamic(filepath) {
                         Ok(data) => {
                             self.invoke_respond(respond, data);
                         }
-                        Err(err) => tracing::error!("Error loading mesh: {}", err),
+                        Err(err) => {
+                            let sources =
+                                err.chain()
+                                    .map(|src| format!("\t{}", src))
+                                    .reduce(|mut str, s| {
+                                        str.push_str(&s);
+                                        str.push('\n');
+                                        str
+                                    }).unwrap_or("<No sources>".into());
+                            tracing::error!("Error loading mesh: {}\n{}", err, sources)
+                        }
                     }
                 }
                 UiMessage::AddLight { light, respond } => {
@@ -260,7 +317,7 @@ impl Sandbox {
         if load_file_done {
             let handle = self.load_file_join.take().unwrap();
             for obj in handle.join().unwrap() {
-                self.render_events.push(RenderMessage::LoadMesh(obj));
+                self.render_events.send(RenderMessage::LoadMesh(obj));
             }
         }
     }
@@ -286,7 +343,7 @@ impl Sandbox {
                                 let nlat = SPHERE_NLAT.with(|cell| cell.borrow().clone());
                                 let nlon = SPHERE_NLON.with(|cell| cell.borrow().clone());
                                 let default_material = self.default_material.clone();
-                                self.render_events.push(RenderMessage::AddSphere {
+                                self.render_events.send(RenderMessage::AddSphere {
                                     radius,
                                     nlon,
                                     nlat,
@@ -301,7 +358,7 @@ impl Sandbox {
                             }
                         });
                         if ui.small_button("Load mesh...").clicked() {
-                            self.ui_events.push(UiMessage::OpenMesh);
+                            self.ui_events.send(UiMessage::OpenMesh);
                         }
                     });
                     ui.toggle_value(&mut self.ui_add_light, "Add light ...");
@@ -358,9 +415,9 @@ impl Sandbox {
                                 self.selected.map(|sel| sel == inst.id()).unwrap_or(false);
                             if ui.checkbox(&mut checked, "").clicked() {
                                 if checked {
-                                    self.ui_events.push(UiMessage::Select(inst.id()));
+                                    self.ui_events.send(UiMessage::Select(inst.id()));
                                 } else {
-                                    self.ui_events.push(UiMessage::Deselect);
+                                    self.ui_events.send(UiMessage::Deselect);
                                 }
                             }
                         });
@@ -376,7 +433,7 @@ impl Sandbox {
                                     }
                                 }
                                 if ui.small_button("Delete").clicked() {
-                                    self.ui_events.push(UiMessage::DeleteInstance(inst.id()));
+                                    self.ui_events.send(UiMessage::DeleteInstance(inst.id()));
                                 }
                             });
                         });
@@ -406,7 +463,7 @@ impl Sandbox {
 
 impl Application for Sandbox {
     fn window_features(wb: WindowBuilder) -> WindowBuilder {
-        wb.with_maximized(true)
+        wb.with_inner_size(LogicalSize::new(1280, 860))
     }
 
     fn new(size: PhysicalSize<f32>) -> Result<Self> {
@@ -438,8 +495,8 @@ impl Application for Sandbox {
             camera_controller,
             camera_interaction_controller: OrbitCameraInteractionController::default(),
             load_file_join: None,
-            ui_events: vec![],
-            render_events: vec![],
+            ui_events: Combined::new(),
+            render_events: Combined::new(),
             default_material,
             selected: None,
             total_ambient_lighting: Vec3::ZERO,
@@ -535,36 +592,34 @@ impl Application for Sandbox {
                         NewLightType::Point => Light::Point {color, position: new_light.transform.position },
                         NewLightType::Directional => Light::Directional {color, dir: new_light.transform.backward()},
                     };
-                    self.ui_events.push(UiMessage::AddLight {light,respond: Some(Box::new(move |light, ui, _| ui.push(UiMessage::InstanceLight {light: light.transformed(new_light.transform), respond:None})))})
+                    self.ui_events.send(UiMessage::AddLight {light,respond: Some(Box::new(move |light, ui, _| ui.push(UiMessage::InstanceLight {light: light.transformed(new_light.transform), respond:None})))})
                 }
             });
         });
 
         let mut scene = self.scene.write().unwrap();
-        if let Some(camera) = scene.active_camera() {
-            if let Some(inst) = self.selected.and_then(|i| scene.get_mut(i)) {
-                egui::CentralPanel::default()
-                    .frame(egui::Frame::none())
-                    .show(ctx.egui, |ui| {
-                        let gizmo = Gizmo::new("manipulator")
-                            .view_matrix(camera.transform.matrix().to_cols_array_2d())
-                            .projection_matrix(camera.projection.matrix().to_cols_array_2d())
-                            .model_matrix(inst.transform.matrix().to_cols_array_2d())
-                            .mode(self.gizmo_mode);
-                        if let Some(response) = gizmo.interact(ui) {
-                            inst.transform = Transform::from_matrix(Mat4::from_cols_array_2d(
-                                &response.transform,
-                            ));
-                        }
-                    });
-            }
+        let camera = self.renderer.camera_mut();
+        if let Some(inst) = self.selected.and_then(|i| scene.get_mut(i)) {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::none())
+                .show(ctx.egui, |ui| {
+                    let gizmo = Gizmo::new("manipulator")
+                        .view_matrix(camera.transform.matrix().to_cols_array_2d())
+                        .projection_matrix(camera.projection.matrix().to_cols_array_2d())
+                        .model_matrix(inst.transform.matrix().to_cols_array_2d())
+                        .mode(self.gizmo_mode);
+                    if let Some(response) = gizmo.interact(ui) {
+                        inst.transform =
+                            Transform::from_matrix(Mat4::from_cols_array_2d(&response.transform));
+                    }
+                });
         }
     }
 }
 
 fn num_value<T: Clone + Numeric>(
     name: &'static str,
-    value: &'static thread::LocalKey<RefCell<T>>,
+    value: &'static std::thread::LocalKey<RefCell<T>>,
     ui: &mut Ui,
 ) -> Response {
     ui.horizontal(|ui| {
