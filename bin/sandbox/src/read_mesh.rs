@@ -13,12 +13,15 @@ use once_cell::sync::Lazy;
 use smol::stream::StreamExt;
 use tracing::Instrument;
 
-use rose_core::transform::Transform;
 use rose_core::{
-    material::TextureSlot,
-    material::{Material, Vertex},
+    transform::Transform,
+    material::{
+        TextureSlot,
+        Material,
+        Vertex
+    },
     mesh::Mesh,
-    transform::TransformExt,
+    transform::TransformExt
 };
 use violette::texture::Texture;
 
@@ -59,8 +62,8 @@ impl WavefrontLoader {
         .await?;
         let materials = smol::stream::iter(raw_obj.material_libraries.iter())
             .then(|fpath| {
-                let fpath = fpath.to_string();
-                let span = tracing::info_span!("obj::raw::parse_mtl", path=%fpath);
+                let fpath = filepath.parent().unwrap().join(fpath);
+                let span = tracing::info_span!("obj::raw::parse_mtl", path=%fpath.display());
                 smol::unblock(move || {
                     Ok::<_, eyre::Report>(
                         obj::raw::parse_mtl(BufReader::new(
@@ -121,7 +124,7 @@ impl WavefrontLoader {
         name: &str,
     ) -> Result<TextureSlot<2>> {
         Ok(if let Some(tex) = texture {
-            Self::convert_mat_texture2(tex)
+            self.convert_mat_texture2(tex)
                 .await
                 .map(TextureSlot::Texture)?
         } else {
@@ -134,8 +137,8 @@ impl WavefrontLoader {
         })
     }
 
-    async fn convert_mat_texture2(tex: &MtlTextureMap) -> Result<Texture<[f32; 2]>> {
-        let file = tex.file.to_string();
+    async fn convert_mat_texture2(&self, tex: &MtlTextureMap) -> Result<Texture<[f32; 2]>> {
+        let file = self.filepath.parent().unwrap().join(&tex.file);
         let image = smol::unblock(move || image::open(file))
             .await
             .context("Cannot open texture")?;
@@ -156,7 +159,7 @@ impl WavefrontLoader {
         name: &str,
     ) -> Result<TextureSlot<3>> {
         Ok(if let Some(tex) = texture {
-            Self::convert_mat_texture3(tex)
+            self.convert_mat_texture3(tex)
                 .await
                 .map(TextureSlot::Texture)?
         } else {
@@ -168,9 +171,9 @@ impl WavefrontLoader {
         })
     }
 
-    async fn convert_mat_texture3(tex: &MtlTextureMap) -> Result<Texture<[f32; 3]>> {
-        let file = tex.file.to_string();
-        tracing::info!("Loading texture {}", file);
+    async fn convert_mat_texture3(&self, tex: &MtlTextureMap) -> Result<Texture<[f32; 3]>> {
+        let file = self.filepath.parent().unwrap().join(&tex.file);
+        tracing::info!("Loading texture {}", file.display());
         let image = smol::unblock(move || image::open(file))
             .await
             .context("Cannot open texture")?;
@@ -198,13 +201,13 @@ impl ObjectData for WavefrontLoader {
                         .convert_mat3(mat.diffuse.as_ref(), mat.diffuse_map.as_ref(), name)
                         .await?;
                     let normal = if let Some(map) = &mat.bump_map {
-                        let texture = Self::convert_mat_texture3(map).await?;
+                        let texture = self.convert_mat_texture3(map).await?;
                         Some(texture)
                     } else {
                         None
                     };
                     let rough_metal = if let Some(tex) = &mat.specular_map {
-                        Self::convert_mat_texture2(tex)
+                        self.convert_mat_texture2(tex)
                             .await
                             .map(TextureSlot::Texture)?
                     } else if let Some(specular) = &mat.specular {
