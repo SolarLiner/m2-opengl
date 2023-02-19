@@ -1,3 +1,4 @@
+use std::sync::RwLock;
 use std::{
     ffi::CString,
     fs::File,
@@ -14,18 +15,79 @@ use glutin::{
     surface::{SurfaceAttributesBuilder, WindowSurface},
 };
 use glutin_winit::DisplayBuilder;
+use histo::Histogram;
 use raw_window_handle::HasRawWindowHandle;
 use tracing_subscriber::{fmt::format::FmtSpan, prelude::*, EnvFilter};
-use tracing_tracy::TracyLayer;
 pub use winit::dpi::{LogicalSize, PhysicalSize};
+pub use winit::event as events;
+use winit::event_loop::ControlFlow;
+pub use winit::window::WindowBuilder;
 use winit::{
     event::{ElementState, Event, KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
     event_loop::EventLoopBuilder,
     window::Fullscreen,
 };
 
-pub use winit::event as events;
-pub use winit::window::WindowBuilder;
+use crate::circbuffer::CircBuffer;
+
+pub mod circbuffer;
+
+#[derive(Debug, Copy, Clone)]
+pub struct TickContext {
+    pub dt: Duration,
+    pub elapsed: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub struct RenderStats {
+    fps_circ: CircBuffer<f32>,
+    fps_hist: Histogram,
+}
+
+impl RenderStats {
+    pub fn percentile(&self, pc: usize) -> u64 {
+        self.fps_hist
+            .buckets()
+            .skip(pc)
+            .next()
+            .map(|bucket| bucket.start())
+            .unwrap_or(0)
+    }
+
+    pub fn fps_average(&self) -> f32 {
+        self.fps_circ.iter().sum::<f32>() / self.fps_circ.len() as f32
+    }
+
+    pub fn fps_history(&self) -> impl '_ + Iterator<Item = f32> {
+        self.fps_circ.iter().copied()
+    }
+
+    fn add_frame_time(&mut self, fps: f32) {
+        self.fps_hist.add(fps as _);
+        self.fps_circ.add(fps);
+    }
+}
+
+#[derive(Debug)]
+pub struct RenderContext<'stats, 'flow> {
+    pub elapsed: Duration,
+    pub stats: &'stats RenderStats,
+    pub dt: Duration,
+    control_flow: &'flow mut ControlFlow,
+}
+
+impl<'stats, 'flow> RenderContext<'stats, 'flow> {
+    pub fn quit(&mut self) {
+        self.control_flow.set_exit();
+    }
+}
+
+pub struct UiContext<'stats, 'ui> {
+    pub elapsed: Duration,
+    pub dt: Duration,
+    pub stats: &'stats RenderStats,
+    pub egui: &'ui egui::Context,
+}
 
 #[allow(unused_variables)]
 pub trait Application: Sized + Send + Sync {
@@ -40,19 +102,18 @@ pub trait Application: Sized + Send + Sync {
         Ok(())
     }
     /// /!\ Does not run on the main thread. OpenGL calls are unsafe here.
-    fn tick(&mut self, _dt: Duration) -> Result<()> {
+    fn tick(&mut self, ctx: TickContext) -> Result<()> {
         Ok(())
     }
-    fn render(&mut self) -> Result<()>;
+    fn render(&mut self, ctx: RenderContext) -> Result<()>;
     #[cfg(feature = "ui")]
-    fn ui(&mut self, ctx: &egui::Context) {}
+    fn ui(&mut self, ctx: UiContext) {}
 }
 
 pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
     color_eyre::install()?;
-    let fmt_layer = tracing_subscriber::fmt::Layer::default()
-        .pretty()
-        .with_filter(EnvFilter::from_default_env());
+    let fmt_layer =
+        tracing_subscriber::fmt::Layer::default().with_filter(EnvFilter::from_default_env());
     let json_layer = tracing_subscriber::fmt::Layer::default()
         .json()
         .with_file(true)
@@ -62,12 +123,15 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
         .with_thread_ids(true)
         .with_span_events(FmtSpan::ENTER | FmtSpan::EXIT)
         .with_writer(File::create("log.jsonl").unwrap());
-    let tracy_layer = TracyLayer::new();
-    tracing_subscriber::registry()
+    let registry = tracing_subscriber::registry()
         .with(fmt_layer)
-        .with(json_layer)
-        .with(tracy_layer)
-        .init();
+        .with(json_layer);
+    #[cfg(feature = "tracy")]
+    let registry = {
+        let tracy_layer = tracing_tracy::TracyLayer::new();
+        registry.with(tracy_layer)
+    };
+    registry.init();
 
     let event_loop = EventLoopBuilder::new().build();
     // The template will match only the configurations supporting rendering to
@@ -77,7 +141,7 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
         .with_transparency(true);
 
     let display_builder =
-        DisplayBuilder::new().with_window_builder(Some(WindowBuilder::new().with_title(title)));
+        DisplayBuilder::new().with_window_builder(Some(App::window_features(WindowBuilder::new()).with_title(title)));
 
     let (window, gl_config) = display_builder
         .build(&event_loop, template, |configs| {
@@ -173,8 +237,9 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
     let app = Arc::new(Mutex::new(app));
 
     #[cfg(feature = "ui")]
-    let mut ui = rose_ui::Ui::new(&event_loop)?;
+    let mut ui = rose_ui::Ui::new(&event_loop, &window)?;
 
+    let start = Instant::now();
     std::thread::spawn({
         let app = app.clone();
         move || {
@@ -182,7 +247,13 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
             loop {
                 let _span = tracing::trace_span!("loop_tick").entered();
                 let tick_start = Instant::now();
-                app.lock().unwrap().tick(last_tick.elapsed()).unwrap();
+                app.lock()
+                    .unwrap()
+                    .tick(TickContext {
+                        elapsed: start.elapsed(),
+                        dt: last_tick.elapsed(),
+                    })
+                    .unwrap();
                 let tick_duration = tick_start.elapsed().as_secs_f32();
                 last_tick = Instant::now();
                 tracing::debug!(%tick_duration);
@@ -191,6 +262,12 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
         }
     });
 
+    let render_stats = Arc::new(RwLock::new(RenderStats {
+        fps_circ: CircBuffer::new(60),
+        fps_hist: Histogram::with_buckets(100),
+    }));
+
+    let mut last_frame_time = Instant::now();
     let mut next_frame_time = Instant::now() + Duration::from_nanos(16_666_667);
     event_loop.run(move |event, _, control_flow| {
         control_flow.set_wait_until(next_frame_time);
@@ -202,20 +279,43 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
                     let _span = tracing::debug_span!("ui").entered();
                     ui.run(&window, {
                         let app = app.clone();
-                        move |cx| app.lock().unwrap().ui(cx)
+                        let render_stats = render_stats.clone();
+                        move |cx| {
+                            app.lock().unwrap().ui(UiContext {
+                                elapsed: start.elapsed(),
+                                dt: last_frame_time.elapsed(),
+                                stats: &render_stats.read().unwrap(),
+                                egui: cx,
+                            })
+                        }
                     })
+                    .min(Duration::from_nanos(16_666_667))
                 };
                 #[cfg(not(feature = "ui"))]
                 let next_run = Duration::from_nanos(16_666_667);
 
                 let mut app = app.lock().unwrap();
                 let frame_start = Instant::now();
-                app.render().unwrap();
-                ui.draw(&window).unwrap();
+                app.render(RenderContext {
+                    elapsed: start.elapsed(),
+                    dt: last_frame_time.elapsed(),
+                    stats: &render_stats.read().unwrap(),
+                    control_flow,
+                })
+                .unwrap();
+                #[cfg(feature = "ui")]
+                {
+                    ui.draw(&window).unwrap();
+                }
                 gl_surface.swap_buffers(&context).unwrap();
                 let frame_time = frame_start.elapsed().as_secs_f32();
+                render_stats
+                    .write()
+                    .unwrap()
+                    .add_frame_time(frame_time.recip());
                 tracing::debug!(%frame_time);
-                next_frame_time = frame_start + Duration::from_nanos(16_666_667).min(next_run);
+                next_frame_time = frame_start + next_run;
+                last_frame_time = Instant::now();
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested
@@ -252,12 +352,15 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
                     window.request_redraw();
                 }
                 event => {
-                    let response = ui.on_event(&event);
-                    if !response.consumed {
-                        app.lock().unwrap().interact(event).unwrap();
-                    }
-                    if response.repaint {
-                        window.request_redraw();
+                    #[cfg(feature = "ui")]
+                    {
+                        let response = ui.on_event(&event);
+                        if !response.consumed {
+                            app.lock().unwrap().interact(event).unwrap();
+                        }
+                        if response.repaint {
+                            window.request_redraw();
+                        }
                     }
                 }
             },

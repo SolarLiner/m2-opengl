@@ -5,19 +5,22 @@ use std::{
 };
 
 use eyre::Result;
-use glam::{UVec2, Vec3};
+use glam::{UVec2, Vec4};
+use tracing::span::EnteredSpan;
+
+use gbuffers::GeometryBuffers;
+use postprocess::Postprocess;
 use rose_core::{
     camera::Camera,
-    gbuffers::GeometryBuffers,
     light::{GpuLight, Light, LightBuffer},
     material::Material,
-    postprocess::Postprocess,
-    screen_draw::ScreenDraw,
     transform::{TransformExt, Transformed},
     utils::thread_guard::ThreadGuard,
 };
-use tracing::span::EnteredSpan;
 use violette::framebuffer::{ClearBuffer, Framebuffer};
+
+pub mod gbuffers;
+pub mod postprocess;
 
 pub type Mesh = rose_core::mesh::Mesh<rose_core::material::Vertex>;
 
@@ -47,7 +50,11 @@ pub struct Renderer {
     begin_scene_at: Option<Instant>,
     last_scene_duration: Option<Duration>,
     last_render_duration: Option<Duration>,
+    last_render_submitted: usize,
+    last_render_rendered: usize,
 }
+
+impl Renderer {}
 
 impl Renderer {
     pub fn new(size: UVec2) -> Result<Self> {
@@ -74,6 +81,8 @@ impl Renderer {
             begin_scene_at: None,
             last_scene_duration: None,
             last_render_duration: None,
+            last_render_submitted: 0,
+            last_render_rendered: 0,
             debug_window_open: false,
         })
     }
@@ -107,17 +116,26 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn begin_render(&mut self) -> Result<()> {
+    pub fn set_light_buffer(&mut self, light_buffer: LightBuffer) {
+        self.lights = light_buffer;
+    }
+
+    pub fn begin_render(&mut self, clear_color: Vec4) -> Result<()> {
         self.render_span
             .replace(tracing::debug_span!("render").entered());
-        self.begin_scene_at.replace(Instant::now());
+        let now = Instant::now();
+        tracing::trace!(message = "Begin render", ?now);
+        self.begin_scene_at.replace(now);
+
+        self.last_render_rendered = 0;
+        self.last_render_submitted = 0;
+
         let backbuffer = Framebuffer::backbuffer();
-        backbuffer.clear_color(Vec3::ZERO.extend(1.).to_array())?;
+        backbuffer.clear_color(clear_color.to_array())?;
         backbuffer.clear_depth(1.)?;
         backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
 
-        self.post_process
-            .set_exposure(self.post_process_iface.exposure)?;
+        self.post_process.luminance_bias = self.post_process_iface.exposure;
         self.post_process
             .set_bloom_size(self.post_process_iface.bloom.size)?;
         self.post_process
@@ -131,10 +149,11 @@ impl Renderer {
         Ok(())
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(skip_all)]
     pub fn submit_mesh(&mut self, material: Weak<Material>, mesh: Transformed<Weak<Mesh>>) {
         let mesh_ptr = Weak::as_ptr(&mesh) as usize;
         let material_ptr = Weak::as_ptr(&material) as usize;
+        self.last_render_submitted += 1;
         tracing::debug!(message="Submitting mesh", %mesh_ptr, %material_ptr);
         let mat_ix = if let Some(ix) = self
             .queued_materials
@@ -154,8 +173,8 @@ impl Renderer {
             .or_insert_with(|| vec![mesh]);
     }
 
-    #[tracing::instrument]
-    pub fn flush(&mut self) -> Result<()> {
+    #[tracing::instrument(skip(self))]
+    pub fn flush(&mut self, dt: Duration) -> Result<()> {
         let render_start = Instant::now();
         let geom_pass = self.geom_pass.read().unwrap();
         for (mat_ix, meshes) in self.queued_meshes.drain() {
@@ -168,11 +187,13 @@ impl Renderer {
                 continue;
             };
 
+            self.last_render_rendered += meshes.len();
             geom_pass.draw_meshes(&self.camera, &material, &mut meshes)?;
         }
 
-        geom_pass.draw_screen(self.post_process.framebuffer(), &self.camera, &self.lights)?;
-        self.post_process.draw(&Framebuffer::backbuffer())?;
+        let shaded_tex = geom_pass.process(&self.camera, &self.lights)?;
+        self.post_process
+            .draw(&Framebuffer::backbuffer(), shaded_tex, dt)?;
         self.last_render_duration.replace(render_start.elapsed());
         self.last_scene_duration
             .replace(self.begin_scene_at.take().unwrap().elapsed());
@@ -187,7 +208,7 @@ impl Renderer {
 
     #[cfg(feature = "debug-ui")]
     pub fn ui(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("render-stats")
+        egui::TopBottomPanel::bottom("renderer-stats")
             .frame(
                 egui::Frame::none()
                     .inner_margin(egui::style::Margin::same(5.))
@@ -196,17 +217,23 @@ impl Renderer {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(format!(
-                        "Scene processing: {:2.2} ms",
-                        self.last_scene_duration
-                            .map(|d| d.as_secs_f64() * 1e3)
-                            .unwrap_or(0.)
+                        "{:3} Objects submitted | {:3} objects rendered",
+                        self.last_render_submitted, self.last_render_rendered
                     ));
                     ui.separator();
                     ui.label(format!(
-                        "Render time: {:2.2} ms",
-                        self.last_render_duration
-                            .map(|d| d.as_secs_f64() * 1e3)
-                            .unwrap_or(0.)
+                        "Scene processing: {:5?}",
+                        self.last_scene_duration.unwrap_or_default()
+                    ));
+                    ui.separator();
+                    ui.label(format!(
+                        "Render time: {:5?}",
+                        self.last_render_duration.unwrap_or_default()
+                    ));
+                    ui.separator();
+                    ui.label(format!(
+                        "Average luminance: {:>2.2} EV",
+                        self.post_process.average_luminance().log2()
                     ));
                 });
             });

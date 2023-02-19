@@ -1,8 +1,11 @@
+use std::env;
 use std::time::Duration;
 
 use egui::epaint;
+use egui::os::OperatingSystem;
 use egui_winit::winit::event_loop::EventLoopWindowTarget;
 use eyre::Result;
+use winit::window::Window;
 use violette::framebuffer::Framebuffer;
 
 use self::painter::UiImpl;
@@ -18,11 +21,24 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new<E>(event_loop: &EventLoopWindowTarget<E>) -> Result<Self> {
+    pub fn new<E>(event_loop: &EventLoopWindowTarget<E>, window: &Window) -> Result<Self> {
         let painter = UiImpl::new()?;
+        let ctx = egui::Context::default();
+        let scale_factor = window.scale_factor() as _;
+        OperatingSystem::from_target_os();
+        let os = match env::consts::OS {
+            "linux" => OperatingSystem::Nix,
+            "macos" => OperatingSystem::Mac,
+            "windows" => OperatingSystem::Windows,
+            _ => OperatingSystem::Unknown,
+        };
+        tracing::info!("Window scale factor: {}", scale_factor);
+        tracing::info!("OS: {:?}", os);
+        ctx.set_pixels_per_point(scale_factor);
+        ctx.set_os(os);
 
         Ok(Self {
-            ctx: Default::default(),
+            ctx,
             winit: egui_winit::State::new(event_loop),
             painter,
             shapes: Vec::new(),

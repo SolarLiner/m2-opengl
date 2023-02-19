@@ -14,6 +14,14 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-ui/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/violette/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/violette/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/many-spheres/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/rose-renderer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/tests/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/violette-derive/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/violette-derive/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/sandbox/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/pan-orbit-camera/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/asset-server/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

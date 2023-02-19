@@ -1,17 +1,12 @@
+use crevice::std140::{self, AsStd140};
 use eyre::{Context, Result};
-use crevice::{
-    std140::{
-        self,
-        AsStd140
-    }
-};
 use glam::Vec3;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use violette::{
-    buffer::{Buffer, UniformBuffer, BufferAccess},
-};
+use violette::buffer::{Buffer, BufferAccess, UniformBuffer};
+
+use crate::transform::Transform;
 
 #[derive(Debug, Copy, Clone, FromPrimitive)]
 #[repr(u32)]
@@ -29,6 +24,20 @@ pub enum Light {
 }
 
 impl Light {
+    pub fn with_transform(self, transform: Transform) -> Self {
+        match self {
+            Self::Ambient { color } => Self::Ambient { color },
+            Self::Point { color, .. } => Self::Point {
+                color: color * transform.scale.length(),
+                position: transform.position,
+            },
+            Self::Directional { color, .. } => Self::Directional {
+                color,
+                dir: transform.forward().normalize(),
+            },
+        }
+    }
+
     fn pos_dir(&self) -> Vec3 {
         match self {
             &Self::Point { position, .. } => position,
@@ -121,7 +130,12 @@ impl GpuLight {
 
     pub fn download_buffer(buf: &LightBuffer) -> Result<Vec<Self>> {
         let slice = buf.slice(..);
-        let lights = slice.get(BufferAccess::MAP_READ)?.iter().copied().map(|gl| gl.into()).collect::<Vec<_>>();
+        let lights = slice
+            .get(BufferAccess::MAP_READ)?
+            .iter()
+            .copied()
+            .map(|gl| gl.into())
+            .collect::<Vec<_>>();
         Ok(lights)
     }
 }
