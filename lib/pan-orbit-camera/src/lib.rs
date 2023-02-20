@@ -2,6 +2,7 @@ use std::{
     f32::consts::{PI, TAU},
     time::Duration,
 };
+use egui::Ui;
 
 use glam::{vec2, Mat3, Quat, Vec2, Vec3};
 use winit::event::{ElementState, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent};
@@ -77,33 +78,37 @@ impl OrbitCameraController {
     }
 
     pub fn ui(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Camera controls")
-            .open(&mut self.ui_window_show)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    let label_focus = ui.label("Position:");
-                    vec3(ui, &mut self.focus).labelled_by(label_focus.id);
-                    if ui.button("Reset position").clicked() {
-                        self.focus *= 0.;
-                    }
-                });
+        // egui::Window::new("Camera controls")
+        //     .open(&mut self.ui_window_show)
+        //     .show(ctx, |ui| {
+        //         self.ui_inner(ui);
+        //     });
+    }
 
-                ui.horizontal(|ui| {
-                    let sensitivity = ui.label("Sensitivity:");
-                    ui.add(egui::DragValue::new(&mut self.sensitivity).clamp_range(0f32..=2.))
-                        .labelled_by(sensitivity.id);
-                });
+    pub fn ui_inner(&mut self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            let label_focus = ui.label("Position:");
+            vec3(ui, &mut self.focus).labelled_by(label_focus.id);
+            if ui.button("Reset position").clicked() {
+                self.focus *= 0.;
+            }
+        });
 
-                ui.horizontal(|ui| {
-                    let pos_label = ui.label("Radius:");
-                    ui.add(
-                        egui::DragValue::new(&mut self.radius)
-                            .clamp_range(0f32..=50.)
-                            .speed(0.3),
-                    )
-                    .labelled_by(pos_label.id);
-                });
-            });
+        ui.horizontal(|ui| {
+            let sensitivity = ui.label("Sensitivity:");
+            ui.add(egui::DragValue::new(&mut self.sensitivity).clamp_range(0f32..=2.))
+                .labelled_by(sensitivity.id);
+        });
+
+        ui.horizontal(|ui| {
+            let pos_label = ui.label("Radius:");
+            ui.add(
+                egui::DragValue::new(&mut self.radius)
+                    .clamp_range(0f32..=50.)
+                    .speed(0.3),
+            )
+                .labelled_by(pos_label.id);
+        });
     }
 
     pub fn set_orientation(&mut self, _camera_mut: &mut Camera, orientation_radians: Vec2) {

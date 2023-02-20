@@ -1,9 +1,13 @@
 use std::{
     cell::RefCell,
     path::PathBuf,
-    sync::mpsc::{sync_channel, Receiver, SyncSender},
-    sync::Mutex,
-    sync::{Arc, RwLock, Weak},
+    sync::{
+        mpsc::{sync_channel, Receiver, SyncSender},
+        Mutex,
+        Arc,
+        RwLock,
+        Weak
+    },
     thread::JoinHandle,
 };
 
@@ -29,32 +33,20 @@ use rose_platform::{
 use rose_renderer::{Mesh, Renderer};
 use violette::texture::{AsTextureFormat, Texture};
 
+use crate::io::LoadMeshExt;
+use crate::ui::{TabViewer, UiState};
 use crate::{
     io::ObjectData,
     scene::{Entity, Scene},
 };
-use crate::io::LoadMeshExt;
 
 mod io;
 mod scene;
+mod ui;
 // mod persistence;
 
 type Respond<T> =
     Option<Box<dyn Send + Sync + FnOnce(T, &mut Vec<UiMessage>, &mut Vec<RenderMessage>)>>;
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum NewLightType {
-    Ambient,
-    Directional,
-    Point,
-}
-
-#[derive(Debug, Copy, Clone)]
-struct NewLight {
-    ty: NewLightType,
-    transform: Transform,
-    color: [f32; 3],
-}
 
 enum TextureDesc<const N: usize> {
     Image(DynamicImage),
@@ -144,6 +136,7 @@ impl<T> Combined<T> {
 struct Sandbox {
     renderer: Renderer,
     scene: Arc<RwLock<Scene>>,
+    ui_state: UiState,
     camera_controller: OrbitCameraController,
     camera_interaction_controller: OrbitCameraInteractionController,
     load_file_join: Option<JoinHandle<Vec<Box<dyn 'static + Send + Sync + ObjectData>>>>,
@@ -152,7 +145,6 @@ struct Sandbox {
     default_material: Weak<Material>,
     selected: Option<u64>,
     total_ambient_lighting: Vec3,
-    ui_add_light: bool,
     gizmo_mode: GizmoMode,
 }
 
@@ -263,14 +255,15 @@ impl Sandbox {
                             self.invoke_respond(respond, data);
                         }
                         Err(err) => {
-                            let sources =
-                                err.chain()
-                                    .map(|src| format!("\t{}", src))
-                                    .reduce(|mut str, s| {
-                                        str.push_str(&s);
-                                        str.push('\n');
-                                        str
-                                    }).unwrap_or("<No sources>".into());
+                            let sources = err
+                                .chain()
+                                .map(|src| format!("\t{}", src))
+                                .reduce(|mut str, s| {
+                                    str.push_str(&s);
+                                    str.push('\n');
+                                    str
+                                })
+                                .unwrap_or("<No sources>".into());
                             tracing::error!("Error loading mesh: {}\n{}", err, sources)
                         }
                     }
@@ -350,11 +343,11 @@ impl Sandbox {
                             self.ui_events.send(UiMessage::OpenMesh);
                         }
                     });
-                    ui.toggle_value(&mut self.ui_add_light, "Add light ...");
                 });
                 ui.menu_button("View", |ui| {
-                    self.camera_controller.ui_toolbar(ui);
-                    self.renderer.ui_toolbar(ui);
+                    // self.camera_controller.ui_toolbar(ui);
+                    // self.renderer.ui_toolbar(ui);
+                    self.ui_state.ui_toolbar(ui);
                 });
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Max), |ui| {
                     let label = ui.label("Gizmo");
@@ -367,117 +360,6 @@ impl Sandbox {
                 })
             });
         });
-    }
-
-    fn objects_panel(&mut self, ui: &mut Ui) {
-        ui.group(|ui| {
-            ui.heading("Objects");
-            let table_builder = egui_extras::TableBuilder::new(ui)
-                .columns(Column::auto(), 2)
-                .column(Column::auto().resizable(true))
-                .column(Column::auto().resizable(true).at_least(100.))
-                .column(Column::remainder().at_least(150.).resizable(true))
-                .striped(true).resizable(true);
-
-            if let Some(selection) = self.selected {
-                table_builder.scroll_to_row(selection as _, None)
-            } else {
-                table_builder
-            }
-            .header(20., |mut header| {
-                header.col(|ui| ());
-                header.col(|ui| ());
-                header.col(|ui| {
-                    ui.label(RichText::new("ID").strong());
-                });
-                header.col(|ui| {
-                    ui.label(RichText::new("Type").strong());
-                });
-                header.col(|ui| {
-                    ui.label(RichText::new("Name").strong());
-                });
-            })
-            .body(|mut body| {
-                for inst in self.scene.write().unwrap().instances_mut() {
-                    body.row(20., |mut row| {
-                        row.col(|ui| {
-                            let mut checked =
-                                self.selected.map(|sel| sel == inst.id()).unwrap_or(false);
-                            if ui.checkbox(&mut checked, "").clicked() {
-                                if checked {
-                                    self.ui_events.send(UiMessage::Select(inst.id()));
-                                } else {
-                                    self.ui_events.send(UiMessage::Deselect);
-                                }
-                            }
-                        });
-                        row.col(|ui| {
-                            ui.menu_button("+", |ui| {
-                                if let Some(name) = &mut inst.name {
-                                    let label = ui.label("Name");
-                                    ui.add(egui::TextEdit::singleline(name))
-                                        .labelled_by(label.id);
-                                } else {
-                                    if ui.small_button("Add name").clicked() {
-                                        inst.named("");
-                                    }
-                                }
-                                if ui.small_button("Delete").clicked() {
-                                    self.ui_events.send(UiMessage::DeleteInstance(inst.id()));
-                                }
-                            });
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("{}", inst.id()));
-                        });
-                        row.col(|ui| {
-                            ui.label(match inst.entity() {
-                                Entity::Light(..) => "Light",
-                                Entity::Object(..) => "Object",
-                                Entity::Camera(..) => "Camera",
-                            });
-                        });
-                        row.col(|ui| {
-                            if let Some(name) = &inst.name {
-                                ui.label(name);
-                            } else {
-                                ui.colored_label(egui::Color32::GRAY, "<None>");
-                            }
-                        });
-                    });
-                }
-            });
-        });
-    }
-
-    fn ui_object_properties(&mut self, ui: &mut Ui) {
-        let mut scene = self.scene.write().unwrap();
-        if let Some(selected) = self.selected.and_then(|ix| scene.get_mut(ix)) {
-            ui.group(|ui| {
-                ui.collapsing("Transform", |ui| {
-                    egui::Grid::new("selected-transform").striped(true).num_columns(4).show(ui, |ui| {
-                        ui.strong("Position");
-                        ui.add(egui::DragValue::new(&mut selected.transform.position.x).prefix("x: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.position.y).prefix("y: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.position.z).prefix("z: ").fixed_decimals(2));
-                        ui.end_row();
-
-                        ui.strong("Rotation");
-                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.x).prefix("x: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.y).prefix("y: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.z).prefix("z: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.w).prefix("w: ").fixed_decimals(2));
-                        ui.end_row();
-
-                        ui.strong("Scale");
-                        ui.add(egui::DragValue::new(&mut selected.transform.scale.x).prefix("x: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.scale.y).prefix("y: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.scale.z).prefix("z: ").fixed_decimals(2));
-                        ui.end_row();
-                    });
-                });
-            });
-        }
     }
 
     fn ui_gizmo(&mut self, ctx: UiContext) {
@@ -524,7 +406,10 @@ impl Application for Sandbox {
             let loader = match io::load_mesh_dynamic(&file) {
                 Ok(loader) => loader,
                 Err(err) => {
-                    let err_display = err.chain().skip(1).fold(err.to_string(), |str, err| format!("{}\n\t{}", str, err));
+                    let err_display = err
+                        .chain()
+                        .skip(1)
+                        .fold(err.to_string(), |str, err| format!("{}\n\t{}", str, err));
                     tracing::error!("Cannot load file {}: {}", file, err_display);
                     continue;
                 }
@@ -541,6 +426,7 @@ impl Application for Sandbox {
         );
         Ok(Self {
             renderer,
+            ui_state: UiState::new(),
             scene: Arc::new(RwLock::new(scene)),
             camera_controller,
             camera_interaction_controller: OrbitCameraInteractionController::default(),
@@ -550,7 +436,6 @@ impl Application for Sandbox {
             default_material,
             selected: None,
             total_ambient_lighting: Vec3::ZERO,
-            ui_add_light: false,
             gizmo_mode: GizmoMode::Translate,
         })
     }
@@ -609,44 +494,23 @@ impl Application for Sandbox {
     fn ui(&mut self, ctx: UiContext) {
         self.ui_menubar(&ctx);
         self.renderer.ui(ctx.egui);
-        self.camera_controller.ui(ctx.egui);
 
-        egui::SidePanel::left("left-panel").show(ctx.egui, |ui| {
-            self.objects_panel(ui);
-            self.ui_object_properties(ui);
-        });
+        {
+            let mut scene = self.scene.write().unwrap();
+            let mut tabs = TabViewer {
+                ui_events: self.ui_events.clone(),
+                selection: &mut self.selected,
+                scene: &mut scene,
+                renderer: &mut self.renderer,
+                camera_controller: &mut self.camera_controller,
+                added_nodes: vec![],
+            };
 
-        egui::Window::new("Add light").resizable(true).open(&mut self.ui_add_light).show(ctx.egui, |ui| {
-            thread_local! {
-                static NEW_LIGHT: RefCell<NewLight> = RefCell::new(NewLight {color: [1.; 3], ty: NewLightType::Point, transform: Transform::default() });
-            }
-            NEW_LIGHT.with(|key| {
-                ui.label("Type");
-                ui.vertical(|ui| {
-                    let ty = &mut key.borrow_mut().ty;
-                    ui.radio_value(ty, NewLightType::Point, "Point");
-                    ui.radio_value(ty, NewLightType::Directional, "Directional");
-                    ui.radio_value(ty, NewLightType::Ambient, "Ambient");
-                });
-
-                ui.horizontal(|ui| {
-                    let color = ui.label("Color");
-                    ui.color_edit_button_rgb(&mut key.borrow_mut().color).labelled_by(color.id);
-                });
-
-                if ui.button("Add").clicked() {
-                    let new_light = key.borrow().clone();
-                    let color = Vec3::from_array(new_light.color);
-                    let light = match new_light.ty {
-                        NewLightType::Ambient => Light::Ambient {color },
-                        NewLightType::Point => Light::Point {color, position: new_light.transform.position },
-                        NewLightType::Directional => Light::Directional {color, dir: new_light.transform.backward()},
-                    };
-                    self.ui_events.send(UiMessage::AddLight {light,respond: Some(Box::new(move |light, ui, _| ui.push(UiMessage::InstanceLight {light: light.transformed(new_light.transform), respond:None})))})
-                }
-            });
-        });
-
+            // self.ui_state.show(ctx.egui, &mut tabs);
+            egui::SidePanel::left("tabs")
+                .min_width(150.)
+                .show(ctx.egui, |ui| self.ui_state.show_inner(ui, &mut tabs));
+        }
         self.ui_gizmo(ctx);
     }
 }
