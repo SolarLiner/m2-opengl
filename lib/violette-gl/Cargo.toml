@@ -1,0 +1,13 @@
+[package]
+name = "violette-gl"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cgmath = "0.18.0"
+raw-window-handle = "0.5.0"
+raw-window-handle-extensions = "0.5.3"
+glutin = "0.30.6"
+winit = "0.28.1"
