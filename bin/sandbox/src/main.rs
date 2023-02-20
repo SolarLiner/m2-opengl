@@ -352,8 +352,10 @@ impl Sandbox {
                     });
                     ui.toggle_value(&mut self.ui_add_light, "Add light ...");
                 });
-                self.camera_controller.ui_toolbar(ui);
-                self.renderer.ui_toolbar(ui);
+                ui.menu_button("View", |ui| {
+                    self.camera_controller.ui_toolbar(ui);
+                    self.renderer.ui_toolbar(ui);
+                });
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Max), |ui| {
                     let label = ui.label("Gizmo");
                     ui.radio_value(&mut self.gizmo_mode, GizmoMode::Translate, "Translate")
@@ -515,7 +517,7 @@ impl Application for Sandbox {
             position: Vec3::ZERO,
         });
         scene
-            .instance_light(point_light.transformed(Transform::translation(vec3(2., 3., -1.))))
+            .instance_light(point_light.transformed(Transform::translation(vec3(2., 3., 3.))))
             .named("Point light");
 
         for file in std::env::args().skip(1) {

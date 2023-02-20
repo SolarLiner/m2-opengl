@@ -73,8 +73,8 @@ impl Renderer {
             post_process_iface: PostprocessInterface {
                 exposure: 1.,
                 bloom: BloomInterface {
-                    size: 1e-3,
-                    strength: 1e-2,
+                    size: 1e-2,
+                    strength: 5e-2,
                 },
             },
             queued_materials: vec![],
@@ -138,8 +138,7 @@ impl Renderer {
         backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
 
         self.post_process.luminance_bias = self.post_process_iface.exposure;
-        self.post_process
-            .set_bloom_size(self.post_process_iface.bloom.size)?;
+        self.post_process.bloom_radius = self.post_process_iface.bloom.size;
         self.post_process
             .set_bloom_strength(self.post_process_iface.bloom.strength)?;
 
@@ -206,6 +205,49 @@ impl Renderer {
     #[cfg(feature = "debug-ui")]
     pub fn ui_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.toggle_value(&mut self.debug_window_open, "Debug menu");
+        ui.menu_button("Post processing", |ui| {
+            let pp_iface = self.post_process_interface();
+            egui::Grid::new("pp-iface")
+                .striped(true)
+                .num_columns(2)
+                .show(ui, |ui| {
+                    let exposure_label = ui.label("Exposure:");
+                    ui.add(
+                        egui::Slider::new(&mut pp_iface.exposure, 1e-6..=1e4)
+                            .logarithmic(true)
+                            .show_value(true)
+                            .suffix(" EV")
+                            .custom_formatter(|v, _| format!("{:+1.1}", v.log2()))
+                            .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev)))
+                            .text("Exposure"),
+                    )
+                    .labelled_by(exposure_label.id);
+                    ui.end_row();
+
+                    let bloom_size_label = ui.label("Bloom size:");
+                    ui.add(
+                        egui::Slider::new(&mut pp_iface.bloom.size, 0f32..=0.5)
+                            .logarithmic(true)
+                            .clamp_to_range(false)
+                            .show_value(true),
+                    )
+                    .labelled_by(bloom_size_label.id);
+                    ui.end_row();
+
+                    let bloom_strength_label = ui.label("Bloom strength:");
+                    ui.add(
+                        egui::Slider::new(&mut pp_iface.bloom.strength, 1e-4..=1e2)
+                            .logarithmic(true)
+                            .show_value(true)
+                            .suffix(" %")
+                            .custom_formatter(|x, _| format!("{:2.1}", x * 100.))
+                            .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.))
+                            .text("Bloom strength"),
+                    )
+                    .labelled_by(bloom_strength_label.id);
+                    ui.end_row();
+                });
+        });
     }
 
     #[cfg(feature = "debug-ui")]
@@ -254,15 +296,17 @@ impl Renderer {
                     static SELECTED_TEXTURE: RefCell<usize> = RefCell::new(usize::MAX);
                 }
                 SELECTED_TEXTURE.with(|key| {
-                    let ix = ui.horizontal(|ui| {
-                        let label = ui.label("Select debug texture");
-                        let ix = &mut *key.borrow_mut();
-                        egui::ComboBox::new("renderer-debug-texture", "Debug texture")
-                            .selected_text(GET_NAME(*ix))
-                            .show_index(ui, ix, 5, |ix| GET_NAME(ix).to_string())
-                            .labelled_by(label.id);
-                        *ix
-                    }).inner;
+                    let ix = ui
+                        .horizontal(|ui| {
+                            let label = ui.label("Select debug texture");
+                            let ix = &mut *key.borrow_mut();
+                            egui::ComboBox::new("renderer-debug-texture", "Debug texture")
+                                .selected_text(GET_NAME(*ix))
+                                .show_index(ui, ix, 5, |ix| GET_NAME(ix).to_string())
+                                .labelled_by(label.id);
+                            *ix
+                        })
+                        .inner;
                     const SIDE: f32 = 256.;
                     let size = vec2(self.camera.projection.width, self.camera.projection.height);
                     let size = if size.x > size.y {

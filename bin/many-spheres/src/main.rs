@@ -131,42 +131,6 @@ impl Application for ManySpheres {
             ui.horizontal(|ui| {
                 self.camera_controller.ui_toolbar(ui);
                 self.renderer.ui_toolbar(ui);
-                let pp_iface = self.renderer.post_process_interface();
-                ui.menu_button("Scene", |ui| {
-                    ui.horizontal(|ui| {
-                        let exposure_label = ui.label("Exposure:");
-                        ui.add(
-                            egui::Slider::new(&mut pp_iface.exposure, 1e-6..=10.)
-                                .logarithmic(true)
-                                .show_value(true)
-                                .custom_formatter(|v, _| format!("{:+1.1} EV", v.log2()))
-                                .text("Exposure"),
-                        )
-                        .labelled_by(exposure_label.id);
-                    });
-
-                    ui.horizontal(|ui| {
-                        let bloom_size_label = ui.label("Bloom size:");
-                        ui.add(
-                            egui::Slider::new(&mut pp_iface.bloom.size, 1e-4..=1f32)
-                                .logarithmic(true)
-                                .show_value(true)
-                                .text("Bloom size"),
-                        )
-                        .labelled_by(bloom_size_label.id);
-                    });
-
-                    ui.horizontal(|ui| {
-                        let bloom_strength_label = ui.label("Bloom strength:");
-                        ui.add(
-                            egui::Slider::new(&mut pp_iface.bloom.strength, 1e-4..=1f32)
-                                .logarithmic(true)
-                                .show_value(true)
-                                .text("Bloom strength"),
-                        )
-                        .labelled_by(bloom_strength_label.id);
-                    });
-                });
             });
         });
         self.camera_controller.ui(ctx);

@@ -4,8 +4,8 @@ in vec2 v_uv;
 out vec4 out_color;
 
 uniform sampler2D frame;
+uniform sampler2D bloom_tex;
 uniform float luminance_average = 0.5;
-uniform float bloom_size = 5e-2;
 uniform float bloom_strength = 1e-2;
 
 float desaturate(vec3 col) {
@@ -31,12 +31,7 @@ vec3 aces(vec3 x)
 }
 
 void main() {
-    vec3 blur = vec3(0);
-    for (int y = -3; y < 3; ++y)
-        for(int x = -3; x < 3; ++x) {
-            vec2 offset = vec2(x, y) * bloom_size;
-            blur += texture(frame, v_uv + offset).rgb;
-        }
+    vec3 blur = texture(bloom_tex, v_uv).rgb;
     vec3 linear_out = texture(frame, v_uv).rgb + bloom_strength * blur;
     out_color = vec4(aces(scale_levels(linear_out)), 1);
 }
