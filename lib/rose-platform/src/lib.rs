@@ -47,9 +47,7 @@ pub struct RenderStats {
 impl RenderStats {
     pub fn percentile(&self, pc: usize) -> u64 {
         self.fps_hist
-            .buckets()
-            .skip(pc)
-            .next()
+            .buckets().nth(pc)
             .map(|bucket| bucket.start())
             .unwrap_or(0)
     }

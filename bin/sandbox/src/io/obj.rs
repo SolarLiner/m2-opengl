@@ -37,12 +37,10 @@ impl WavefrontLoader {
         let filepath = path.into();
         let path = filepath.clone();
         let raw_obj: RawObj = smol::unblock(move || {
-            Ok::<_, eyre::Report>(
-                obj::raw::parse_obj(BufReader::new(
+            obj::raw::parse_obj(BufReader::new(
                     File::open(&path).context("Cannot open mesh file")?,
                 ))
-                .context("Cannot parse OBJ")?,
-            )
+                .context("Cannot parse OBJ")
         })
         .await?;
         let materials = smol::stream::iter(raw_obj.material_libraries.iter())
@@ -50,12 +48,10 @@ impl WavefrontLoader {
                 let fpath = filepath.parent().unwrap().join(fpath);
                 let span = tracing::info_span!("obj::raw::parse_mtl", path=%fpath.display());
                 smol::unblock(move || {
-                    Ok::<_, eyre::Report>(
-                        obj::raw::parse_mtl(BufReader::new(
+                    obj::raw::parse_mtl(BufReader::new(
                             File::open(fpath).context("Cannot open material library")?,
                         ))
-                        .context("Cannot parse material library")?,
-                    )
+                        .context("Cannot parse material library")
                 })
                 .instrument(span)
             })
@@ -66,7 +62,7 @@ impl WavefrontLoader {
             .await
             .unwrap_or_else(|err| {
                 tracing::error!("Could not load material library: {}", err);
-                return Default::default();
+                Default::default()
             });
         let images = smol::stream::iter(materials.values().flat_map(|mat| {
             let mut files = vec![];
@@ -138,7 +134,7 @@ impl WavefrontLoader {
             .chunks_exact(3)
             .flat_map(|slice| [slice[0], slice[1]])
             .collect::<Vec<_>>();
-        Ok(Texture::from_2d_pixels(width.try_into()?, &data)?)
+        Texture::from_2d_pixels(width.try_into()?, &data)
     }
 
     async fn convert_mat3(
@@ -166,7 +162,7 @@ impl WavefrontLoader {
         let image = smol::unblock(move || image::open(file))
             .await
             .context("Cannot open texture")?;
-        Ok(Texture::from_image(image.into_rgb32f())?)
+        Texture::from_image(image.into_rgb32f())
     }
 
     fn convert_mat_color(&self, color: &MtlColor, mat_name: &str) -> Option<[f32; 3]> {
@@ -233,7 +229,7 @@ impl ObjectData for WavefrontLoader {
                     .iter()
                     .copied()
                     .flat_map(|range| &self.raw_obj.polygons[range.start..range.end])
-                    .map(|poly| match poly {
+                    .flat_map(|poly| match poly {
                         Polygon::P(pos) => pos
                             .iter()
                             .copied()
@@ -271,7 +267,6 @@ impl ObjectData for WavefrontLoader {
                             })
                             .collect(),
                     })
-                    .flatten()
                     .collect::<Vec<_>>();
                 let indices = Vec::from_iter(0..vertices.len() as u32);
                 let mesh = Mesh::new(vertices, indices)?;

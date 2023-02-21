@@ -7,13 +7,13 @@ use std::{
     thread::JoinHandle,
 };
 
-use egui::{emath::Numeric, Response, RichText, Ui, Widget, WidgetText};
+use egui::{emath::Numeric, Response, RichText, Ui, Widget};
 use egui_extras::Column;
 use egui_gizmo::{Gizmo, GizmoMode};
 use eyre::Result;
 use glam::{vec2, vec3, Mat4, UVec2, Vec2, Vec3};
 use image::DynamicImage;
-use tracing::Instrument;
+
 
 use pan_orbit_camera::{OrbitCameraController, OrbitCameraInteractionController};
 use rose_core::{
@@ -27,13 +27,13 @@ use rose_platform::{
     UiContext, WindowBuilder,
 };
 use rose_renderer::{Mesh, Renderer};
-use violette::texture::{AsTextureFormat, Texture};
+use violette::texture::{Texture};
 
 use crate::{
     io::ObjectData,
     scene::{Entity, Scene},
 };
-use crate::io::LoadMeshExt;
+
 
 mod io;
 mod scene;
@@ -328,9 +328,9 @@ impl Sandbox {
                             num_value("# slices longitude", &SPHERE_NLON, ui);
 
                             if ui.button("Add").clicked() {
-                                let radius = SPHERE_RADIUS.with(|cell| cell.borrow().clone());
-                                let nlat = SPHERE_NLAT.with(|cell| cell.borrow().clone());
-                                let nlon = SPHERE_NLON.with(|cell| cell.borrow().clone());
+                                let radius = SPHERE_RADIUS.with(|cell| *cell.borrow());
+                                let nlat = SPHERE_NLAT.with(|cell| *cell.borrow());
+                                let nlon = SPHERE_NLON.with(|cell| *cell.borrow());
                                 let default_material = self.default_material.clone();
                                 self.render_events.send(RenderMessage::AddSphere {
                                     radius,
@@ -385,8 +385,8 @@ impl Sandbox {
                 table_builder
             }
             .header(20., |mut header| {
-                header.col(|ui| ());
-                header.col(|ui| ());
+                header.col(|_ui| ());
+                header.col(|_ui| ());
                 header.col(|ui| {
                     ui.label(RichText::new("ID").strong());
                 });
@@ -417,10 +417,8 @@ impl Sandbox {
                                     let label = ui.label("Name");
                                     ui.add(egui::TextEdit::singleline(name))
                                         .labelled_by(label.id);
-                                } else {
-                                    if ui.small_button("Add name").clicked() {
-                                        inst.named("");
-                                    }
+                                } else if ui.small_button("Add name").clicked() {
+                                    inst.named("");
                                 }
                                 if ui.small_button("Delete").clicked() {
                                     self.ui_events.send(UiMessage::DeleteInstance(inst.id()));
@@ -635,7 +633,7 @@ impl Application for Sandbox {
                 });
 
                 if ui.button("Add").clicked() {
-                    let new_light = key.borrow().clone();
+                    let new_light = *key.borrow();
                     let color = Vec3::from_array(new_light.color);
                     let light = match new_light.ty {
                         NewLightType::Ambient => Light::Ambient {color },

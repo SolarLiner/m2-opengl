@@ -1,5 +1,5 @@
 use std::num::NonZeroU32;
-use std::time::Duration;
+
 
 use eyre::Result;
 use glam::{UVec2, Vec3};
@@ -10,7 +10,7 @@ use violette::{
     framebuffer::Framebuffer,
     texture::{Dimension, SampleMode, Texture},
 };
-use violette::framebuffer::ClearBuffer;
+
 
 #[derive(Debug)]
 pub struct AutoExposure {

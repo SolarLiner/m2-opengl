@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use eyre::Result;
-use glam::{vec3, UVec2, Vec2, Vec3, Vec4};
+use glam::{vec3, UVec2, Vec2, Vec3};
 
 use camera_controller::OrbitCameraController;
 use rose_core::{

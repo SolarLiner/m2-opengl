@@ -321,7 +321,7 @@ impl Renderer {
                     let geom_pass = self.geom_pass.clone();
                     painter.add(egui::PaintCallback {
                         rect,
-                        callback: Arc::new(rose_ui::painter::UiCallback::new(move |info, ui| {
+                        callback: Arc::new(rose_ui::painter::UiCallback::new(move |_info, ui| {
                             let geom_pass = geom_pass.read().unwrap();
                             let _ = match ix {
                                 0 => geom_pass.debug_position(ui.framebuffer()),
@@ -378,7 +378,7 @@ fn make_texture_frame(
         painter.rect_filled(rect, 0., egui::Rgba::from_gray(0.));
         painter.add(egui::PaintCallback {
             rect,
-            callback: Arc::new(rose_ui::painter::UiCallback::new(move |info, ui| {
+            callback: Arc::new(rose_ui::painter::UiCallback::new(move |_info, ui| {
                 draw(ui.framebuffer());
             })),
         });
