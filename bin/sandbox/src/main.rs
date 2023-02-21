@@ -7,13 +7,12 @@ use std::{
     thread::JoinHandle,
 };
 
-use egui::{emath::Numeric, Response, RichText, Ui, Widget};
+use egui::{emath::Numeric, Response, RichText, Sense, Ui, Widget};
 use egui_extras::Column;
 use egui_gizmo::{Gizmo, GizmoMode};
 use eyre::Result;
 use glam::{vec2, vec3, Mat4, UVec2, Vec2, Vec3};
 use image::DynamicImage;
-
 
 use pan_orbit_camera::{OrbitCameraController, OrbitCameraInteractionController};
 use rose_core::{
@@ -27,13 +26,12 @@ use rose_platform::{
     UiContext, WindowBuilder,
 };
 use rose_renderer::{Mesh, Renderer};
-use violette::texture::{Texture};
+use violette::texture::Texture;
 
 use crate::{
     io::ObjectData,
     scene::{Entity, Scene},
 };
-
 
 mod io;
 mod scene;
@@ -263,14 +261,15 @@ impl Sandbox {
                             self.invoke_respond(respond, data);
                         }
                         Err(err) => {
-                            let sources =
-                                err.chain()
-                                    .map(|src| format!("\t{}", src))
-                                    .reduce(|mut str, s| {
-                                        str.push_str(&s);
-                                        str.push('\n');
-                                        str
-                                    }).unwrap_or("<No sources>".into());
+                            let sources = err
+                                .chain()
+                                .map(|src| format!("\t{}", src))
+                                .reduce(|mut str, s| {
+                                    str.push_str(&s);
+                                    str.push('\n');
+                                    str
+                                })
+                                .unwrap_or("<No sources>".into());
                             tracing::error!("Error loading mesh: {}\n{}", err, sources)
                         }
                     }
@@ -372,79 +371,96 @@ impl Sandbox {
     fn objects_panel(&mut self, ui: &mut Ui) {
         ui.group(|ui| {
             ui.heading("Objects");
-            let table_builder = egui_extras::TableBuilder::new(ui)
-                .columns(Column::auto(), 2)
-                .column(Column::auto().resizable(true))
-                .column(Column::auto().resizable(true).at_least(100.))
-                .column(Column::remainder().at_least(150.).resizable(true))
-                .striped(true).resizable(true);
-
-            if let Some(selection) = self.selected {
-                table_builder.scroll_to_row(selection as _, None)
-            } else {
-                table_builder
-            }
-            .header(20., |mut header| {
-                header.col(|_ui| ());
-                header.col(|_ui| ());
-                header.col(|ui| {
-                    ui.label(RichText::new("ID").strong());
-                });
-                header.col(|ui| {
-                    ui.label(RichText::new("Type").strong());
-                });
-                header.col(|ui| {
-                    ui.label(RichText::new("Name").strong());
-                });
-            })
-            .body(|mut body| {
-                for inst in self.scene.write().unwrap().instances_mut() {
-                    body.row(20., |mut row| {
-                        row.col(|ui| {
-                            let mut checked =
-                                self.selected.map(|sel| sel == inst.id()).unwrap_or(false);
-                            if ui.checkbox(&mut checked, "").clicked() {
-                                if checked {
-                                    self.ui_events.send(UiMessage::Select(inst.id()));
-                                } else {
-                                    self.ui_events.send(UiMessage::Deselect);
-                                }
-                            }
-                        });
-                        row.col(|ui| {
-                            ui.menu_button("+", |ui| {
-                                if let Some(name) = &mut inst.name {
-                                    let label = ui.label("Name");
-                                    ui.add(egui::TextEdit::singleline(name))
-                                        .labelled_by(label.id);
-                                } else if ui.small_button("Add name").clicked() {
-                                    inst.named("");
-                                }
-                                if ui.small_button("Delete").clicked() {
-                                    self.ui_events.send(UiMessage::DeleteInstance(inst.id()));
-                                }
-                            });
-                        });
-                        row.col(|ui| {
-                            ui.label(format!("{}", inst.id()));
-                        });
-                        row.col(|ui| {
-                            ui.label(match inst.entity() {
-                                Entity::Light(..) => "Light",
-                                Entity::Object(..) => "Object",
-                                Entity::Camera(..) => "Camera",
-                            });
-                        });
-                        row.col(|ui| {
-                            if let Some(name) = &inst.name {
-                                ui.label(name);
-                            } else {
-                                ui.colored_label(egui::Color32::GRAY, "<None>");
-                            }
-                        });
-                    });
+            let mut scene = self.scene.write().unwrap();
+            for inst in scene.instances_mut() {
+                let name = if let Some(name) = &inst.name {
+                    format!("[{}] {}", inst.id(), name)
+                } else {
+                    format!("[{}]", inst.id())
+                };
+                let selected = self.selected == Some(inst.id());
+                if ui.selectable_label(selected, if selected { RichText::new(name).strong() } else { name.into() }).clicked() {
+                    self.selected = Some(inst.id());
+                };
+                let size = ui.available_size();
+                let (_, response) = ui.allocate_exact_size(size, Sense::click());
+                if response.clicked() {
+                    self.selected.take();
                 }
-            });
+            }
+            // let table_builder = egui_extras::TableBuilder::new(ui)
+            //     .columns(Column::auto(), 2)
+            //     .column(Column::auto().resizable(true))
+            //     .column(Column::auto().resizable(true).at_least(100.))
+            //     .column(Column::remainder().at_least(150.).resizable(true))
+            //     .striped(true).resizable(true);
+            //
+            // if let Some(selection) = self.selected {
+            //     table_builder.scroll_to_row(selection as _, None)
+            // } else {
+            //     table_builder
+            // }
+            // .header(20., |mut header| {
+            //     header.col(|_ui| ());
+            //     header.col(|_ui| ());
+            //     header.col(|ui| {
+            //         ui.label(RichText::new("ID").strong());
+            //     });
+            //     header.col(|ui| {
+            //         ui.label(RichText::new("Type").strong());
+            //     });
+            //     header.col(|ui| {
+            //         ui.label(RichText::new("Name").strong());
+            //     });
+            // })
+            // .body(|mut body| {
+            //     for inst in self.scene.write().unwrap().instances_mut() {
+            //         body.row(20., |mut row| {
+            //             row.col(|ui| {
+            //                 let mut checked =
+            //                     self.selected.map(|sel| sel == inst.id()).unwrap_or(false);
+            //                 if ui.checkbox(&mut checked, "").clicked() {
+            //                     if checked {
+            //                         self.ui_events.send(UiMessage::Select(inst.id()));
+            //                     } else {
+            //                         self.ui_events.send(UiMessage::Deselect);
+            //                     }
+            //                 }
+            //             });
+            //             row.col(|ui| {
+            //                 ui.menu_button("+", |ui| {
+            //                     if let Some(name) = &mut inst.name {
+            //                         let label = ui.label("Name");
+            //                         ui.add(egui::TextEdit::singleline(name))
+            //                             .labelled_by(label.id);
+            //                     } else if ui.small_button("Add name").clicked() {
+            //                         inst.named("");
+            //                     }
+            //                     if ui.small_button("Delete").clicked() {
+            //                         self.ui_events.send(UiMessage::DeleteInstance(inst.id()));
+            //                     }
+            //                 });
+            //             });
+            //             row.col(|ui| {
+            //                 ui.label(format!("{}", inst.id()));
+            //             });
+            //             row.col(|ui| {
+            //                 ui.label(match inst.entity() {
+            //                     Entity::Light(..) => "Light",
+            //                     Entity::Object(..) => "Object",
+            //                     Entity::Camera(..) => "Camera",
+            //                 });
+            //             });
+            //             row.col(|ui| {
+            //                 if let Some(name) = &inst.name {
+            //                     ui.label(name);
+            //                 } else {
+            //                     ui.colored_label(egui::Color32::GRAY, "<None>");
+            //                 }
+            //             });
+            //         });
+            //     }
+            // });
         });
     }
 
@@ -453,26 +469,69 @@ impl Sandbox {
         if let Some(selected) = self.selected.and_then(|ix| scene.get_mut(ix)) {
             ui.group(|ui| {
                 ui.collapsing("Transform", |ui| {
-                    egui::Grid::new("selected-transform").striped(true).num_columns(4).show(ui, |ui| {
-                        ui.strong("Position");
-                        ui.add(egui::DragValue::new(&mut selected.transform.position.x).prefix("x: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.position.y).prefix("y: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.position.z).prefix("z: ").fixed_decimals(2));
-                        ui.end_row();
+                    egui::Grid::new("selected-transform")
+                        .striped(true)
+                        .num_columns(4)
+                        .show(ui, |ui| {
+                            ui.strong("Position");
+                            ui.add(
+                                egui::DragValue::new(&mut selected.transform.position.x)
+                                    .prefix("x: ")
+                                    .fixed_decimals(2),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut selected.transform.position.y)
+                                    .prefix("y: ")
+                                    .fixed_decimals(2),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut selected.transform.position.z)
+                                    .prefix("z: ")
+                                    .fixed_decimals(2),
+                            );
+                            ui.end_row();
 
-                        ui.strong("Rotation");
-                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.x).prefix("x: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.y).prefix("y: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.z).prefix("z: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.rotation.w).prefix("w: ").fixed_decimals(2));
-                        ui.end_row();
+                            ui.strong("Rotation");
+                            ui.add(
+                                egui::DragValue::new(&mut selected.transform.rotation.x)
+                                    .prefix("x: ")
+                                    .fixed_decimals(2),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut selected.transform.rotation.y)
+                                    .prefix("y: ")
+                                    .fixed_decimals(2),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut selected.transform.rotation.z)
+                                    .prefix("z: ")
+                                    .fixed_decimals(2),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut selected.transform.rotation.w)
+                                    .prefix("w: ")
+                                    .fixed_decimals(2),
+                            );
+                            ui.end_row();
 
-                        ui.strong("Scale");
-                        ui.add(egui::DragValue::new(&mut selected.transform.scale.x).prefix("x: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.scale.y).prefix("y: ").fixed_decimals(2));
-                        ui.add(egui::DragValue::new(&mut selected.transform.scale.z).prefix("z: ").fixed_decimals(2));
-                        ui.end_row();
-                    });
+                            ui.strong("Scale");
+                            ui.add(
+                                egui::DragValue::new(&mut selected.transform.scale.x)
+                                    .prefix("x: ")
+                                    .fixed_decimals(2),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut selected.transform.scale.y)
+                                    .prefix("y: ")
+                                    .fixed_decimals(2),
+                            );
+                            ui.add(
+                                egui::DragValue::new(&mut selected.transform.scale.z)
+                                    .prefix("z: ")
+                                    .fixed_decimals(2),
+                            );
+                            ui.end_row();
+                        });
                 });
             });
         }
@@ -522,7 +581,10 @@ impl Application for Sandbox {
             let loader = match io::load_mesh_dynamic(&file) {
                 Ok(loader) => loader,
                 Err(err) => {
-                    let err_display = err.chain().skip(1).fold(err.to_string(), |str, err| format!("{}\n\t{}", str, err));
+                    let err_display = err
+                        .chain()
+                        .skip(1)
+                        .fold(err.to_string(), |str, err| format!("{}\n\t{}", str, err));
                     tracing::error!("Cannot load file {}: {}", file, err_display);
                     continue;
                 }
