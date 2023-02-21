@@ -1,6 +1,6 @@
 [workspace]
-members = ["bin/*", "lib/*"]
-default-members = ["lib/violette", "lib/rose-core"]
+members = ["lib/*"]
+default-members = ["lib/violette"]
 
 [workspace.package]
 version = "0.1.0"
