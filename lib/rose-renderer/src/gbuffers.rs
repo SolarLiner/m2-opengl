@@ -86,15 +86,12 @@ impl GeometryBuffers {
         deferred_fbo.attach_color(2, &normal)?;
         deferred_fbo.attach_color(3, &rough_metal)?;
         deferred_fbo.attach_depth(&out_depth)?;
+        deferred_fbo.enable_buffers([0, 1, 2, 3])?;
         deferred_fbo.assert_complete()?;
-        deferred_fbo.clear_color([0., 0., 0., 1.])?;
-        deferred_fbo.clear_depth(1.)?;
-        deferred_fbo.viewport(0, 0, size.x as _, size.y as _);
 
         let output_fbo = Framebuffer::new();
         output_fbo.attach_color(0, &out_color)?;
         output_fbo.assert_complete()?;
-        output_fbo.disable_depth_test()?;
 
         let screen_pass = ScreenDraw::load("assets/shaders/defferred.frag.glsl")
             .context("Cannot load screen shader pass")?;
@@ -141,10 +138,9 @@ impl GeometryBuffers {
         material: &Material,
         meshes: &mut [Transformed<MC>],
     ) -> Result<()> {
-        self.deferred_fbo.disable_blending()?;
-        self.deferred_fbo.disable_scissor()?;
-        self.deferred_fbo.enable_depth_test(DepthTestFunction::Less)?;
-        self.deferred_fbo.enable_buffers([0, 1, 2, 3])?;
+        Framebuffer::disable_blending();
+        Framebuffer::disable_scissor();
+        Framebuffer::enable_depth_test(DepthTestFunction::Less);
         material.draw_meshes(&self.deferred_fbo, camera, meshes)?;
 
         Ok(())
@@ -185,9 +181,9 @@ impl GeometryBuffers {
         lights: &LightBuffer,
     ) -> Result<&Texture<[f32;3]>> {
         self.screen_pass.set_uniform(self.uniform_camera_pos, camera.transform.position)?;
-        self.output_fbo.enable_blending(Blend::One, Blend::One)?;
-        self.output_fbo.clear_color([0., 0., 0., 1.])?;
-        self.output_fbo.do_clear(ClearBuffer::COLOR)?;
+        Framebuffer::enable_blending(Blend::One, Blend::One);
+        Framebuffer::clear_color([0., 0., 0., 1.]);
+        self.output_fbo.do_clear(ClearBuffer::COLOR);
         if lights.is_empty() {
             return Ok(&self.out_color);
         }
@@ -215,10 +211,6 @@ impl GeometryBuffers {
         let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width resize"); };
         let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();
-        self.deferred_fbo
-            .viewport(0, 0, width.get() as _, height.get() as _);
-        self.output_fbo
-            .viewport(0, 0, width.get() as _, height.get() as _);
         self.pos.clear_resize(width, height, nonzero_one)?;
         self.albedo.clear_resize(width, height, nonzero_one)?;
         self.normal.clear_resize(width, height, nonzero_one)?;

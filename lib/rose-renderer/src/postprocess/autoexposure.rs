@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::time::Duration;
 
 use eyre::Result;
-use glam::UVec2;
+use glam::{UVec2, Vec3};
 
 use rose_core::screen_draw::ScreenDraw;
 use violette::program::UniformLocation;
@@ -36,10 +36,6 @@ impl AutoExposure {
         target.filter_min(SampleMode::Linear)?;
         target.reserve_memory()?;
         let fbo = Framebuffer::new();
-        fbo.viewport(0, 0, size.x as _, size.y as _);
-        fbo.disable_blending()?;
-        fbo.disable_depth_test()?;
-        fbo.clear_color([0., 0., 0., 1.])?;
         fbo.attach_color(0, &target)?;
         fbo.assert_complete()?;
         let uniform_in_texture = screen_draw.uniform("in_texture").unwrap();
@@ -61,7 +57,6 @@ impl AutoExposure {
         };
         let depth = unsafe { NonZeroU32::new_unchecked(1) };
         self.target.clear_resize(width, height, depth)?;
-        self.fbo.viewport(0, 0, size.x as _, size.y as _);
         Ok(())
     }
 
@@ -73,7 +68,12 @@ impl AutoExposure {
     pub fn process(&mut self, in_texture: &Texture<[f32; 3]>, lerp: f32) -> Result<f32> {
         self.screen_draw
             .set_uniform(self.uniform_in_texture, in_texture.as_uniform(0)?)?;
-        self.fbo.disable_blending()?; // TODO: Find the source of why this we can't just "set and forget" this setting
+        Framebuffer::disable_blending();
+        Framebuffer::disable_depth_test();
+        Framebuffer::clear_color(Vec3::ZERO.extend(1.).to_array());
+        Framebuffer::disable_blending();
+        let (width, height, _) = in_texture.size();
+        Framebuffer::viewport(0, 0, width.get() as _, height.get() as _);
         self.screen_draw.draw(&self.fbo)?;
         self.target.generate_mipmaps()?;
         let last_mipmap = self.target.num_mipmaps() - 1;

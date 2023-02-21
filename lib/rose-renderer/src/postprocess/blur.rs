@@ -45,11 +45,10 @@ impl Blur {
         let draw_upsample = ScreenDraw::load("assets/shaders/blur_upsample.frag.glsl")?;
         let fbo = Framebuffer::new();
         fbo.attach_color(0, &mip_chain[0])?;
-        fbo.disable_depth_test()?;
-        fbo.disable_blending()?;
+        Framebuffer::disable_depth_test();
+        Framebuffer::disable_blending();
         fbo.enable_buffers([0])?;
         fbo.assert_complete()?;
-        fbo.viewport(0, 0, size.x as _, size.y as _);
 
         let uniform_down_tex = draw_downsample.uniform("in_texture").unwrap();
         let uniform_down_size = draw_downsample.uniform("screen_size").unwrap();
@@ -68,6 +67,8 @@ impl Blur {
     }
 
     pub fn process(&self, texture: &Texture<[f32; 3]>, radius: f32) -> Result<&Texture<[f32; 3]>> {
+        Framebuffer::disable_depth_test();
+        Framebuffer::disable_blending();
         self.render_downsample(texture)?;
         self.render_upsample(radius)?;
         Ok(self.mip_chain.last().unwrap())
@@ -75,7 +76,6 @@ impl Blur {
 
     pub fn resize(&mut self, width: NonZeroU32, height: NonZeroU32) -> Result<()> {
         let depth = NonZeroU32::new(1).unwrap();
-        self.fbo.viewport(0, 0, width.get() as _, height.get() as _);
         self.mip_chain.iter_mut().try_for_each(|mip| {
             let width = NonZeroU32::new(width.get() / 2).unwrap();
             let height = NonZeroU32::new(height.get() / 2).unwrap();
@@ -95,7 +95,7 @@ impl Blur {
 
         for mip in &self.mip_chain {
             let size = mip.size_vec().truncate();
-            self.fbo.viewport(0, 0, size.x as _, size.y as _);
+            Framebuffer::viewport(0, 0, size.x as _, size.y as _);
             self.fbo.attach_color(0, mip)?;
             self.draw_downsample.draw(&self.fbo)?;
 
@@ -109,8 +109,8 @@ impl Blur {
     fn render_upsample(&self, radius: f32) -> Result<()> {
         self.draw_upsample
             .set_uniform(self.uniform_up_radius, radius)?;
-        self.fbo.enable_blending(Blend::One, Blend::One)?;
-        self.fbo.blend_equation(BlendFunction::Add);
+        Framebuffer::enable_blending(Blend::One, Blend::One);
+        Framebuffer::blend_equation(BlendFunction::Add);
 
         for window in self.mip_chain.windows(2) {
             let mip = &window[0];
@@ -120,11 +120,10 @@ impl Blur {
 
             self.draw_upsample
                 .set_uniform(self.uniform_up_tex, mip.as_uniform(0)?)?;
-            self.fbo.viewport(0, 0, size.x as _, size.y as _);
+            Framebuffer::viewport(0, 0, size.x as _, size.y as _);
             self.fbo.attach_color(0, next_mip)?;
             self.draw_upsample.draw(&self.fbo)?;
         }
-        self.fbo.disable_blending()?;
         Ok(())
     }
 }

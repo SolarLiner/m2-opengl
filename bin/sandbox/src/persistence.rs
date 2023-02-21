@@ -77,9 +77,7 @@ pub enum ObjectType {
 impl ObjectType {
     fn create_entity(&self, scene: &mut Scene) -> Entity {
         match self {
-            ObjectType::Plane { plane, .. } => {
-                let mesh
-            }
+            ObjectType::Plane { plane, .. } => {}
             ObjectType::Cube { .. } => {}
             ObjectType::Sphere { .. } => {}
             ObjectType::Object { .. } => {}

@@ -13,7 +13,7 @@ use rose_core::{
     mesh::MeshBuilder,
     transform::{Transform, TransformExt},
 };
-use rose_platform::Application;
+use rose_platform::{Application, RenderContext};
 use rose_renderer::{Mesh, Renderer};
 use violette::framebuffer::Framebuffer;
 
@@ -115,15 +115,15 @@ impl Application for ManySpheres {
         Ok(())
     }
 
-    fn render(&mut self) -> eyre::Result<()> {
-        self.renderer.begin_render()?;
+    fn render(&mut self, ctx: RenderContext) -> eyre::Result<()> {
+        self.renderer.begin_render(Vec3::ZERO.extend(1.))?;
         for sphere in &self.spheres {
             self.renderer.submit_mesh(
                 Arc::downgrade(&sphere.material),
                 Arc::downgrade(&sphere.mesh).transformed(sphere.transform),
             );
         }
-        self.renderer.flush()
+        self.renderer.flush(ctx.dt);
     }
 
     fn ui(&mut self, ctx: &egui::Context) {

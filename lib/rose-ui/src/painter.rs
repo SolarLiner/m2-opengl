@@ -101,12 +101,12 @@ impl UiImpl {
     ) -> Result<()> {
         tracing::trace!(message="Egui draw", primitices=%primitives.len());
         self.current_fbo.replace(frame);
-        let _ = self.prepare_painting(frame, size, ppp)?;
+        let _ = self.prepare_painting(size, ppp)?;
         let sizef = size.cast();
 
         for prim in primitives {
             let (x, y, w, h) = to_gl_rect(prim.clip_rect, sizef, ppp);
-            frame.enable_scissor(x, y, w, h)?;
+            Framebuffer::enable_scissor(x,y,w,h);
 
             match &prim.primitive {
                 Primitive::Mesh(mesh) => {
@@ -115,7 +115,7 @@ impl UiImpl {
                 Primitive::Callback(callback) => {
                     if callback.rect.is_positive() {
                         let (x, y, w, h) = to_gl_rect(callback.rect, sizef, ppp);
-                        frame.viewport(x, y, w, h);
+                        Framebuffer::viewport(x, y, w, h);
 
                         let info = egui::PaintCallbackInfo {
                             viewport: callback.rect,
@@ -126,14 +126,14 @@ impl UiImpl {
                         if let Some(callback) = callback.callback.downcast_ref::<UiCallback>() {
                             (callback.0)(info, self);
                         }
-                        frame.viewport(0, 0, size.width as _, size.height as _);
+                        Framebuffer::viewport(0, 0, size.width as _, size.height as _);
                     }
                 }
             }
 
         }
-        frame.disable_scissor()?;
-        frame.viewport(0, 0, size.width as _, size.height as _);
+        Framebuffer::disable_scissor();
+        Framebuffer::viewport(0, 0, size.width as _, size.height as _);
         self.tex_trash_bin.clear();
         self.current_fbo.take();
         Ok(())
@@ -164,7 +164,7 @@ impl UiImpl {
         let width = NonZeroU32::new(delta.image.width() as _).unwrap();
         let height = NonZeroU32::new(delta.image.height() as _).unwrap();
 
-        let mut pixels = match &delta.image {
+        let pixels = match &delta.image {
             egui::ImageData::Color(image) => {
                 let newtype_pixels = bytemuck::cast_slice(&image.pixels).to_vec();
                 newtype_pixels
@@ -178,7 +178,7 @@ impl UiImpl {
             if let Some(pos) = delta.pos {
                 let pos = IVec2::from_array(pos.map(|x| x as _));
                 let size = IVec2::from_array(delta.image.size().map(|x| x as _));
-                texture.set_sub_data_2D(0, pos.x, pos.y, size.x, size.y, &pixels)?;
+                texture.set_sub_data_2d(0, pos.x, pos.y, size.x, size.y, &pixels)?;
             } else {
                 texture.clear_resize(width, height, unsafe {NonZeroU32::new_unchecked(1)})?;
                 texture.set_data(&pixels)?;
@@ -234,18 +234,17 @@ impl UiImpl {
 
     fn prepare_painting(
         &self,
-        frame: &Framebuffer,
         size: PhysicalSize<u32>,
         ppp: f32,
     ) -> Result<PhysicalSize<u32>> {
         violette::culling(None);
-        frame.disable_depth_test()?;
+        Framebuffer::disable_depth_test();
         unsafe {
             gl::ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
         }
-        frame.enable_blending(Blend::One, Blend::OneMinusSrcAlpha)?;
+        Framebuffer::enable_blending(Blend::One, Blend::OneMinusSrcAlpha);
         let logical_size = size.to_logical::<f32>(ppp as _);
-        frame.viewport(0, 0, size.width as _, size.height as _);
+        Framebuffer::viewport(0, 0, size.width as _, size.height as _);
         self.program
             .set_uniform::<[f32; 2]>(self.uniform_screen_size, logical_size.into())?;
 

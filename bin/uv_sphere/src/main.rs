@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use eyre::Result;
-use glam::{vec3, UVec2, Vec2, Vec3};
+use glam::{vec3, UVec2, Vec2, Vec3, Vec4};
 
 use camera_controller::OrbitCameraController;
 use rose_core::{
@@ -130,7 +130,7 @@ impl Application for App {
 
     #[tracing::instrument(target = "App::render", skip_all)]
     fn render(&mut self, ctx: RenderContext) -> Result<()> {
-        self.renderer.begin_render()?;
+        self.renderer.begin_render(Vec3::ZERO.extend(1.))?;
         self.renderer.submit_mesh(
             Arc::downgrade(&self.material),
             Arc::downgrade(&self.mesh).transformed(self.transform),

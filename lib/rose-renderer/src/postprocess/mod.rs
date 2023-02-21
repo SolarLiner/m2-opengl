@@ -99,7 +99,7 @@ impl Postprocess {
             .set_uniform(self.uniform_texture, input.as_uniform(0)?)?;
         self.draw
             .set_uniform(self.uniform_bloom_tex, bloom.as_uniform(1)?)?;
-        frame.viewport(0, 0, width.get() as _, height.get() as _);
+        Framebuffer::viewport(0, 0, width.get() as _, height.get() as _);
         self.draw.draw(frame)?;
         Ok(())
     }
