@@ -1,79 +1,113 @@
+use std::ffi::{c_void, CStr, CString};
+use std::sync::Arc;
+
 use cgmath::Vector2;
-use glutin::config::Config;
-use glutin::context::{NotCurrentContext, PossiblyCurrentContext};
-use glutin::display::GetGlDisplay;
-use glutin::prelude::*;
-use glutin::surface::{Surface, SurfaceAttributesBuilder, WindowSurface};
+use glutin::{
+    config::Config,
+    context::{NotCurrentContext, PossiblyCurrentContext},
+    display::GetGlDisplay,
+    prelude::*,
+    surface::{Surface, SurfaceAttributesBuilder, WindowSurface},
+};
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use thiserror::Error;
 use winit::window::Window;
-use violette as api;
 
-#[derive(Debug, Copy, Clone, Error)]
+use violette_api::{api::Api, window::Window as ApiWindow};
+
+use crate::{
+    api::{OpenGLApi, OpenGLError},
+    context::OpenGLContext,
+    thread_guard::ThreadGuard,
+};
+
+#[derive(Debug, Error)]
 pub enum WindowError {
     #[error("Glutin context error: {0}")]
-    GlutinError(#[from] glutin::error::Error),
+    Glutin(#[from] glutin::error::Error),
+    #[error("OpenGL error: {0}")]
+    OpenGl(#[from] OpenGLError),
+}
+
+struct OpenGLWindowImpl {
+    window: Window,
+    surface: Surface<WindowSurface>,
+    config: Config,
 }
 
 pub struct OpenGLWindow {
-    window: Window,
+    inner_window: ThreadGuard<OpenGLWindowImpl>,
+    context: Arc<ThreadGuard<PossiblyCurrentContext>>,
     scale_factor: f32,
-    physical_size: Vector2<f32>,
-    surface: Surface<WindowSurface>,
-    config: Config,
-    context: NotCurrentContext,
+    physical_size: Vector2<u32>,
 }
 
 unsafe impl HasRawWindowHandle for OpenGLWindow {
     fn raw_window_handle(&self) -> RawWindowHandle {
-        self.window.raw_window_handle()
+        self.inner_window.window.raw_window_handle()
     }
 }
 
-impl api::Window for OpenGLWindow {
-    type Err = ();
-    type Api = ();
+impl ApiWindow for OpenGLWindow {
+    type Api = OpenGLApi;
+    type Err = WindowError;
 
-    fn physical_size(&self) -> Vector2<f32> {
-        self.physical_size
-    }
-
-    fn scale_factor(&self) -> f32 {
-        self.scale_factor
-    }
-
-    fn update(&self) -> Result<(), Self::Err> {
-        Ok(())
+    fn request_redraw(&self) {
+        self.inner_window.window.request_redraw();
     }
 
     fn vsync(&self) -> bool {
         false
     }
 
-    fn request_redraw(&self) {
-        self.window.request_redraw();
+    fn update(&self) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    fn scale_factor(&self) -> f32 {
+        self.scale_factor
+    }
+
+    fn physical_size(&self) -> Vector2<u32> {
+        self.physical_size
     }
 }
 
 impl OpenGLWindow {
-    pub(crate) fn new(window: Window, config: Config, context: NotCurrentContext) -> Result<Self, WindowError> {
+    pub(crate) fn new(
+        window: Window,
+        config: Config,
+        context: NotCurrentContext,
+    ) -> Result<Self, WindowError> {
         let inner_size = window.inner_size();
-        let physical_size = inner_size.cast();
-        let physical_size = Vector2::new(physical_size.width, physical_size.height);
+        let physical_size = Vector2::new(inner_size.width, inner_size.height);
         let scale_factor = window.scale_factor() as _;
-        let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(window.raw_window_handle(), inner_size.width.try_into().unwrap(), inner_size.height.try_into().unwrap());
+        let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
+            window.raw_window_handle(),
+            inner_size.width.try_into().unwrap(),
+            inner_size.height.try_into().unwrap(),
+        );
         let surface = unsafe { config.display().create_window_surface(&config, &attrs) }?;
-        Ok(Self {
+        let context = Arc::new(ThreadGuard::new(context.make_current(&surface)?));
+        let inner_window = OpenGLWindowImpl {
             window,
-            physical_size,
-            scale_factor,
             surface,
             config,
+        };
+        Ok(Self {
+            inner_window: ThreadGuard::new(inner_window),
             context,
+            physical_size,
+            scale_factor,
         })
     }
 
-    pub(crate) fn activate_context(&self) -> Result<PossiblyCurrentContext, WindowError> {
-        Ok(self.context.make_current(&self.surface)?)
+    pub(crate) fn context(&self) -> Arc<ThreadGuard<PossiblyCurrentContext>> {
+        self.context.clone()
+    }
+
+    pub(crate) fn get_proc_address(&self, sym: &str) -> *const c_void {
+        let sym = CString::new(sym).unwrap();
+        self.context.display().get_proc_address(sym.as_c_str())
     }
 }

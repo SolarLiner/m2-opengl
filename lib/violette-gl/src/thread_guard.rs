@@ -19,6 +19,7 @@ pub struct ThreadGuard<T> {
 // All accesses to the inner value are guarded by checking that the thread accessing it is the right one.
 // In effect, this allows sending the value, but disallows using it anywhere but in the right thread.
 unsafe impl<T> Send for ThreadGuard<T> {}
+unsafe impl<T> Sync for ThreadGuard<T> {}
 
 impl<T> ThreadGuard<T> {
     pub fn new(value: T) -> Self {

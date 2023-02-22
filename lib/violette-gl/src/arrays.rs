@@ -1,11 +1,17 @@
-use std::{marker::PhantomData, num::NonZeroU32};
+use std::{marker::PhantomData, num::NonZeroU32, ops};
 use std::cell::Cell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use crevice::std140::AsStd140;
 
-use violette::{self as api, Bind, GraphicsContext, ScalarType, ValueType, VertexLayout};
+use violette_api::{
+    bind::Bind,
+    context::GraphicsContext,
+    vao::{VertexArray as ApiVertexArray, VertexLayout},
+    value::{ScalarType, ValueType}
+};
 
 use crate::{api::OpenGLError, context::OpenGLContext};
+use crate::thread_guard::ThreadGuard;
 
 fn gl_scalar_type(typ: ScalarType) -> u32 {
     match typ {
@@ -23,7 +29,7 @@ fn gl_scalar_type(typ: ScalarType) -> u32 {
 }
 
 fn gl_value_type(typ: ValueType) -> u32 {
-    use ScalarType::*;
+    use violette_api::value::ScalarType::*;
     match typ {
         ValueType::Scalar(scalar) => gl_scalar_type(scalar),
         ValueType::Vector(2, Bool) => gl::BOOL_VEC2,
@@ -71,13 +77,25 @@ fn gl_num_components(typ: ValueType) -> i32 {
     }
 }
 
-pub struct VertexArray {
+#[derive(Debug)]
+pub struct VertexArrayImpl {
     __non_send: PhantomData<*mut ()>,
     id: NonZeroU32,
     num_layouts: Cell<usize>,
 }
 
-impl api::Bind for VertexArray {
+#[derive(Debug)]
+pub struct VertexArray(ThreadGuard<VertexArrayImpl>);
+
+impl ops::Deref for VertexArray {
+    type Target = VertexArrayImpl;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Bind for VertexArray {
     type Id = NonZeroU32;
 
     fn id(&self) -> Self::Id {
@@ -97,7 +115,7 @@ impl api::Bind for VertexArray {
     }
 }
 
-impl api::VertexArray for VertexArray {
+impl ApiVertexArray for VertexArray {
     type Gc = OpenGLContext;
     type Err = OpenGLError;
 
@@ -125,7 +143,7 @@ impl api::VertexArray for VertexArray {
     }
 
     // This takes care of binding and unbinding since this would too unwieldy to let the user do
-    fn bind_buffer<T: AsStd140>(&self, ix: usize, buffer: &<Self::Gc as GraphicsContext>::Buffer<T>) -> Result<(), Self::Err> {
+    fn bind_buffer<T: 'static + AsStd140>(&self, ix: usize, buffer: &<Self::Gc as GraphicsContext>::Buffer<T>) -> Result<(), Self::Err> {
         self.bind();
         buffer.bind();
         unsafe {
@@ -149,7 +167,7 @@ impl Drop for VertexArray {
 
 impl VertexArray {
     pub(crate) fn new() -> Self {
-        Self {
+        let inner = VertexArrayImpl {
             __non_send: PhantomData,
             id: NonZeroU32::new(unsafe {
                 let mut id = 0;
@@ -158,6 +176,7 @@ impl VertexArray {
             })
             .unwrap(),
             num_layouts: Cell::new(0),
-        }
+        };
+        Self(ThreadGuard::new(inner))
     }
 }

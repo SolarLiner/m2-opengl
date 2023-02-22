@@ -109,3 +109,8 @@ target/
 # Zipped archives
 *.zip
 *.gz
+
+# Performance tracing (flamegraph)
+perf.data
+perf.data.old
+flamegraph.svg

@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod context;
 pub mod api;
 pub mod window;

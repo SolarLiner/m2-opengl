@@ -12,7 +12,6 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-core/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-platform/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-ui/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/violette/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/violette/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/bin/many-spheres/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-renderer/src" isTestSource="false" />
@@ -24,6 +23,9 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/asset-server/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/bin/sandbox-ecs/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/violette-gl/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/violette-api/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/violette-gl/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/violette-old/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

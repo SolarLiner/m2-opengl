@@ -1,15 +1,24 @@
-use std::error::Error;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::backtrace::{Backtrace, BacktraceStatus};
+use std::cell::{Cell, RefCell};
+use std::fmt::Formatter;
+use std::time::Duration;
+use std::{
+    error::Error,
+    fmt,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use cgmath::num_traits;
 use crevice::std140::AsStd140;
-use glutin::context::{ContextApi, ContextAttributesBuilder, Version};
-use glutin::display::{DisplayFeatures, GetGlDisplay};
+use glutin::config::GetGlConfig;
+use glutin::surface::{SurfaceAttributesBuilder, WindowSurface};
 use glutin::{
     config::{Config, ConfigTemplateBuilder},
-    context::NotCurrentContext,
-    display::Display,
+    context::{ContextApi, ContextAttributesBuilder, NotCurrentContext, Version},
+    display::{Display, DisplayFeatures, GetGlDisplay},
     prelude::*,
 };
 use glutin_winit::DisplayBuilder;
@@ -17,16 +26,21 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use raw_window_handle::HasRawWindowHandle;
 use thiserror::Error;
-use winit::window::Fullscreen;
-use winit::{dpi::LogicalSize, event_loop::EventLoop, window::WindowBuilder};
+use winit::event::VirtualKeyCode::Back;
+use winit::platform::run_return::EventLoopExtRunReturn;
+use winit::{dpi::LogicalSize, event_loop::EventLoop, window::Fullscreen, window::WindowBuilder};
 
-use violette::{Api, WindowDesc};
-use crate::context::OpenGLContext;
-use crate::window::OpenGLWindow;
+use violette_api::window::Window;
+use violette_api::{api::Api, window::WindowDesc};
+
+use crate::buffer::Buffer;
+use crate::thread_guard::ThreadGuard;
+use crate::window::WindowError;
+use crate::{context::OpenGLContext, window::OpenGLWindow};
 
 #[derive(Debug, Copy, Clone, Error, FromPrimitive)]
 #[repr(u32)]
-pub enum OpenGLError {
+pub enum GlErrorKind {
     #[error("Provided enum value is not valid")]
     InvalidEnum = gl::INVALID_ENUM,
     #[error("Provided value is not valid")]
@@ -47,19 +61,55 @@ pub enum OpenGLError {
     UnknownError,
 }
 
-impl OpenGLError {
+impl GlErrorKind {
     pub fn current_error() -> Option<Self> {
         let error = unsafe { gl::GetError() };
-        if error != gl::NO_ERROR {
-            Some(OpenGLError::from_u32(error).unwrap_or(OpenGLError::UnknownError))
-        } else {
-            None
+        (error != gl::NO_ERROR)
+            .then(|| GlErrorKind::from_u32(error).unwrap_or(GlErrorKind::UnknownError))
+    }
+}
+
+#[derive(Debug)]
+pub struct OpenGLError {
+    pub kind: GlErrorKind,
+    pub info: String,
+    pub backtrace: Backtrace,
+}
+
+impl From<GlErrorKind> for OpenGLError {
+    fn from(value: GlErrorKind) -> Self {
+        Self {
+            kind: value,
+            info: "".to_string(),
+            backtrace: Backtrace::capture(),
         }
+    }
+}
+
+impl Error for OpenGLError {}
+
+impl fmt::Display for OpenGLError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.kind, self.info)
+    }
+}
+
+impl OpenGLError {
+    pub fn with_info_log(info: impl ToString) -> Option<Self> {
+        GlErrorKind::current_error().map(|kind| Self {
+            kind,
+            info: info.to_string(),
+            backtrace: Backtrace::capture(),
+        })
     }
 
     pub fn guard() -> Result<(), Self> {
-        if let Some(err) = Self::current_error() {
-            Err(err)
+        if let Some(kind) = GlErrorKind::current_error() {
+            Err(Self {
+                kind,
+                info: kind.to_string(),
+                backtrace: Backtrace::capture(),
+            })
         } else {
             Ok(())
         }
@@ -67,7 +117,16 @@ impl OpenGLError {
 }
 
 pub struct OpenGLApi {
-    event_loop: EventLoop<()>,
+    event_loop: ThreadGuard<RefCell<Option<EventLoop<()>>>>,
+}
+
+impl OpenGLApi {
+    pub fn new() -> Arc<Self> {
+        let event_loop = EventLoop::new();
+        Arc::new(Self {
+            event_loop: ThreadGuard::new(RefCell::new(Some(event_loop))),
+        })
+    }
 }
 
 #[derive(Debug, Error)]
@@ -77,27 +136,83 @@ pub enum ApiError {
     #[error("Glutin context error: {0}")]
     Glutin(#[from] glutin::error::Error),
     #[error("Windowing error: {0}")]
-    Winit(#[from] Box<dyn Error>),
+    Window(#[from] WindowError),
+    #[error("Platform error: {0}")]
+    Platform(#[from] WinitError),
+}
+
+#[derive(Debug)]
+pub struct WinitError {
+    inner: ThreadGuard<Box<dyn Error>>,
+}
+
+impl Error for WinitError {}
+
+impl fmt::Display for WinitError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", &*self.inner)
+    }
+}
+
+impl WinitError {
+    fn from_dyn_error(err: Box<dyn Error>) -> Self {
+        Self {
+            inner: ThreadGuard::new(err),
+        }
+    }
 }
 
 impl Api for OpenGLApi {
     type Err = ApiError;
-    type Buffer<T: AsStd140> = ();
-    type GraphicsContext = ();
+    type Buffer<T: AsStd140> = Buffer<T>;
     type Window = OpenGLWindow;
+    type GraphicsContext = OpenGLContext;
+
+    fn create_graphics_context(
+        self: Arc<Self>,
+        window: Arc<Self::Window>,
+    ) -> Result<Self::GraphicsContext, Self::Err> {
+        static LOADED: AtomicBool = AtomicBool::new(false);
+        let context = window.context();
+        if !LOADED
+            .fetch_update(Ordering::Release, Ordering::Acquire, |_| Some(true))
+            .unwrap()
+        {
+            gl::load_with(|sym| window.get_proc_address(sym));
+        }
+        let size = window.physical_size();
+        let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
+            window.raw_window_handle(),
+            size.x.try_into().unwrap(),
+            size.y.try_into().unwrap(),
+        );
+        let surface = unsafe {
+            context
+                .display()
+                .create_window_surface(&context.config(), &attrs)
+        }?;
+        Ok(OpenGLContext::new(context, surface))
+    }
 
     fn create_window(self: Arc<Self>, desc: WindowDesc) -> Result<Arc<Self::Window>, Self::Err> {
         let template = ConfigTemplateBuilder::new()
             .with_alpha_size(8)
             .with_transparency(true);
-        let display_builder = DisplayBuilder::new().with_window_builder(Some(
-            WindowBuilder::new()
-                .with_title(desc.title)
-                .with_inner_size(LogicalSize::new(desc.logical_size.x, desc.logical_size.y))
-                .with_fullscreen(desc.fullscreen.then_some(Fullscreen::Borderless(None))),
-        ));
-        let (window, gl_config) =
-            display_builder.build(&self.event_loop, template, |mut configs| {
+        let display_builder = DisplayBuilder::new().with_window_builder(Some({
+            let wb = if let Some(str) = desc.title.as_deref() {
+                WindowBuilder::new().with_title(str)
+            } else {
+                WindowBuilder::new()
+            };
+            wb.with_inner_size(LogicalSize::new(desc.logical_size.x, desc.logical_size.y))
+                .with_fullscreen(desc.fullscreen.then_some(Fullscreen::Borderless(None)))
+        }));
+        let event_loop = self.event_loop.borrow();
+        let event_loop = event_loop
+            .as_ref()
+            .expect("Event loop has already been consumed");
+        let (window, gl_config) = display_builder
+            .build(event_loop, template, |mut configs| {
                 configs
                     .find(|config| {
                         config.api().contains(glutin::config::Api::OPENGL)
@@ -109,7 +224,8 @@ impl Api for OpenGLApi {
                             )
                     })
                     .unwrap()
-            })?;
+            })
+            .map_err(WinitError::from_dyn_error)?;
         let window = window.unwrap();
         let raw_window_handle = Some(window.raw_window_handle());
         let display = gl_config.display();
@@ -123,15 +239,21 @@ impl Api for OpenGLApi {
         Ok(Arc::new(OpenGLWindow::new(window, gl_config, gl_context)?))
     }
 
-    fn create_graphics_context(
+    fn run(
         self: Arc<Self>,
-        window: Arc<Self::Window>,
-    ) -> Result<Self::GraphicsContext, Self::Err> {
-        static LOADED: AtomicBool = AtomicBool::new(false);
-        let context = window.activate_context()?;
-        if !LOADED.fetch_update(Ordering::Acquire, Ordering::Release, |_| true).unwrap() {
-            gl::load_with(|sym| window.get_proc_address(sym.as_c_str()).cast());
-        }
-        Ok(OpenGLContext::instance())
+        runner: impl 'static + Fn() -> Result<bool, Self::Err>,
+    ) -> Result<i32, Self::Err> {
+        let mut event_loop = self
+            .event_loop
+            .take()
+            .expect("Event loop has already been consumed");
+        let ret = event_loop.run_return(|_, _, control_flow| {
+            if !runner().unwrap() {
+                control_flow.set_exit();
+            } else {
+                control_flow.set_wait_timeout(Duration::from_nanos(16_666_667));
+            }
+        });
+        Ok(ret)
     }
 }

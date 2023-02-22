@@ -3,18 +3,25 @@ use std::sync::Arc;
 
 use cgmath::Vector2;
 use crevice::std140::AsStd140;
-use glutin::context::PossiblyCurrentContext;
-use glutin::prelude::*;
-use glutin::surface::{Surface, WindowSurface};
+use glutin::{
+    context::PossiblyCurrentContext,
+    prelude::*,
+    surface::{Surface, WindowSurface},
+};
 use winit::window::Window;
 
-use violette as api;
-use violette::{BufferKind, ClearBuffers, Color, Rect};
-use crate::api::{OpenGLApi, OpenGLError};
+use violette_api::context::GraphicsContext;
+use violette_api::{
+    buffer::BufferKind,
+    context::ClearBuffers,
+    math::{Color, Rect},
+};
 
+use crate::api::{OpenGLApi, OpenGLError};
 use crate::arrays::VertexArray;
 use crate::buffer::Buffer;
-use crate::framebuffer::Framebuffer;
+use crate::framebuffer::{Framebuffer, FramebufferImpl};
+use crate::program::Program;
 use crate::thread_guard::ThreadGuard;
 
 pub struct WindowDesc {
@@ -25,7 +32,7 @@ pub struct WindowDesc {
 impl Default for WindowDesc {
     fn default() -> Self {
         Self {
-            name: "violette".to_string(),
+            name: "violette-old".to_string(),
             logical_size: Vector2::new(800., 600.),
         }
     }
@@ -33,98 +40,42 @@ impl Default for WindowDesc {
 
 #[derive(Debug)]
 pub struct OpenGLContextImpl {
-    gl_context: PossiblyCurrentContext,
+    gl_context: Arc<ThreadGuard<PossiblyCurrentContext>>,
     gl_surface: Surface<WindowSurface>,
 }
 
 #[derive(Debug)]
-pub struct OpenGLContext(ThreadGuard<OpenGLContextImpl>);
+pub struct OpenGLContext {
+    ctx_impl: ThreadGuard<OpenGLContextImpl>,
+    backbuffer: Arc<Framebuffer>,
+}
 
 impl OpenGLContext {
-    pub(crate) fn new(context: PossiblyCurrentContext, surface: Surface<WindowSurface>) -> Self {
+    pub(crate) fn new(
+        context: Arc<ThreadGuard<PossiblyCurrentContext>>,
+        surface: Surface<WindowSurface>,
+    ) -> Self {
         let inner = OpenGLContextImpl {
             gl_context: context,
             gl_surface: surface,
         };
-        Self(ThreadGuard::new(inner))
+        Self {
+            ctx_impl: ThreadGuard::new(inner),
+            backbuffer: Arc::new(Framebuffer(ThreadGuard::new(FramebufferImpl::backbuffer()))),
+        }
     }
 }
 
-impl api::GraphicsContext for OpenGLContext {
-    type Err = OpenGLError;
+impl GraphicsContext for OpenGLContext {
     type Api = OpenGLApi;
-    type Buffer<T: AsStd140> = ThreadGuard<Buffer<T>>;
-    type Framebuffer = ThreadGuard<Framebuffer>;
-    type ShaderModule = ThreadGuard<Program>;
-    type VertexArray = ThreadGuard<VertexArray>;
+    type Err = OpenGLError;
+    type Buffer<T:'static + AsStd140> = Buffer<T>;
+    type Framebuffer = Framebuffer;
+    type VertexArray = VertexArray;
+    type ShaderModule = Program;
 
-    fn swap_buffers(&self) {
-        self.gl_surface.swap_buffers(&self.gl_context).unwrap();
-    }
-
-    fn create_buffer<T: AsStd140>(
-        &self,
-        kind: BufferKind,
-    ) -> Result<Arc<Self::Buffer<T>>, Self::Err> {
-        OK(Arc::new(ThreadGuard::new(Buffer::new(kind))))
-    }
-
-    fn create_framebuffer(&self) -> Result<Arc<Self::Framebuffer>, Self::Err> {
-        Ok(Arc::new(ThreadGuard::new(Framebuffer::new())))
-    }
-
-    fn create_shader_module(&self) -> Result<Arc<Self::ShaderModule>, Self::Err> {
-        Ok(Arc::new(ThreadGuard::new(Program::new())))
-    }
-
-    fn create_vertex_array(&self) -> Result<Arc<Self::VertexArray>, Self::Err> {
-        Ok(Arc::new(ThreadGuard::new(VertexArray::new())))
-    }
-
-    fn viewport(&self, rect: Rect<f32>) {
-        unsafe {
-            let [x, y, w, h] = rect.cast().into();
-            gl::Viewport(x, y, w, h);
-        }
-    }
-
-    fn set_depth_test(&self, enabled: bool) {
-        if enabled {
-            unsafe { gl::Enable(gl::DEPTH_TEST) };
-        } else {
-            unsafe { gl::Disable(gl::DEPTH_TEST) };
-        }
-    }
-
-    fn set_scissor_test(&self, enabled: bool) {
-        if enabled {
-            unsafe { gl::Enable(gl::SCISSOR_TEST) };
-        } else {
-            unsafe { gl::Disable(gl::SCISSOR_TEST) };
-        }
-    }
-
-    fn set_clear_color(&self, color: Color) {
-        let [r, g, b, a] = color.into();
-        unsafe {
-            gl::ClearColor(r, g, b, a);
-        }
-    }
-
-    fn set_clear_depth(&self, depth: f64) {
-        unsafe {
-            gl::ClearDepth(depth);
-        }
-    }
-
-    fn set_clear_stencil(&self, stencil: i32) {
-        unsafe { gl::ClearStencil(stencil) }
-    }
-
-    fn set_line_width(&self, width: f32) {
-        unsafe {
-            gl::LineWidth(width);
-        }
+    fn backbuffer(&self) -> Arc<Self::Framebuffer> {
+        self.backbuffer.clone()
     }
 
     fn clear(&self, mode: ClearBuffers) {
@@ -141,5 +92,74 @@ impl api::GraphicsContext for OpenGLContext {
         unsafe {
             gl::Clear(bits);
         }
+    }
+
+    fn set_line_width(&self, width: f32) {
+        unsafe {
+            gl::LineWidth(width);
+        }
+    }
+
+    fn set_clear_stencil(&self, stencil: i32) {
+        unsafe { gl::ClearStencil(stencil) }
+    }
+
+    fn set_clear_depth(&self, depth: f64) {
+        unsafe {
+            gl::ClearDepth(depth);
+        }
+    }
+
+    fn set_clear_color(&self, color: Color) {
+        let [r, g, b, a] = color.into_array();
+        unsafe {
+            gl::ClearColor(r, g, b, a);
+        }
+    }
+
+    fn set_scissor_test(&self, enabled: bool) {
+        if enabled {
+            unsafe { gl::Enable(gl::SCISSOR_TEST) };
+        } else {
+            unsafe { gl::Disable(gl::SCISSOR_TEST) };
+        }
+    }
+
+    fn set_depth_test(&self, enabled: bool) {
+        if enabled {
+            unsafe { gl::Enable(gl::DEPTH_TEST) };
+        } else {
+            unsafe { gl::Disable(gl::DEPTH_TEST) };
+        }
+    }
+
+    fn viewport(&self, rect: Rect<f32>) {
+        unsafe {
+            let [x, y, w, h] = rect.cast().into_array();
+            gl::Viewport(x, y, w, h);
+        }
+    }
+
+    fn create_buffer<T: 'static + AsStd140>(
+        &self,
+        kind: BufferKind,
+    ) -> Result<Arc<Self::Buffer<T>>, Self::Err> {
+        Ok(Arc::new(Buffer::new(kind)))
+    }
+
+    fn create_vertex_array(&self) -> Result<Arc<Self::VertexArray>, Self::Err> {
+        Ok(Arc::new(VertexArray::new()))
+    }
+
+    fn create_shader_module(&self) -> Result<Arc<Self::ShaderModule>, Self::Err> {
+        Ok(Arc::new(Program::new()?))
+    }
+
+    fn create_framebuffer(&self) -> Result<Arc<Self::Framebuffer>, Self::Err> {
+        Ok(Arc::new(Framebuffer::new()))
+    }
+
+    fn swap_buffers(&self) {
+        self.ctx_impl.gl_surface.swap_buffers(&self.ctx_impl.gl_context).unwrap();
     }
 }

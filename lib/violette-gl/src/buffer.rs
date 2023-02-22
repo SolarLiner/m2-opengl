@@ -1,19 +1,23 @@
-use std::cell::Cell;
-use std::collections::Bound;
-use std::marker::PhantomData;
-use std::num::{NonZeroU32, NonZeroUsize};
-use std::ops;
-use std::ops::{Range, RangeBounds};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    cell::Cell,
+    collections::Bound,
+    marker::PhantomData,
+    num::{NonZeroU32, NonZeroUsize},
+    ops,
+    ops::{Range, RangeBounds},
+    sync::atomic::{AtomicUsize, Ordering}
+};
 
-use crevice::internal::bytemuck;
-use crevice::std140::{AsStd140, Std140};
+use crevice::{
+    std140::{AsStd140, Std140}
+};
 use once_cell::sync::Lazy;
 
-use violette::{self as api, Bind, Buffer as ApiBuffer, BufferKind, BufferUsage};
+use violette_api::{bind::Bind, buffer::{Buffer as ApiBuffer, ReadBuffer, WriteBuffer}, buffer::BufferKind, buffer::BufferUsage};
 
 use crate::api::OpenGLError;
 use crate::context::OpenGLContext;
+use crate::thread_guard::ThreadGuard;
 
 fn gl_target(kind: BufferKind) -> u32 {
     match kind {
@@ -42,15 +46,25 @@ impl ops::Deref for BufferId {
     }
 }
 
-pub struct Buffer<T> {
+pub struct BufferImpl<T> {
     __non_send: PhantomData<*mut T>,
     id: BufferId,
     bufsize: Cell<usize>,
 }
 
+pub struct Buffer<T>(ThreadGuard<BufferImpl<T>>);
+
+impl<T> ops::Deref for Buffer<T> {
+    type Target = BufferImpl<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl<T> Drop for Buffer<T> {
     fn drop(&mut self) {
-        let id = self.id.get();
+        let id = self.0.id.get();
         unsafe { gl::DeleteBuffers(1, &id) };
     }
 }
@@ -58,17 +72,17 @@ impl<T> Drop for Buffer<T> {
 impl<T> Bind for Buffer<T> {
     type Id = BufferId;
     fn id(&self) -> Self::Id {
-        self.id
+        self.0.id
     }
 
     fn bind(&self) {
         tracing::trace!(
             message = "Bind buffer",
-            id = self.id.get(),
-            kind = self.id.1
+            id = self.id().get(),
+            kind = ?self.id().1
         );
         unsafe {
-            gl::BindBuffer(gl_target(self.id.1), self.id.get());
+            gl::BindBuffer(gl_target(self.0.id.1), self.id.get());
         }
     }
 
@@ -76,13 +90,13 @@ impl<T> Bind for Buffer<T> {
         tracing::trace!(
             message = "Unbind buffer",
             id = self.id.get(),
-            kind = self.id.1
+            kind = ?self.id.1
         );
-        unsafe { gl::BindBuffer(gl_target(self.id.1), 0) }
+        unsafe { gl::BindBuffer(gl_target(self.0.id.1), 0) }
     }
 }
 
-impl<T: AsStd140> api::Buffer<T> for Buffer<T> {
+impl<T: 'static + AsStd140> ApiBuffer<T> for Buffer<T> {
     type Gc = OpenGLContext;
     type Err = OpenGLError;
     type ReadBuffer<'a> = BufferSlice<'a, T>;
@@ -98,13 +112,13 @@ impl<T: AsStd140> api::Buffer<T> for Buffer<T> {
         usage: BufferUsage,
     ) -> Result<(), Self::Err> {
         let std140 = data.into_iter().map(|t| t.as_std140()).collect::<Vec<_>>();
-        let std140 = bytemuck::cast_vec(std140);
+        // let std140: &[u8] = bytemuck::cast_slice(&std140);
         self.bufsize.set(std140.len());
         unsafe {
             gl::BufferData(
                 gl_target(self.id.1),
                 std140.len() as _,
-                std140.as_ptr().castt(),
+                std140.as_ptr().cast(),
                 gl_usage(usage),
             )
         };
@@ -112,24 +126,8 @@ impl<T: AsStd140> api::Buffer<T> for Buffer<T> {
         Ok(())
     }
 
-    fn slice(&self, range: impl RangeBounds<usize>) -> Result<Self::ReadBuffer, Self::Err> {
-        let byte_range = self.byte_slice(range);
-        let offset = byte_range.start;
-        let size = (byte_range.end - offset);
-        Ok(BufferSlice {
-            buffer: self,
-            byte_range,
-            data: unsafe {
-                let access = gl::MAP_READ_BIT;
-                let ptr = gl::MapBufferRange(gl_target(self.id.1), offset, size, access);
-                OpenGLError::guard()?;
-                std::slice::from_raw_parts(ptr.cast(), size)
-            },
-        })
-    }
-
-    fn slice_mut(&self, range: impl RangeBounds<usize>) -> Result<Self::WriteBuffer, Self::Err> {
-        let byte_range = self.byte_slice(range);
+    fn slice_mut(&self, range: impl RangeBounds<usize>) -> Result<Self::WriteBuffer<'_>, Self::Err> {
+        let byte_range = self.byte_range(range);
         let offset = byte_range.start;
         let size = (byte_range.end - offset);
         Ok(BufferSliceMut {
@@ -137,9 +135,25 @@ impl<T: AsStd140> api::Buffer<T> for Buffer<T> {
             byte_range,
             data: unsafe {
                 let access = gl::MAP_READ_BIT | gl::MAP_WRITE_BIT;
-                let ptr = gl::MapBufferRange(gl_target(self.id.1), offset, size, access);
+                let ptr = gl::MapBufferRange(gl_target(self.id.1), offset as _, size as _, access);
                 OpenGLError::guard()?;
                 std::slice::from_raw_parts_mut(ptr.cast(), size)
+            },
+        })
+    }
+
+    fn slice(&self, range: impl RangeBounds<usize>) -> Result<Self::ReadBuffer<'_>, Self::Err> {
+        let byte_range = self.byte_range(range);
+        let offset = byte_range.start;
+        let size = byte_range.end - offset;
+        Ok(BufferSlice {
+            buffer: self,
+            byte_range,
+            data: unsafe {
+                let access = gl::MAP_READ_BIT;
+                let ptr = gl::MapBufferRange(gl_target(self.id.1), offset as _, size as _, access);
+                OpenGLError::guard()?;
+                std::slice::from_raw_parts(ptr.cast(), size as _)
             },
         })
     }
@@ -151,16 +165,17 @@ impl<T> Buffer<T> {
         unsafe {
             gl::GenBuffers(1, &mut id);
         }
-        Self {
+        let inner = BufferImpl {
             __non_send: PhantomData,
             id: BufferId(NonZeroU32::new(id).unwrap(), kind),
             bufsize: Cell::new(0),
-        }
+        };
+        Self(ThreadGuard::new(inner))
     }
 }
 
-impl<T: AsStd140> Buffer<T> {
-    fn byte_size(&self, range: impl RangeBounds<usize>) -> Range<usize> {
+impl<T: 'static + AsStd140> Buffer<T> {
+    fn byte_range(&self, range: impl RangeBounds<usize>) -> Range<usize> {
         let alignment = next_multiple(T::Output::ALIGNMENT, *GL_ALIGNMENT);
         let start = match range.start_bound() {
             Bound::Included(i) => *i,
@@ -198,14 +213,14 @@ impl<'a, T: AsStd140> ops::Deref for BufferSlice<'a, T> {
     }
 }
 
-impl<'a, T: AsStd140> api::ReadBuffer<T> for BufferSlice<'a, T> {
+impl<'a, T: AsStd140> ReadBuffer<'a, T> for BufferSlice<'a, T> {
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
     fn slice(&self) -> Range<usize> {
         (self.byte_range.start / T::std140_size_static())
             ..(self.byte_range.end / T::std140_size_static())
-    }
-
-    fn len(&self) -> usize {
-        self.data.len()
     }
 }
 
@@ -237,18 +252,18 @@ impl<'a, T: AsStd140> ops::DerefMut for BufferSliceMut<'a, T> {
     }
 }
 
-impl<'a, T: AsStd140> api::ReadBuffer<T> for BufferSliceMut<'a, T> {
+impl<'a, T: AsStd140> ReadBuffer<'a ,T> for BufferSliceMut<'a, T> {
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
     fn slice(&self) -> Range<usize> {
         (self.byte_range.start / T::std140_size_static())
             ..(self.byte_range.end / T::std140_size_static())
     }
-
-    fn len(&self) -> usize {
-        self.data.len()
-    }
 }
 
-impl<'a, T: AsStd140> api::WriteBuffer<T> for BufferSliceMut<'a, T> {}
+impl<'a, T: AsStd140> WriteBuffer<'a,T> for BufferSliceMut<'a, T> {}
 
 #[cfg(feature = "fast")]
 static GL_ALIGNMENT: Lazy<NonZeroUsize> = Lazy::new(|| unsafe {

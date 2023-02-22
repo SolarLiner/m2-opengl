@@ -1,6 +1,6 @@
 [workspace]
 members = ["lib/*"]
-default-members = ["lib/violette"]
+default-members = ["lib/violette-old"]
 
 [workspace.package]
 version = "0.1.0"
