@@ -1,42 +1,33 @@
-use std::backtrace::{Backtrace, BacktraceStatus};
-use std::cell::{Cell, RefCell};
+use std::backtrace::Backtrace;
+use std::cell::RefCell;
 use std::fmt::Formatter;
-use std::time::Duration;
-use std::{
-    error::Error,
-    fmt,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::time::{Duration, Instant};
+use std::{error::Error, fmt, sync::Arc};
 
 use cgmath::num_traits;
-use crevice::std140::AsStd140;
+use dashmap::DashMap;
 use glutin::config::GetGlConfig;
-use glutin::surface::{SurfaceAttributesBuilder, WindowSurface};
 use glutin::{
-    config::{Config, ConfigTemplateBuilder},
-    context::{ContextApi, ContextAttributesBuilder, NotCurrentContext, Version},
-    display::{Display, DisplayFeatures, GetGlDisplay},
+    config::ConfigTemplateBuilder,
+    display::{DisplayFeatures, GetGlDisplay},
     prelude::*,
 };
 use glutin_winit::DisplayBuilder;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use raw_window_handle::HasRawWindowHandle;
 use thiserror::Error;
-use winit::event::VirtualKeyCode::Back;
+use winit::event::{Event, StartCause};
 use winit::platform::run_return::EventLoopExtRunReturn;
+use winit::window::WindowId;
 use winit::{dpi::LogicalSize, event_loop::EventLoop, window::Fullscreen, window::WindowBuilder};
 
+use violette_api::context::GraphicsContext;
 use violette_api::window::Window;
 use violette_api::{api::Api, window::WindowDesc};
 
-use crate::buffer::Buffer;
 use crate::thread_guard::ThreadGuard;
+use crate::window::OpenGLWindow;
 use crate::window::WindowError;
-use crate::{context::OpenGLContext, window::OpenGLWindow};
 
 #[derive(Debug, Copy, Clone, Error, FromPrimitive)]
 #[repr(u32)]
@@ -95,12 +86,12 @@ impl fmt::Display for OpenGLError {
 }
 
 impl OpenGLError {
-    pub fn with_info_log(info: impl ToString) -> Option<Self> {
-        GlErrorKind::current_error().map(|kind| Self {
-            kind,
+    pub fn with_info_log(info: impl ToString) -> Self {
+        Self {
+            kind: GlErrorKind::current_error().unwrap_or(GlErrorKind::UnknownError),
             info: info.to_string(),
             backtrace: Backtrace::capture(),
-        })
+        }
     }
 
     pub fn guard() -> Result<(), Self> {
@@ -118,6 +109,7 @@ impl OpenGLError {
 
 pub struct OpenGLApi {
     event_loop: ThreadGuard<RefCell<Option<EventLoop<()>>>>,
+    windows: DashMap<WindowId, Arc<OpenGLWindow>>,
 }
 
 impl OpenGLApi {
@@ -125,6 +117,7 @@ impl OpenGLApi {
         let event_loop = EventLoop::new();
         Arc::new(Self {
             event_loop: ThreadGuard::new(RefCell::new(Some(event_loop))),
+            windows: DashMap::new(),
         })
     }
 }
@@ -164,37 +157,9 @@ impl WinitError {
 
 impl Api for OpenGLApi {
     type Err = ApiError;
-    type Buffer<T: AsStd140> = Buffer<T>;
     type Window = OpenGLWindow;
-    type GraphicsContext = OpenGLContext;
 
-    fn create_graphics_context(
-        self: Arc<Self>,
-        window: Arc<Self::Window>,
-    ) -> Result<Self::GraphicsContext, Self::Err> {
-        static LOADED: AtomicBool = AtomicBool::new(false);
-        let context = window.context();
-        if !LOADED
-            .fetch_update(Ordering::Release, Ordering::Acquire, |_| Some(true))
-            .unwrap()
-        {
-            gl::load_with(|sym| window.get_proc_address(sym));
-        }
-        let size = window.physical_size();
-        let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
-            window.raw_window_handle(),
-            size.x.try_into().unwrap(),
-            size.y.try_into().unwrap(),
-        );
-        let surface = unsafe {
-            context
-                .display()
-                .create_window_surface(&context.config(), &attrs)
-        }?;
-        Ok(OpenGLContext::new(context, surface))
-    }
-
-    fn create_window(self: Arc<Self>, desc: WindowDesc) -> Result<Arc<Self::Window>, Self::Err> {
+    fn create_window(self: &Arc<Self>, desc: WindowDesc) -> Result<Arc<Self::Window>, Self::Err> {
         let template = ConfigTemplateBuilder::new()
             .with_alpha_size(8)
             .with_transparency(true);
@@ -227,31 +192,61 @@ impl Api for OpenGLApi {
             })
             .map_err(WinitError::from_dyn_error)?;
         let window = window.unwrap();
-        let raw_window_handle = Some(window.raw_window_handle());
-        let display = gl_config.display();
-        let context_attributes = ContextAttributesBuilder::new()
-            .with_debug(cfg!(debug_assertions))
-            .with_profile(glutin::context::GlProfile::Core)
-            .with_robustness(glutin::context::Robustness::RobustLoseContextOnReset)
-            .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
-            .build(raw_window_handle);
-        let gl_context = unsafe { display.create_context(&gl_config, &context_attributes)? };
-        Ok(Arc::new(OpenGLWindow::new(window, gl_config, gl_context)?))
+        let window_id = window.id();
+        let window = Arc::new(OpenGLWindow::new(window, gl_config)?);
+        self.windows.insert(window_id, window.clone());
+        Ok(window)
     }
 
-    fn run(
-        self: Arc<Self>,
-        runner: impl 'static + Fn() -> Result<bool, Self::Err>,
-    ) -> Result<i32, Self::Err> {
+    fn run(self: &Arc<Self>) -> Result<i32, Self::Err> {
         let mut event_loop = self
             .event_loop
             .take()
             .expect("Event loop has already been consumed");
-        let ret = event_loop.run_return(|_, _, control_flow| {
-            if !runner().unwrap() {
-                control_flow.set_exit();
-            } else {
-                control_flow.set_wait_timeout(Duration::from_nanos(16_666_667));
+        let start = Instant::now();
+        let mut next = start + Duration::from_nanos(16_666_667);
+        let ret = event_loop.run_return(move |event, _, control_flow| {
+            let _span = tracing::info_span!("winit-frame").entered();
+            control_flow.set_wait_until(next);
+            match event {
+                Event::WindowEvent { event, window_id } => {
+                    let mut remove_window = false;
+                    if let Some(window) = self.windows.get(&window_id) {
+                        tracing::info!(message="Window event", event=?event, id=?window_id);
+                        if window.on_event(event) {
+                            tracing::info!(message="Close requested", id=?window_id);
+                            remove_window = true;
+                        }
+                    } else {
+                        tracing::warn!("Received event for window that doesn't exist");
+                    }
+                    if remove_window {
+                        self.windows.remove(&window_id);
+                    }
+                    if self.windows.len() == 0 {
+                        tracing::debug!("All windows destroyed, quitting");
+                        control_flow.set_exit();
+                    }
+                }
+                Event::RedrawRequested(id) => {
+                    if let Some(window) = self.windows.get(&id) {
+                        let _span = tracing::info_span!("window-draw", id=?window.key()).entered();
+                        tracing::debug!(message = "Draw", id=?window.key());
+                        window.on_frame().unwrap();
+                        control_flow.set_wait_until(next);
+                        next += Duration::from_nanos(16_666_667);
+                    } else {
+                        tracing::warn!("Cannot redraw with unknown window id {:?}", id);
+                    }
+                }
+                Event::NewEvents(StartCause::ResumeTimeReached { .. }) => {
+                    for window in self.windows.iter() {
+                        tracing::debug!(message = "Request redraw", id=?window.key());
+                        window.value().request_redraw();
+                    }
+                }
+                _ => {
+                }
             }
         });
         Ok(ret)

@@ -8,3 +8,5 @@ pub mod buffer;
 pub mod arrays;
 pub mod framebuffer;
 pub mod program;
+mod math;
+mod debug;

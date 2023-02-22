@@ -77,6 +77,14 @@ fn gl_num_components(typ: ValueType) -> i32 {
     }
 }
 
+fn gl_attrib_type(typ: ValueType) -> u32 {
+    match typ {
+        ValueType::Scalar(scalar) => gl_scalar_type(scalar),
+        ValueType::Vector(_, scalar) => gl_scalar_type(scalar),
+        ValueType::Matrix(_, _, scalar) => gl_scalar_type(scalar),
+    }
+}
+
 #[derive(Debug)]
 pub struct VertexArrayImpl {
     __non_send: PhantomData<*mut ()>,
@@ -131,7 +139,7 @@ impl ApiVertexArray for VertexArray {
                 gl::VertexAttribPointer(
                     ix as _,
                     gl_num_components(vl.typ),
-                    gl_value_type(vl.typ),
+                    gl_attrib_type(vl.typ),
                     gl::FALSE,
                     stride as _,
                     vl.offset as *const _,

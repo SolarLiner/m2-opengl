@@ -5,15 +5,17 @@ use std::{
     num::{NonZeroU32, NonZeroUsize},
     ops,
     ops::{Range, RangeBounds},
-    sync::atomic::{AtomicUsize, Ordering}
 };
 
-use crevice::{
-    std140::{AsStd140, Std140}
-};
+use crevice::std140::{AsStd140, Std140};
 use once_cell::sync::Lazy;
 
-use violette_api::{bind::Bind, buffer::{Buffer as ApiBuffer, ReadBuffer, WriteBuffer}, buffer::BufferKind, buffer::BufferUsage};
+use violette_api::{
+    bind::Bind,
+    buffer::BufferKind,
+    buffer::BufferUsage,
+    buffer::{Buffer as ApiBuffer, ReadBuffer, WriteBuffer},
+};
 
 use crate::api::OpenGLError;
 use crate::context::OpenGLContext;
@@ -111,8 +113,11 @@ impl<T: 'static + AsStd140> ApiBuffer<T> for Buffer<T> {
         data: impl IntoIterator<Item = &'a T>,
         usage: BufferUsage,
     ) -> Result<(), Self::Err> {
-        let std140 = data.into_iter().map(|t| t.as_std140()).collect::<Vec<_>>();
-        // let std140: &[u8] = bytemuck::cast_slice(&std140);
+        let std140 = data
+            .into_iter()
+            .map(|t| t.as_std140().as_bytes().to_vec())
+            .flatten()
+            .collect::<Vec<u8>>();
         self.bufsize.set(std140.len());
         unsafe {
             gl::BufferData(
@@ -126,7 +131,10 @@ impl<T: 'static + AsStd140> ApiBuffer<T> for Buffer<T> {
         Ok(())
     }
 
-    fn slice_mut(&self, range: impl RangeBounds<usize>) -> Result<Self::WriteBuffer<'_>, Self::Err> {
+    fn slice_mut(
+        &self,
+        range: impl RangeBounds<usize>,
+    ) -> Result<Self::WriteBuffer<'_>, Self::Err> {
         let byte_range = self.byte_range(range);
         let offset = byte_range.start;
         let size = byte_range.end - offset;
@@ -252,7 +260,7 @@ impl<'a, T: AsStd140> ops::DerefMut for BufferSliceMut<'a, T> {
     }
 }
 
-impl<'a, T: AsStd140> ReadBuffer<'a ,T> for BufferSliceMut<'a, T> {
+impl<'a, T: AsStd140> ReadBuffer<'a, T> for BufferSliceMut<'a, T> {
     fn len(&self) -> usize {
         self.data.len()
     }
@@ -263,7 +271,7 @@ impl<'a, T: AsStd140> ReadBuffer<'a ,T> for BufferSliceMut<'a, T> {
     }
 }
 
-impl<'a, T: AsStd140> WriteBuffer<'a,T> for BufferSliceMut<'a, T> {}
+impl<'a, T: AsStd140> WriteBuffer<'a, T> for BufferSliceMut<'a, T> {}
 
 #[cfg(feature = "fast")]
 static GL_ALIGNMENT: Lazy<NonZeroUsize> = Lazy::new(|| unsafe {

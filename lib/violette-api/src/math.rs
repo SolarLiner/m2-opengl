@@ -96,6 +96,10 @@ where
 #[derive(Debug, Copy, Clone)]
 pub struct Color(pub [f32; 4]);
 
+impl Color {
+    pub const BLACK: Self = Self([0., 0., 0., 1.]);
+}
+
 impl From<[u8; 3]> for Color {
     fn from(arr: [u8; 3]) -> Self {
         let farr = arr.map(|x| x as f32 / 255.);
