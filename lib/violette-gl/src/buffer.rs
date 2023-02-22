@@ -129,7 +129,7 @@ impl<T: 'static + AsStd140> ApiBuffer<T> for Buffer<T> {
     fn slice_mut(&self, range: impl RangeBounds<usize>) -> Result<Self::WriteBuffer<'_>, Self::Err> {
         let byte_range = self.byte_range(range);
         let offset = byte_range.start;
-        let size = (byte_range.end - offset);
+        let size = byte_range.end - offset;
         Ok(BufferSliceMut {
             buffer: self,
             byte_range,
