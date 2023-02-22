@@ -3,7 +3,9 @@ use std::{collections::HashMap, num::NonZeroU32};
 use bytemuck::{offset_of, Pod, Zeroable};
 use egui::epaint::{self, Primitive};
 use eyre::Result;
-use glam::{vec2, IVec2, Vec2};
+use glam::{vec2, IVec2, Vec2, Vec4};
+use winit::dpi::PhysicalSize;
+
 use rose_core::mesh::Mesh;
 use violette::{
     base::GlType,
@@ -13,28 +15,8 @@ use violette::{
     texture::{Texture, TextureFormat},
     vertex::{VertexAttributes, VertexDesc},
 };
-use winit::dpi::PhysicalSize;
 
-pub type UiTexture = Texture<EguiColor>;
-
-#[derive(Debug, Copy, Clone, Pod, Zeroable)]
-#[repr(transparent)]
-pub struct EguiColor(pub egui::Color32);
-
-impl GlType for EguiColor {
-    const GL_TYPE: gl::types::GLenum = gl::UNSIGNED_BYTE;
-    const NUM_COMPONENTS: usize = 4;
-    const NORMALIZED: bool = true;
-    const STRIDE: usize = std::mem::size_of::<Self>();
-}
-
-impl TextureFormat for EguiColor {
-    type Subpixel = Self;
-    const COUNT: usize = 1;
-    const FORMAT: gl::types::GLenum = gl::RGBA;
-    const TYPE: gl::types::GLenum = gl::SRGB8_ALPHA8;
-    const NORMALIZED: bool = true;
-}
+pub type UiTexture = Texture<f32>;
 
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 #[repr(transparent)]
@@ -169,8 +151,7 @@ impl UiImpl {
                 newtype_pixels
             }
             egui::ImageData::Font(image) => {
-                let pixels = image.srgba_pixels(None).map(EguiColor).collect::<Vec<_>>();
-                pixels
+                image.pixels.clone()
             }
         };
         if let Some(texture) = self.textures.get_mut(&id) {
@@ -179,6 +160,7 @@ impl UiImpl {
                 let size = IVec2::from_array(delta.image.size().map(|x| x as _));
                 texture.set_sub_data_2d(0, pos.x, pos.y, size.x, size.y, &pixels)?;
             } else {
+                tracing::debug!("Reset image {:?} to {}x{} with [_; {}] pixels", id, width.get(), height.get(), pixels.len());
                 texture.clear_resize(width, height, unsafe { NonZeroU32::new_unchecked(1) })?;
                 texture.set_data(&pixels)?;
             }
