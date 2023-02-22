@@ -13,8 +13,10 @@ use violette_derive::VertexAttributes;
 
 #[derive(Debug, Default, Clone, Copy, Zeroable, Pod, VertexAttributes)]
 #[repr(C)]
-struct Vertex { pos: Vec2, color: Vec3 }
-
+struct Vertex {
+    pos: Vec2,
+    color: Vec3,
+}
 
 struct TriangleApp {
     mesh_scale: f32,
@@ -34,9 +36,18 @@ impl Application for TriangleApp {
             .link()?;
         let mesh = Mesh::new(
             [
-                Vertex { pos: vec2(-0.5, -0.5), color: vec3(1., 0., 0.) },
-                Vertex { pos: vec2(0., 0.5), color: vec3(0., 1., 0.) },
-                Vertex { pos: vec2(0.5, -0.5), color: vec3(0., 0., 1.) },
+                Vertex {
+                    pos: vec2(-0.5, -0.5),
+                    color: vec3(1., 0., 0.),
+                },
+                Vertex {
+                    pos: vec2(0., 0.5),
+                    color: vec3(0., 1., 0.),
+                },
+                Vertex {
+                    pos: vec2(0.5, -0.5),
+                    color: vec3(0., 0., 1.),
+                },
             ],
             [0, 1, 2],
         )?;

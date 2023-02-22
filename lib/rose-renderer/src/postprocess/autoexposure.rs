@@ -1,6 +1,5 @@
 use std::num::NonZeroU32;
 
-
 use eyre::Result;
 use glam::{UVec2, Vec3};
 
@@ -10,7 +9,6 @@ use violette::{
     framebuffer::Framebuffer,
     texture::{Dimension, SampleMode, Texture},
 };
-
 
 #[derive(Debug)]
 pub struct AutoExposure {

@@ -1,8 +1,4 @@
-use std::{
-    f32::consts::TAU,
-    sync::Arc,
-    time::{Instant},
-};
+use std::{f32::consts::TAU, sync::Arc, time::Instant};
 
 use camera_controller::OrbitCameraController;
 use glam::{vec2, vec3, UVec2, Vec2, Vec3};

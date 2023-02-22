@@ -2,21 +2,19 @@ use std::{collections::HashMap, fs::File, io::BufReader, ops::Deref, path::PathB
 
 use eyre::WrapErr;
 use glam::{vec2, vec3, Vec2, Vec3};
-use obj::{
-    raw::{
-        object::Polygon,
-        material::{MtlColor, MtlTextureMap},
-        RawObj
-    }
+use obj::raw::{
+    material::{MtlColor, MtlTextureMap},
+    object::Polygon,
+    RawObj,
 };
 use smol::stream::StreamExt;
 use tracing::Instrument;
 
 use rose_core::{
-    transform::TransformExt,
     material::{Material, TextureSlot, Vertex},
     mesh::Mesh,
-    transform::Transform
+    transform::Transform,
+    transform::TransformExt,
 };
 use violette::texture::Texture;
 
@@ -38,9 +36,9 @@ impl WavefrontLoader {
         let path = filepath.clone();
         let raw_obj: RawObj = smol::unblock(move || {
             obj::raw::parse_obj(BufReader::new(
-                    File::open(&path).context("Cannot open mesh file")?,
-                ))
-                .context("Cannot parse OBJ")
+                File::open(&path).context("Cannot open mesh file")?,
+            ))
+            .context("Cannot parse OBJ")
         })
         .await?;
         let materials = smol::stream::iter(raw_obj.material_libraries.iter())
@@ -49,9 +47,9 @@ impl WavefrontLoader {
                 let span = tracing::info_span!("obj::raw::parse_mtl", path=%fpath.display());
                 smol::unblock(move || {
                     obj::raw::parse_mtl(BufReader::new(
-                            File::open(fpath).context("Cannot open material library")?,
-                        ))
-                        .context("Cannot parse material library")
+                        File::open(fpath).context("Cannot open material library")?,
+                    ))
+                    .context("Cannot parse material library")
                 })
                 .instrument(span)
             })

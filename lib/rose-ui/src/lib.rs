@@ -5,8 +5,8 @@ use egui::epaint;
 use egui::os::OperatingSystem;
 use egui_winit::winit::event_loop::EventLoopWindowTarget;
 use eyre::Result;
-use winit::window::Window;
 use violette::framebuffer::Framebuffer;
+use winit::window::Window;
 
 use self::painter::UiImpl;
 
@@ -50,11 +50,16 @@ impl Ui {
         self.winit.on_event(&self.ctx, event)
     }
 
-    pub fn run(&mut self, window: &winit::window::Window, runner: impl FnMut(&egui::Context)) -> Duration {
+    pub fn run(
+        &mut self,
+        window: &winit::window::Window,
+        runner: impl FnMut(&egui::Context),
+    ) -> Duration {
         let raw_input = self.winit.take_egui_input(window);
         let output = self.ctx.run(raw_input, runner);
 
-        self.winit.handle_platform_output(window, &self.ctx, output.platform_output);
+        self.winit
+            .handle_platform_output(window, &self.ctx, output.platform_output);
         self.shapes = output.shapes;
         self.tex_deltas.append(output.textures_delta);
         output.repaint_after
@@ -66,7 +71,12 @@ impl Ui {
         }
 
         let primitives = self.ctx.tessellate(std::mem::take(&mut self.shapes));
-        self.painter.draw(&Framebuffer::backbuffer(), window.inner_size(), self.ctx.pixels_per_point(), &primitives)?;
+        self.painter.draw(
+            &Framebuffer::backbuffer(),
+            window.inner_size(),
+            self.ctx.pixels_per_point(),
+            &primitives,
+        )?;
 
         for id in self.tex_deltas.free.drain(..) {
             self.painter.delete_texture(id);

@@ -379,7 +379,17 @@ impl Sandbox {
                     format!("[{}]", inst.id())
                 };
                 let selected = self.selected == Some(inst.id());
-                if ui.selectable_label(selected, if selected { RichText::new(name).strong() } else { name.into() }).clicked() {
+                if ui
+                    .selectable_label(
+                        selected,
+                        if selected {
+                            RichText::new(name).strong()
+                        } else {
+                            name.into()
+                        },
+                    )
+                    .clicked()
+                {
                     self.selected = Some(inst.id());
                 };
                 let size = ui.available_size();

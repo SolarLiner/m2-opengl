@@ -3,21 +3,16 @@ use std::{ops, path::Path};
 use eyre::{Context, Result};
 use once_cell::sync::Lazy;
 
-use violette::{
-    buffer::{
-        Buffer,
-        ElementBuffer,
-    },
-    program::Program,
-    vertex::{
-        DrawMode,
-        VertexArray,
-    },
-};
 use violette::framebuffer::Framebuffer;
+use violette::{
+    buffer::{Buffer, ElementBuffer},
+    program::Program,
+    vertex::{DrawMode, VertexArray},
+};
 
 const INDICES: [u32; 6] = [/* Face 1: */ 0, 2, 1, /* Face 2: */ 0, 3, 2];
-static SCREEN_INDEX_BUFFER: Lazy<ElementBuffer<u32>> = Lazy::new(|| Buffer::with_data(&INDICES).unwrap());
+static SCREEN_INDEX_BUFFER: Lazy<ElementBuffer<u32>> =
+    Lazy::new(|| Buffer::with_data(&INDICES).unwrap());
 static SCREEN_VAO: Lazy<VertexArray> = Lazy::new(|| {
     let mut vao = VertexArray::new();
     vao.with_element_buffer(&*SCREEN_INDEX_BUFFER).unwrap();
@@ -49,10 +44,9 @@ impl ScreenDraw {
             &std::fs::read_to_string("assets/shaders/screen.vert.glsl")?,
             Some(shader_source),
             None,
-        ).context("Could not compile OpenGL shader program")?;
-        Ok(Self {
-            program,
-        })
+        )
+        .context("Could not compile OpenGL shader program")?;
+        Ok(Self { program })
     }
 
     pub fn load(file: impl AsRef<Path>) -> Result<Self> {

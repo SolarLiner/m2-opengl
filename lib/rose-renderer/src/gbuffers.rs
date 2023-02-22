@@ -1,28 +1,20 @@
-use std::num::NonZeroU32;
 use glam::UVec2;
+use std::num::NonZeroU32;
 
 use eyre::{Context, Result};
 
 use violette::{
     base::resource::Resource,
-    framebuffer::{
-        Blend,
-        ClearBuffer,
-        Framebuffer,
-        DepthTestFunction,
-    },
+    framebuffer::{Blend, ClearBuffer, DepthTestFunction, Framebuffer},
     program::{UniformBlockIndex, UniformLocation},
     texture::{DepthStencil, Dimension, SampleMode, Texture},
 };
 
-use rose_core::{
-    light::LightBuffer,
-    screen_draw::ScreenDraw
-};
 use rose_core::camera::Camera;
 use rose_core::material::{Material, Vertex};
 use rose_core::mesh::Mesh;
 use rose_core::transform::Transformed;
+use rose_core::{light::LightBuffer, screen_draw::ScreenDraw};
 
 #[derive(Debug)]
 pub struct GeometryBuffers {
@@ -51,9 +43,9 @@ impl GeometryBuffers {
         let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();
         let pos = Texture::new(width, height, nonzero_one, Dimension::D2);
-            pos.filter_min(SampleMode::Linear)?;
-            pos.filter_mag(SampleMode::Linear)?;
-            pos.reserve_memory()?;
+        pos.filter_min(SampleMode::Linear)?;
+        pos.filter_mag(SampleMode::Linear)?;
+        pos.reserve_memory()?;
 
         let albedo = Texture::new(width, height, nonzero_one, Dimension::D2);
         albedo.filter_min(SampleMode::Linear)?;
@@ -132,7 +124,7 @@ impl GeometryBuffers {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn draw_meshes<MC: std::ops::Deref<Target=Mesh<Vertex>>>(
+    pub fn draw_meshes<MC: std::ops::Deref<Target = Mesh<Vertex>>>(
         &self,
         camera: &Camera,
         material: &Material,
@@ -148,39 +140,40 @@ impl GeometryBuffers {
 
     pub fn debug_position(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.pos.as_uniform(0)?;
-        self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
+        self.debug_texture
+            .set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
         Ok(())
     }
 
     pub fn debug_albedo(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.albedo.as_uniform(0)?;
-        self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
+        self.debug_texture
+            .set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
         Ok(())
     }
 
     pub fn debug_normal(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.normal.as_uniform(0)?;
-        self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
+        self.debug_texture
+            .set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
         Ok(())
     }
 
     pub fn debug_rough_metal(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.rough_metal.as_uniform(0)?;
-        self.debug_texture.set_uniform(self.debug_uniform_in_texture, unit)?;
+        self.debug_texture
+            .set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
         Ok(())
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn process(
-        &self,
-        camera: &Camera,
-        lights: &LightBuffer,
-    ) -> Result<&Texture<[f32;3]>> {
-        self.screen_pass.set_uniform(self.uniform_camera_pos, camera.transform.position)?;
+    pub fn process(&self, camera: &Camera, lights: &LightBuffer) -> Result<&Texture<[f32; 3]>> {
+        self.screen_pass
+            .set_uniform(self.uniform_camera_pos, camera.transform.position)?;
         Framebuffer::enable_blending(Blend::One, Blend::One);
         Framebuffer::clear_color([0., 0., 0., 1.]);
         self.output_fbo.do_clear(ClearBuffer::COLOR);
@@ -192,10 +185,14 @@ impl GeometryBuffers {
         let unit_albedo = self.albedo.as_uniform(1)?;
         let unit_normal = self.normal.as_uniform(2)?;
         let unit_rough_metal = self.rough_metal.as_uniform(3)?;
-        self.screen_pass.set_uniform(self.uniform_frame_pos, unit_pos)?;
-        self.screen_pass.set_uniform(self.uniform_frame_albedo, unit_albedo)?;
-        self.screen_pass.set_uniform(self.uniform_frame_normal, unit_normal)?;
-        self.screen_pass.set_uniform(self.uniform_frame_rough_metal, unit_rough_metal)?;
+        self.screen_pass
+            .set_uniform(self.uniform_frame_pos, unit_pos)?;
+        self.screen_pass
+            .set_uniform(self.uniform_frame_albedo, unit_albedo)?;
+        self.screen_pass
+            .set_uniform(self.uniform_frame_normal, unit_normal)?;
+        self.screen_pass
+            .set_uniform(self.uniform_frame_rough_metal, unit_rough_metal)?;
 
         for light_ix in 0..lights.len() {
             self.screen_pass

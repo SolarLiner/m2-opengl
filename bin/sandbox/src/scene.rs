@@ -210,7 +210,7 @@ impl Scene {
         })
     }
 
-    pub fn lights(&self) -> impl '_ + Iterator<Item=&Light> {
+    pub fn lights(&self) -> impl '_ + Iterator<Item = &Light> {
         self.light_storage.iter().map(|arc| arc.as_ref())
     }
 

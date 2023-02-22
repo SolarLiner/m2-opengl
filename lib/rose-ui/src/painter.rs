@@ -3,7 +3,7 @@ use std::{collections::HashMap, num::NonZeroU32};
 use bytemuck::{offset_of, Pod, Zeroable};
 use egui::epaint::{self, Primitive};
 use eyre::Result;
-use glam::{IVec2, vec2, Vec2};
+use glam::{vec2, IVec2, Vec2};
 use rose_core::mesh::Mesh;
 use violette::{
     base::GlType,
@@ -106,7 +106,7 @@ impl UiImpl {
 
         for prim in primitives {
             let (x, y, w, h) = to_gl_rect(prim.clip_rect, sizef, ppp);
-            Framebuffer::enable_scissor(x,y,w,h);
+            Framebuffer::enable_scissor(x, y, w, h);
 
             match &prim.primitive {
                 Primitive::Mesh(mesh) => {
@@ -130,7 +130,6 @@ impl UiImpl {
                     }
                 }
             }
-
         }
         Framebuffer::disable_scissor();
         Framebuffer::viewport(0, 0, size.width as _, size.height as _);
@@ -160,7 +159,7 @@ impl UiImpl {
     }
 
     pub fn set_texture(&mut self, id: egui::TextureId, delta: &epaint::ImageDelta) -> Result<()> {
-        tracing::trace!(message="Set texture from delta", ?id);
+        tracing::trace!(message = "Set texture from delta", ?id);
         let width = NonZeroU32::new(delta.image.width() as _).unwrap();
         let height = NonZeroU32::new(delta.image.height() as _).unwrap();
 
@@ -180,7 +179,7 @@ impl UiImpl {
                 let size = IVec2::from_array(delta.image.size().map(|x| x as _));
                 texture.set_sub_data_2d(0, pos.x, pos.y, size.x, size.y, &pixels)?;
             } else {
-                texture.clear_resize(width, height, unsafe {NonZeroU32::new_unchecked(1)})?;
+                texture.clear_resize(width, height, unsafe { NonZeroU32::new_unchecked(1) })?;
                 texture.set_data(&pixels)?;
             }
         } else {
@@ -208,12 +207,12 @@ impl UiImpl {
 
     pub fn insert_texture(&mut self, texture: UiTexture) -> egui::TextureId {
         let id = egui::TextureId::User(self.textures.len() as _);
-        tracing::trace!(message="Insert texture", ?id);
+        tracing::trace!(message = "Insert texture", ?id);
         self.replace_texture(id, texture)
     }
 
     pub fn replace_texture(&mut self, id: egui::TextureId, texture: UiTexture) -> egui::TextureId {
-        tracing::trace!(message="Replace texture", ?id);
+        tracing::trace!(message = "Replace texture", ?id);
         if let Some(old_texture) = self.textures.insert(id, texture) {
             self.tex_trash_bin.push(old_texture);
         }
@@ -221,7 +220,7 @@ impl UiImpl {
     }
 
     pub fn delete_texture(&mut self, id: egui::TextureId) {
-        tracing::trace!(message="Delete texture", ?id);
+        tracing::trace!(message = "Delete texture", ?id);
         if let Some(tex) = self.textures.remove(&id) {
             self.tex_trash_bin.push(tex);
         }
@@ -232,11 +231,7 @@ impl UiImpl {
         unsafe { &*self.current_fbo.unwrap() }
     }
 
-    fn prepare_painting(
-        &self,
-        size: PhysicalSize<u32>,
-        ppp: f32,
-    ) -> Result<PhysicalSize<u32>> {
+    fn prepare_painting(&self, size: PhysicalSize<u32>, ppp: f32) -> Result<PhysicalSize<u32>> {
         violette::culling(None);
         Framebuffer::disable_depth_test();
         unsafe {

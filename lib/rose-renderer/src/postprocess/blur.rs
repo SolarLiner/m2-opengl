@@ -7,7 +7,7 @@ use rose_core::screen_draw::ScreenDraw;
 use violette::{
     framebuffer::{Blend, BlendFunction, Framebuffer},
     program::UniformLocation,
-    texture::{Dimension, SampleMode, Texture, TextureWrap}
+    texture::{Dimension, SampleMode, Texture, TextureWrap},
 };
 
 #[derive(Debug)]
@@ -101,7 +101,8 @@ impl Blur {
 
             self.draw_downsample
                 .set_uniform(self.uniform_down_size, size.as_vec2())?;
-            self.draw_downsample.set_uniform(self.uniform_down_tex, mip.as_uniform(0)?)?;
+            self.draw_downsample
+                .set_uniform(self.uniform_down_tex, mip.as_uniform(0)?)?;
         }
         Ok(())
     }

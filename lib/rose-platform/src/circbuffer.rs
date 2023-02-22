@@ -34,7 +34,7 @@ impl<T> CircBuffer<T> {
         self.storage.capacity()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item=&T> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.storage.iter()
     }
 }

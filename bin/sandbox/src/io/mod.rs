@@ -1,15 +1,11 @@
-use std::{
-    path::Path, sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
+use self::obj::WavefrontLoader;
 use eyre::{Context, Result};
 use once_cell::sync::Lazy;
-use self::obj::WavefrontLoader;
 
-use rose_core::{
-    material::Material
-};
 use crate::scene::Scene;
+use rose_core::material::Material;
 
 mod obj;
 
