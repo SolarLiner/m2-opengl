@@ -1,6 +1,11 @@
 use std::borrow::Cow;
+use std::error::Error;
+use std::ops::Deref;
+use std::sync::{Arc, RwLockReadGuard};
 use cgmath::Vector2;
+use violette_input::Input;
 use crate::api::Api;
+use crate::context::GraphicsContext;
 
 pub struct WindowDesc {
     pub logical_size: Vector2<f32>,
@@ -20,11 +25,17 @@ impl Default for WindowDesc {
 
 pub trait Window: Send + Sync {
     type Api: Api;
+    type Gc: GraphicsContext<Window=Self>;
     type Err: Into<<Self::Api as Api>::Err>;
+    type Input<'a>: 'a + Deref<Target=Input> where Self: 'a;
 
+    fn attach_renderer(&self, renderer: impl 'static + Send + Sync + Fn() -> Result<(), Box<dyn Error>>);
     fn request_redraw(&self);
     fn vsync(&self) -> bool;
-    fn update(&self) -> Result<(), Self::Err>;
     fn scale_factor(&self) -> f32;
     fn physical_size(&self) -> Vector2<u32>;
+    fn input<'a>(&'a self) -> Self::Input<'a>;
+    fn context(self: &Arc<Self>) -> Result<Arc<Self::Gc>, Self::Err>;
+    fn on_frame(&self) -> Result<(), Self::Err>;
+    fn on_update(&self) -> Result<(), Self::Err>;
 }
