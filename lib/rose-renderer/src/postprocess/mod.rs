@@ -24,6 +24,7 @@ pub struct Postprocess {
     texture: Texture<[f32; 3]>,
     uniform_bloom_tex: UniformLocation,
     uniform_bloom_strength: UniformLocation,
+    pub auto_exposure_enabled: bool,
     pub bloom_radius: f32,
     pub luminance_bias: f32,
 }
@@ -54,6 +55,7 @@ impl Postprocess {
             uniform_bloom_tex,
             uniform_bloom_strength,
             texture,
+            auto_exposure_enabled: true,
             luminance_bias: 1.,
             bloom_radius: 10.,
         })
@@ -86,14 +88,21 @@ impl Postprocess {
         let accomodate = dt.as_secs_f32() * 100.;
         let lerp = accomodate / (1. + accomodate);
         tracing::debug!(?accomodate, ?lerp);
-        let avg_luminance = self
-            .auto_exposure
-            .process(input, lerp)
-            .unwrap_or_else(|_| self.auto_exposure.average_luminance());
-        self.draw.set_uniform(
-            self.uniform_avg_luminance,
-            avg_luminance / self.luminance_bias,
-        )?;
+        if self.auto_exposure_enabled {
+            let avg_luminance = self
+                .auto_exposure
+                .process(input, lerp)
+                .unwrap_or_else(|err| {
+                    tracing::warn!("Error calculating scene luminance: {}", err);
+                    self.auto_exposure.average_luminance()
+                });
+            self.draw.set_uniform(
+                self.uniform_avg_luminance,
+                avg_luminance / self.luminance_bias,
+            )?;
+        } else {
+            self.draw.set_uniform(self.uniform_avg_luminance, self.luminance_bias.recip())?;
+        }
         let bloom = self.bloom.process(input, self.bloom_radius)?;
         self.draw
             .set_uniform(self.uniform_texture, input.as_uniform(0)?)?;
@@ -104,7 +113,6 @@ impl Postprocess {
         Ok(())
     }
 
-    #[cfg(feature = "debug-ui")]
     pub fn average_luminance(&self) -> f32 {
         self.auto_exposure.average_luminance()
     }

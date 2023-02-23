@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use egui::vec2;
+use egui::{vec2, Ui};
 use eyre::Result;
 use glam::{UVec2, Vec4};
 use tracing::span::EnteredSpan;
@@ -29,6 +29,7 @@ pub type Mesh = rose_core::mesh::Mesh<rose_core::material::Vertex>;
 #[derive(Debug, Clone, Copy)]
 pub struct PostprocessInterface {
     pub exposure: f32,
+    pub auto_exposure: bool,
     pub bloom: BloomInterface,
 }
 
@@ -56,8 +57,6 @@ pub struct Renderer {
     last_render_rendered: usize,
 }
 
-impl Renderer {}
-
 impl Renderer {
     pub fn new(size: UVec2) -> Result<Self> {
         let mut camera = Camera::default();
@@ -72,6 +71,7 @@ impl Renderer {
             post_process,
             post_process_iface: PostprocessInterface {
                 exposure: 1.,
+                auto_exposure: true,
                 bloom: BloomInterface {
                     size: 1e-2,
                     strength: 5e-2,
@@ -137,6 +137,7 @@ impl Renderer {
         Framebuffer::clear_depth(1.);
         backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
 
+        self.post_process.auto_exposure_enabled = self.post_process_iface.auto_exposure;
         self.post_process.luminance_bias = self.post_process_iface.exposure;
         self.post_process.bloom_radius = self.post_process_iface.bloom.size;
         self.post_process
@@ -206,48 +207,54 @@ impl Renderer {
     pub fn ui_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.toggle_value(&mut self.debug_window_open, "Debug menu");
         ui.menu_button("Post processing", |ui| {
-            let pp_iface = self.post_process_interface();
-            egui::Grid::new("pp-iface")
-                .striped(true)
-                .num_columns(2)
-                .show(ui, |ui| {
-                    let exposure_label = ui.label("Exposure:");
-                    ui.add(
-                        egui::Slider::new(&mut pp_iface.exposure, 1e-6..=1e4)
-                            .logarithmic(true)
-                            .show_value(true)
-                            .suffix(" EV")
-                            .custom_formatter(|v, _| format!("{:+1.1}", v.log2()))
-                            .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev)))
-                            .text("Exposure"),
-                    )
-                    .labelled_by(exposure_label.id);
-                    ui.end_row();
-
-                    let bloom_size_label = ui.label("Bloom size:");
-                    ui.add(
-                        egui::Slider::new(&mut pp_iface.bloom.size, 0f32..=0.5)
-                            .logarithmic(true)
-                            .clamp_to_range(false)
-                            .show_value(true),
-                    )
-                    .labelled_by(bloom_size_label.id);
-                    ui.end_row();
-
-                    let bloom_strength_label = ui.label("Bloom strength:");
-                    ui.add(
-                        egui::Slider::new(&mut pp_iface.bloom.strength, 1e-4..=1e2)
-                            .logarithmic(true)
-                            .show_value(true)
-                            .suffix(" %")
-                            .custom_formatter(|x, _| format!("{:2.1}", x * 100.))
-                            .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.))
-                            .text("Bloom strength"),
-                    )
-                    .labelled_by(bloom_strength_label.id);
-                    ui.end_row();
-                });
+            self.ui_postprocessing(ui);
         });
+    }
+
+    pub fn ui_postprocessing(&mut self, ui: &mut Ui) {
+        let pp_iface = self.post_process_interface();
+        egui::Grid::new("pp-iface")
+            .striped(true)
+            .num_columns(2)
+            .show(ui, |ui| {
+                let label = ui.label("Auto exposure");
+                ui.checkbox(&mut pp_iface.auto_exposure, "Enabled").labelled_by(label.id);
+                ui.end_row();
+
+                let exposure_label = ui.label("Exposure");
+                ui.add(
+                    egui::Slider::new(&mut pp_iface.exposure, 1e-6..=1e4)
+                        .logarithmic(true)
+                        .show_value(true)
+                        .suffix(" EV")
+                        .custom_formatter(|v, _| format!("{:+1.1}", v.log2()))
+                        .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev)))
+                )
+                    .labelled_by(exposure_label.id);
+                ui.end_row();
+
+                let bloom_size_label = ui.label("Bloom size");
+                ui.add(
+                    egui::Slider::new(&mut pp_iface.bloom.size, 0f32..=0.5)
+                        .logarithmic(true)
+                        .clamp_to_range(false)
+                        .show_value(true),
+                )
+                    .labelled_by(bloom_size_label.id);
+                ui.end_row();
+
+                let bloom_strength_label = ui.label("Bloom strength");
+                ui.add(
+                    egui::Slider::new(&mut pp_iface.bloom.strength, 1e-4..=1e2)
+                        .logarithmic(true)
+                        .show_value(true)
+                        .suffix(" %")
+                        .custom_formatter(|x, _| format!("{:2.1}", x * 100.))
+                        .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.))
+                )
+                    .labelled_by(bloom_strength_label.id);
+                ui.end_row();
+            });
     }
 
     #[cfg(feature = "debug-ui")]
@@ -281,83 +288,62 @@ impl Renderer {
                     ));
                 });
             });
-        egui::Window::new("Renderer debug")
-            .resizable(true)
-            .open(&mut self.debug_window_open)
-            .show(ctx, |ui| {
-                const GET_NAME: fn(usize) -> &'static str = |ix| match ix {
-                    0 => "Position",
-                    1 => "Albedo",
-                    2 => "Normal",
-                    3 => "Roughness/Metal",
-                    _ => "<None>",
-                };
-                thread_local! {
-                    static SELECTED_TEXTURE: RefCell<usize> = RefCell::new(usize::MAX);
-                }
-                SELECTED_TEXTURE.with(|key| {
-                    let ix = ui
-                        .horizontal(|ui| {
-                            let label = ui.label("Select debug texture");
-                            let ix = &mut *key.borrow_mut();
-                            egui::ComboBox::new("renderer-debug-texture", "Debug texture")
-                                .selected_text(GET_NAME(*ix))
-                                .show_index(ui, ix, 5, |ix| GET_NAME(ix).to_string())
-                                .labelled_by(label.id);
-                            *ix
-                        })
-                        .inner;
-                    const SIDE: f32 = 256.;
-                    let size = vec2(self.camera.projection.width, self.camera.projection.height);
-                    let size = if size.x > size.y {
-                        vec2(SIDE, size.y / size.x * SIDE)
-                    } else {
-                        vec2(SIDE * size.x / size.y, SIDE)
-                    };
-                    let (rect, _) =
-                        ui.allocate_at_least(size, egui::Sense::focusable_noninteractive());
-                    let painter = ui.painter();
-                    painter.rect_filled(rect, 0., egui::Rgba::from_gray(0.));
-                    let geom_pass = self.geom_pass.clone();
-                    painter.add(egui::PaintCallback {
-                        rect,
+        // egui::Window::new("Renderer debug")
+        //     .resizable(true)
+        //     .open(&mut self.debug_window_open)
+        //     .show(ctx, |ui| self.ui_debug_panel(ui));
+    }
+
+    #[cfg(feature = "debug-ui")]
+    pub fn ui_debug_panel(&self, ui: &mut Ui) {
+        const GET_NAME: fn(usize) -> &'static str = |ix| match ix {
+            0 => "Position",
+            1 => "Albedo",
+            2 => "Normal",
+            3 => "Roughness/Metal",
+            _ => "<None>",
+        };
+        thread_local! {
+            static SELECTED_TEXTURE: RefCell<usize> = RefCell::new(usize::MAX);
+        }
+        SELECTED_TEXTURE.with(|key| {
+            let ix = ui
+                .horizontal(|ui| {
+                    let label = ui.label("Select debug texture");
+                    let ix = &mut *key.borrow_mut();
+                    egui::ComboBox::new("renderer-debug-texture", "Debug texture")
+                        .selected_text(GET_NAME(*ix))
+                        .show_index(ui, ix, 5, |ix| GET_NAME(ix).to_string())
+                        .labelled_by(label.id);
+                    *ix
+                })
+                .inner;
+            const SIDE: f32 = 256.;
+            let size = vec2(self.camera.projection.width, self.camera.projection.height);
+            let size = if size.x > size.y {
+                vec2(SIDE, size.y / size.x * SIDE)
+            } else {
+                vec2(SIDE * size.x / size.y, SIDE)
+            };
+            let (rect, _) = ui.allocate_at_least(size, egui::Sense::focusable_noninteractive());
+            let painter = ui.painter();
+            painter.rect_filled(rect, 0., egui::Rgba::from_gray(0.));
+            let geom_pass = self.geom_pass.clone();
+            painter.add(egui::PaintCallback {
+                rect,
                         callback: Arc::new(rose_ui::painter::UiCallback::new(move |_info, ui| {
-                            let geom_pass = geom_pass.read().unwrap();
-                            let _ = match ix {
-                                0 => geom_pass.debug_position(ui.framebuffer()),
-                                1 => geom_pass.debug_albedo(ui.framebuffer()),
-                                2 => geom_pass.debug_normal(ui.framebuffer()),
-                                3 => geom_pass.debug_rough_metal(ui.framebuffer()),
-                                _ => Ok(()),
-                            }
-                            .is_ok();
-                        })),
-                    });
-                });
-                // egui::Grid::new("debug_textures")
-                //     .num_columns(2)
-                //     .show(ui, |ui| {
-                //         make_texture_frame(ui, "Position", {
-                //             let geom_pass = self.geom_pass.clone();
-                //             move |frame| geom_pass.read().unwrap().debug_position(frame).unwrap()
-                //         });
-                //         make_texture_frame(ui, "Albedo", {
-                //             let geom_pass = self.geom_pass.clone();
-                //             move |frame| geom_pass.read().unwrap().debug_albedo(frame).unwrap()
-                //         });
-                //         ui.end_row();
-                //
-                //         make_texture_frame(ui, "Normal", {
-                //             let geom_pass = self.geom_pass.clone();
-                //             move |frame| geom_pass.read().unwrap().debug_normal(frame).unwrap()
-                //         });
-                //         make_texture_frame(ui, "Roughness / Metal", {
-                //             let geom_pass = self.geom_pass.clone();
-                //             move |frame| geom_pass.read().unwrap().debug_rough_metal(frame).unwrap()
-                //         });
-                //         ui.end_row();
-                //     })
+                    let geom_pass = geom_pass.read().unwrap();
+                    let _ = match ix {
+                        0 => geom_pass.debug_position(ui.framebuffer()),
+                        1 => geom_pass.debug_albedo(ui.framebuffer()),
+                        2 => geom_pass.debug_normal(ui.framebuffer()),
+                        3 => geom_pass.debug_rough_metal(ui.framebuffer()),
+                        _ => Ok(()),
+                    }
+                    .is_ok();
+                })),
             });
+        });
     }
 }
 
