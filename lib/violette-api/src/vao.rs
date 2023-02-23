@@ -8,6 +8,7 @@ use crate::{
 };
 use crate::value::AsValueType;
 
+#[derive(Debug, Copy, Clone, Hash)]
 pub struct VertexLayout {
     pub offset: usize,
     pub typ: ValueType,
