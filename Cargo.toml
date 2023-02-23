@@ -1,5 +1,5 @@
 [workspace]
-members = ["lib/*"]
+members = ["lib/*", "lib/violette-gl/gl"]
 default-members = ["lib/violette-old"]
 
 [workspace.package]

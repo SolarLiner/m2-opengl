@@ -4,6 +4,7 @@ use crate::{
     bind::Bind,
     context::GraphicsContext
 };
+use crate::base::Resource;
 use crate::value::ValueType;
 
 pub struct VertexLayout {
@@ -11,7 +12,7 @@ pub struct VertexLayout {
     pub typ: ValueType,
 }
 
-pub trait VertexArray: Bind + Send + Sync {
+pub trait VertexArray: Resource + Bind {
     type Gc: GraphicsContext<VertexArray=Self>;
     type Err: Into<<Self::Gc as GraphicsContext>::Err>;
 
@@ -20,7 +21,7 @@ pub trait VertexArray: Bind + Send + Sync {
         stride: usize,
         layout: impl IntoIterator<IntoIter=impl ExactSizeIterator<Item=VertexLayout>>,
     ) -> Result<(), Self::Err>;
-    fn bind_buffer<T: AsStd140>(&self, ix: usize, buffer: &<Self::Gc as GraphicsContext>::Buffer<T>) -> Result<(), Self::Err>;
+    fn bind_buffer<T: Send + Sync + AsStd140>(&self, ix: usize, buffer: &<Self::Gc as GraphicsContext>::Buffer<T>) -> Result<(), Self::Err>;
 }
 
 

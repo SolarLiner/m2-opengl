@@ -26,6 +26,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/violette-api/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/violette-gl/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/violette-old/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/violette-gl/gl/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

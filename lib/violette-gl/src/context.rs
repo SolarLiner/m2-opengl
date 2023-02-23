@@ -1,4 +1,7 @@
 use std::error::Error;
+use std::fmt;
+use std::fmt::Formatter;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use cgmath::Vector2;
@@ -17,7 +20,7 @@ use violette_api::{
     math::{Color, Rect},
 };
 
-use crate::api::{OpenGLApi, OpenGLError};
+use crate::{api::{OpenGLApi, OpenGLError}, Gl};
 use crate::arrays::VertexArray;
 use crate::buffer::Buffer;
 use crate::framebuffer::{Framebuffer, FramebufferImpl};
@@ -38,10 +41,17 @@ impl Default for WindowDesc {
     }
 }
 
-#[derive(Debug)]
 pub struct OpenGLContextImpl {
+    gl: Gl,
     gl_context: Arc<ThreadGuard<PossiblyCurrentContext>>,
     gl_surface: Surface<WindowSurface>,
+}
+
+impl fmt::Debug for OpenGLContextImpl {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OpenGLContextImpl")
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug)]
@@ -52,10 +62,12 @@ pub struct OpenGLContext {
 
 impl OpenGLContext {
     pub(crate) fn new(
+        gl: Gl,
         context: Arc<ThreadGuard<PossiblyCurrentContext>>,
         surface: Surface<WindowSurface>,
     ) -> Self {
         let inner = OpenGLContextImpl {
+            gl,
             gl_context: context,
             gl_surface: surface,
         };
@@ -69,7 +81,7 @@ impl OpenGLContext {
 impl GraphicsContext for OpenGLContext {
     type Api = OpenGLApi;
     type Err = OpenGLError;
-    type Buffer<T:'static + AsStd140> = Buffer<T>;
+    type Buffer<T:'static + Send + Sync + AsStd140> = Buffer<T>;
     type Framebuffer = Framebuffer;
     type VertexArray = VertexArray;
     type ShaderModule = Program;
@@ -90,53 +102,53 @@ impl GraphicsContext for OpenGLContext {
             bits |= gl::STENCIL_BUFFER_BIT;
         }
         unsafe {
-            gl::Clear(bits);
+            self.gl().Clear(bits);
         }
     }
 
     fn set_line_width(&self, width: f32) {
         unsafe {
-            gl::LineWidth(width);
+            self.gl().LineWidth(width);
         }
     }
 
     fn set_clear_stencil(&self, stencil: i32) {
-        unsafe { gl::ClearStencil(stencil) }
+        unsafe { self.gl().ClearStencil(stencil) }
     }
 
     fn set_clear_depth(&self, depth: f64) {
         unsafe {
-            gl::ClearDepth(depth);
+            self.gl().ClearDepth(depth);
         }
     }
 
     fn set_clear_color(&self, color: Color) {
         let [r, g, b, a] = color.into_array();
         unsafe {
-            gl::ClearColor(r, g, b, a);
+            self.gl().ClearColor(r, g, b, a);
         }
     }
 
     fn set_scissor_test(&self, enabled: bool) {
         if enabled {
-            unsafe { gl::Enable(gl::SCISSOR_TEST) };
+            unsafe { self.gl().Enable(gl::SCISSOR_TEST) };
         } else {
-            unsafe { gl::Disable(gl::SCISSOR_TEST) };
+            unsafe { self.gl().Disable(gl::SCISSOR_TEST) };
         }
     }
 
     fn set_depth_test(&self, enabled: bool) {
         if enabled {
-            unsafe { gl::Enable(gl::DEPTH_TEST) };
+            unsafe { self.gl().Enable(gl::DEPTH_TEST) };
         } else {
-            unsafe { gl::Disable(gl::DEPTH_TEST) };
+            unsafe { self.gl().Disable(gl::DEPTH_TEST) };
         }
     }
 
     fn viewport(&self, rect: Rect<f32>) {
         unsafe {
             let [x, y, w, h] = rect.cast().into_array();
-            gl::Viewport(x, y, w, h);
+            self.gl().Viewport(x, y, w, h);
         }
     }
 
@@ -144,11 +156,11 @@ impl GraphicsContext for OpenGLContext {
         &self,
         kind: BufferKind,
     ) -> Result<Arc<Self::Buffer<T>>, Self::Err> {
-        Ok(Arc::new(Buffer::new(kind)))
+        Ok(Arc::new(Buffer::new(&self.gl(), kind)))
     }
 
     fn create_vertex_array(&self) -> Result<Arc<Self::VertexArray>, Self::Err> {
-        Ok(Arc::new(VertexArray::new()))
+        Ok(Arc::new(VertexArray::new(&self.gl())))
     }
 
     fn create_shader_module(&self) -> Result<Arc<Self::ShaderModule>, Self::Err> {
@@ -156,10 +168,16 @@ impl GraphicsContext for OpenGLContext {
     }
 
     fn create_framebuffer(&self) -> Result<Arc<Self::Framebuffer>, Self::Err> {
-        Ok(Arc::new(Framebuffer::new()))
+        Ok(Arc::new(Framebuffer::new(self.gl())))
     }
 
     fn swap_buffers(&self) {
         self.ctx_impl.gl_surface.swap_buffers(&self.ctx_impl.gl_context).unwrap();
+    }
+}
+
+impl OpenGLContext {
+    fn gl(&self) -> &Gl {
+        &self.ctx_impl.gl
     }
 }

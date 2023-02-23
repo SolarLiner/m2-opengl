@@ -1,64 +1,52 @@
-use std::{marker::PhantomData, num::NonZeroU32, ops};
-use std::sync::Arc;
+use std::{
+    fmt::{
+        self,
+        Formatter
+    },
+    marker::PhantomData,
+    num::NonZeroU32,
+    ops,
+    sync::Arc
+};
+
 use once_cell::sync::Lazy;
 
+use gl::types::GLenum;
+use violette_api::base::Resource;
 use violette_api::{
     bind::Bind,
     context::GraphicsContext,
     framebuffer::{DrawMode, Framebuffer as ApiFramebuffer},
 };
 
-use crate::{api::OpenGLError, context::OpenGLContext};
-use crate::api::GlErrorKind;
-use crate::thread_guard::ThreadGuard;
+use crate::{
+    api::GlErrorKind, api::OpenGLError, context::OpenGLContext, thread_guard::ThreadGuard, Gl,
+    GlObject,
+};
 
 fn gl_draw_mode(mode: DrawMode) -> u32 {
     match mode {
         DrawMode::Points => gl::POINTS,
         DrawMode::Lines => gl::LINES,
         DrawMode::Triangles => gl::TRIANGLES,
-        DrawMode::Quads => gl::QUADS,
+        _ => unreachable!("OpenGL cannot draw {:?}", mode),
     }
 }
 
-#[derive(Debug)]
-pub struct FramebufferImpl {
-    __non_send: PhantomData<*mut ()>,
+pub struct Framebuffer {
+    gl: Gl,
     id: Option<NonZeroU32>,
 }
 
-impl FramebufferImpl {
-    pub(crate) const fn backbuffer() -> Self {
-        Self {
-            __non_send: PhantomData,
-            id: None,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Framebuffer(pub(crate) ThreadGuard<FramebufferImpl>);
-
-impl ops::Deref for Framebuffer {
-    type Target = FramebufferImpl;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Framebuffer {
-    pub fn new() -> Self {
-        let inner = FramebufferImpl {
-            __non_send: PhantomData,
-            id: unsafe {
-                let mut id = 0;
-                gl::GenFramebuffers(1, &mut id);
-                // Yes this is weird, but the meanings of the two `Option` differ here
-                Some(NonZeroU32::new(id as _).unwrap())
-            },
-        };
-        Self(ThreadGuard::new(inner))
+impl fmt::Debug for Framebuffer {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Framebuffer")
+            .field(if let Some(id) = self.id {
+                &id.get()
+            } else {
+                &0
+            })
+            .finish()
     }
 }
 
@@ -67,9 +55,40 @@ impl Drop for Framebuffer {
         if let Some(id) = self.id {
             unsafe {
                 let id = id.get();
-                gl::DeleteFramebuffers(1, &id);
+                self.gl.DeleteFramebuffers(1, &id);
             }
         }
+    }
+}
+
+impl Framebuffer {
+    pub fn new(gl: &Gl) -> Self {
+        Self {
+            gl: gl.clone(),
+            id: unsafe {
+                let mut id = 0;
+                gl.GenFramebuffers(1, &mut id);
+                // Yes this is weird, but the meanings of the two `Option` differ here
+                Some(NonZeroU32::new(id as _).unwrap())
+            },
+        }
+    }
+}
+
+impl Framebuffer {
+    pub(crate) const fn backbuffer(gl: &Gl) -> Self {
+        Self {
+            gl: gl.clone(),
+            id: None,
+        }
+    }
+}
+
+impl Resource for Framebuffer {
+    fn set_name(&self, name: impl ToString) {}
+
+    fn get_name(&self) -> Option<String> {
+        None
     }
 }
 
@@ -87,7 +106,7 @@ impl ApiFramebuffer for Framebuffer {
         shader.bind();
         vao.bind();
         unsafe {
-            gl::DrawArrays(gl_draw_mode(mode), 0, count as _);
+            self.gl.DrawArrays(gl_draw_mode(mode), 0, count as _);
         }
         OpenGLError::guard()
     }
@@ -102,7 +121,7 @@ impl ApiFramebuffer for Framebuffer {
         shader.bind();
         vao.bind();
         unsafe {
-            gl::DrawElements(
+            self.gl.DrawElements(
                 gl_draw_mode(mode),
                 count as _,
                 gl::UNSIGNED_INT,

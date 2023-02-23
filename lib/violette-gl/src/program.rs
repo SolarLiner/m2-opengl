@@ -1,18 +1,10 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::Arc;
-use std::{
-    collections::HashSet,
-    ffi::{CStr, CString},
-    marker::PhantomData,
-    mem::ManuallyDrop,
-    num::NonZeroU32,
-    ops,
-    sync::Mutex,
-};
+use std::{cell::RefCell, rc::Rc, sync::Arc, collections::HashSet, ffi::{CStr, CString}, marker::PhantomData, mem::ManuallyDrop, num::NonZeroU32, ops, sync::Mutex, fmt};
+use std::borrow::BorrowMut;
+use std::fmt::Formatter;
 
 use cgmath::{Vector2, Vector3, Vector4};
 use crevice::std140::*;
+use dashmap::DashSet;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
@@ -21,10 +13,9 @@ use violette_api::{
     bind::Bind,
     shader::{AsUniform, ShaderModule},
 };
+use violette_api::base::Resource;
 
-use crate::api::GlErrorKind;
-use crate::thread_guard::ThreadGuard;
-use crate::{api::OpenGLError, context::OpenGLContext};
+use crate::{api::GlErrorKind, thread_guard::ThreadGuard, api::OpenGLError, context::OpenGLContext, Gl, get_ext_label, set_ext_label};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive)]
 #[repr(u32)]
@@ -33,44 +24,38 @@ pub enum ShaderType {
     Fragment = gl::FRAGMENT_SHADER,
     Geometry = gl::GEOMETRY_SHADER,
 }
-#[derive(Debug)]
-pub struct ProgramImpl {
-    __non_send: PhantomData<*mut ()>,
+
+pub struct Program {
+    gl: Gl,
     id: NonZeroU32,
-    shaders: RefCell<HashSet<Shader>>,
+    shaders: DashSet<Shader>,
 }
 
-impl Drop for ProgramImpl {
+impl Drop for Program {
     fn drop(&mut self) {
-        unsafe { gl::DeleteShader(self.id.get()) }
+        unsafe { self.gl.DeleteShader(self.id.get()) }
     }
 }
 
-#[derive(Debug)]
-pub struct Program(ThreadGuard<ProgramImpl>);
-
-impl ops::Deref for Program {
-    type Target = ProgramImpl;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl fmt::Debug for Program {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Program").field(&self.id.get()).finish()
     }
 }
 
 impl Program {
-    pub fn new() -> Result<Self, OpenGLError> {
-        let inner = ProgramImpl {
-            __non_send: PhantomData,
+    pub fn new(gl: &Gl) -> Result<Self, OpenGLError> {
+        Ok(Self {
+            gl: gl.clone(),
             id: unsafe {
                 NonZeroU32::new(gl::CreateProgram()).ok_or_else(|| {
                     OpenGLError::from(
-                        GlErrorKind::current_error().unwrap_or(GlErrorKind::UnknownError),
+                        GlErrorKind::current_error(gl).unwrap_or(GlErrorKind::UnknownError),
                     )
                 })?
             },
-            shaders: RefCell::new(HashSet::new()),
-        };
-        Ok(Self(ThreadGuard::new(inner)))
+            shaders: DashSet::new(),
+        })
     }
 }
 
@@ -96,13 +81,13 @@ impl Bind for Program {
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub struct Shader {
-    __non_send: PhantomData<*mut ()>,
+    gl: Gl,
     id: NonZeroU32,
 }
 
 impl Shader {
-    pub fn with_source(typ: ShaderType, source: &str) -> Result<Self, OpenGLError> {
-        let this = Self::new(typ)?;
+    pub fn with_source(gl: &Gl, typ: ShaderType, source: &str) -> Result<Self, OpenGLError> {
+        let this = Self::new(gl, typ)?;
         this.add_source(source);
         this.compile()?;
         Ok(this)
@@ -118,13 +103,13 @@ impl Drop for Shader {
 }
 
 impl Shader {
-    pub fn new(typ: ShaderType) -> Result<Self, OpenGLError> {
+    pub fn new(gl: &Gl, typ: ShaderType) -> Result<Self, OpenGLError> {
         Ok(Self {
-            __non_send: PhantomData,
+            gl: gl.clone(),
             id: unsafe {
                 NonZeroU32::new(gl::CreateShader(typ as _)).ok_or_else(|| {
                     OpenGLError::from(
-                        GlErrorKind::current_error().unwrap_or(GlErrorKind::UnknownError),
+                        GlErrorKind::current_error(gl).unwrap_or(GlErrorKind::UnknownError),
                     )
                 })?
             },
@@ -162,7 +147,7 @@ impl Shader {
                     .to_string_lossy()
                     .to_string()
             };
-            Err(OpenGLError::with_info_log(info_log).unwrap())
+            Err(OpenGLError::with_info_log(gl, info_log).unwrap())
         } else {
             Ok(())
         }
@@ -255,6 +240,16 @@ impl FromPrimitive for Uniform {
     }
 }
 
+impl Resource for Program {
+    fn set_name(&self, name: impl ToString) {
+        set_ext_label(self, name)
+    }
+
+    fn get_name(&self) -> Option<String> {
+        get_ext_label(self)
+    }
+}
+
 impl ShaderModule for Program {
     type Gc = OpenGLContext;
     type Err = OpenGLError;
@@ -263,36 +258,38 @@ impl ShaderModule for Program {
     type UniformLocation = u32;
 
     fn add_shader_source(&self, source: Self::ShaderSource) -> Result<(), Self::Err> {
-        unsafe { gl::AttachShader(self.id.get(), source.id.get()) }
-        self.shaders.borrow_mut().insert(source);
-        OpenGLError::guard()
+        unsafe { self.gl.AttachShader(self.id.get(), source.id.get()) }
+        self.shaders.insert(source);
+        OpenGLError::guard(&self.gl)
     }
 
     fn link(&self) -> Result<(), Self::Err> {
         let status = unsafe {
-            gl::LinkProgram(self.id.get());
+            self.gl.LinkProgram(self.id.get());
             let mut status = 0;
-            gl::GetProgramiv(self.id.get(), gl::LINK_STATUS, &mut status);
+            self.gl.GetProgramiv(self.id.get(), gl::LINK_STATUS, &mut status);
             status as gl::types::GLboolean == gl::TRUE
         };
         if !status {
             let info_log = unsafe {
                 let mut buf = vec![0; 2048];
                 let mut len = 0;
-                gl::GetProgramInfoLog(self.id.get(), 2048, &mut len, buf.as_mut_ptr().cast());
+                self.gl.GetProgramInfoLog(self.id.get(), 2048, &mut len, buf.as_mut_ptr().cast());
                 CStr::from_bytes_with_nul(&buf[..len as _])
                     .unwrap()
                     .to_string_lossy()
                     .to_string()
             };
-            return Err(OpenGLError::with_info_log(info_log).unwrap());
+            return Err(OpenGLError::with_info_log(&self.gl, info_log).unwrap());
         }
 
-        for shader in self.shaders.borrow_mut().drain() {
+        for shader in self.shaders.iter() {
             unsafe {
-                gl::DetachShader(self.id.get(), shader.id.get());
+                self.gl.DetachShader(self.id.get(), shader.id.get());
             }
         }
+        // Equivalent to drain, but doesn't return an iterator over the values
+        self.shaders.retain(|_| false);
         Ok(())
     }
 
@@ -300,7 +297,7 @@ impl ShaderModule for Program {
         unsafe {
             let mut loc = 0;
             let name = CString::new(name).unwrap();
-            gl::GetUniformLocation(self.id.get(), name.as_c_str().as_ptr());
+            self.gl.GetUniformLocation(self.id.get(), name.as_c_str().as_ptr());
             (loc >= 0).then_some(loc as _)
         }
     }
@@ -309,27 +306,27 @@ impl ShaderModule for Program {
         let location = location as _;
         unsafe {
             match uniform.into() {
-                Uniform::Int(i) => gl::Uniform1i(location, i),
-                Uniform::Uint(i) => gl::Uniform1ui(location, i),
-                Uniform::Float(f) => gl::Uniform1f(location, f),
-                Uniform::Ivec2(v) => gl::Uniform2iv(location, 1, v.as_ptr()),
-                Uniform::UIvec2(v) => gl::Uniform2uiv(location, 1, v.as_ptr()),
-                Uniform::Vec2(v) => gl::Uniform2fv(location, 1, v.as_ptr()),
-                Uniform::Ivec3(v) => gl::Uniform3iv(location, 1, v.as_ptr()),
-                Uniform::UIvec3(v) => gl::Uniform3uiv(location, 1, v.as_ptr()),
-                Uniform::Vec3(v) => gl::Uniform3fv(location, 1, v.as_ptr()),
-                Uniform::Ivec4(v) => gl::Uniform4iv(location, 1, v.as_ptr()),
-                Uniform::UIvec4(v) => gl::Uniform4uiv(location, 1, v.as_ptr()),
-                Uniform::Vec4(m) => gl::Uniform4fv(location, 1, m.as_ptr()),
-                Uniform::Mat2(m) => gl::UniformMatrix2fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat3(m) => gl::UniformMatrix3fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat4(m) => gl::UniformMatrix4fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat23(m) => gl::UniformMatrix2x3fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat24(m) => gl::UniformMatrix2x4fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat32(m) => gl::UniformMatrix3x2fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat34(m) => gl::UniformMatrix3x4fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat42(m) => gl::UniformMatrix4x2fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat43(m) => gl::UniformMatrix4x3fv(location, 1, gl::FALSE, m.as_ptr().cast()),
+                Uniform::Int(i) => self.gl.Uniform1i(location, i),
+                Uniform::Uint(i) => self.gl.Uniform1ui(location, i),
+                Uniform::Float(f) => self.gl.Uniform1f(location, f),
+                Uniform::Ivec2(v) => self.gl.Uniform2iv(location, 1, v.as_ptr()),
+                Uniform::UIvec2(v) => self.gl.Uniform2uiv(location, 1, v.as_ptr()),
+                Uniform::Vec2(v) => self.gl.Uniform2fv(location, 1, v.as_ptr()),
+                Uniform::Ivec3(v) => self.gl.Uniform3iv(location, 1, v.as_ptr()),
+                Uniform::UIvec3(v) => self.gl.Uniform3uiv(location, 1, v.as_ptr()),
+                Uniform::Vec3(v) => self.gl.Uniform3fv(location, 1, v.as_ptr()),
+                Uniform::Ivec4(v) => self.gl.Uniform4iv(location, 1, v.as_ptr()),
+                Uniform::UIvec4(v) => self.gl.Uniform4uiv(location, 1, v.as_ptr()),
+                Uniform::Vec4(m) => self.gl.Uniform4fv(location, 1, m.as_ptr()),
+                Uniform::Mat2(m) => self.gl.UniformMatrix2fv(location, 1, gl::FALSE, m.as_ptr().cast()),
+                Uniform::Mat3(m) => self.gl.UniformMatrix3fv(location, 1, gl::FALSE, m.as_ptr().cast()),
+                Uniform::Mat4(m) => self.gl.UniformMatrix4fv(location, 1, gl::FALSE, m.as_ptr().cast()),
+                Uniform::Mat23(m) => self.gl.UniformMatrix2x3fv(location, 1, gl::FALSE, m.as_ptr().cast()),
+                Uniform::Mat24(m) => self.gl.UniformMatrix2x4fv(location, 1, gl::FALSE, m.as_ptr().cast()),
+                Uniform::Mat32(m) => self.gl.UniformMatrix3x2fv(location, 1, gl::FALSE, m.as_ptr().cast()),
+                Uniform::Mat34(m) => self.gl.UniformMatrix3x4fv(location, 1, gl::FALSE, m.as_ptr().cast()),
+                Uniform::Mat42(m) => self.gl.UniformMatrix4x2fv(location, 1, gl::FALSE, m.as_ptr().cast()),
+                Uniform::Mat43(m) => self.gl.UniformMatrix4x3fv(location, 1, gl::FALSE, m.as_ptr().cast()),
                 _ => todo!(),
             }
         }

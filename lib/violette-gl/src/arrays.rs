@@ -1,7 +1,15 @@
-use std::{marker::PhantomData, num::NonZeroU32, ops};
-use std::cell::Cell;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    fmt,
+    marker::PhantomData,
+    num::NonZeroU32,
+    ops,
+    cell::Cell,
+    ffi::CString,
+    fmt::Formatter,
+    sync::atomic::{AtomicUsize, Ordering}
+};
 use crevice::std140::AsStd140;
+use gl::types::*;
 
 use violette_api::{
     bind::Bind,
@@ -9,8 +17,9 @@ use violette_api::{
     vao::{VertexArray as ApiVertexArray, VertexLayout},
     value::{ScalarType, ValueType}
 };
+use violette_api::base::Resource;
 
-use crate::{api::OpenGLError, context::OpenGLContext};
+use crate::{api::OpenGLError, context::OpenGLContext, get_ext_label, Gl, GlObject, set_ext_label};
 use crate::thread_guard::ThreadGuard;
 
 fn gl_scalar_type(typ: ScalarType) -> u32 {
@@ -44,9 +53,6 @@ fn gl_value_type(typ: ValueType) -> u32 {
         ValueType::Vector(2, F32) => gl::FLOAT_VEC2,
         ValueType::Vector(3, F32) => gl::FLOAT_VEC3,
         ValueType::Vector(4, F32) => gl::FLOAT_VEC4,
-        ValueType::Vector(2, F64) => gl::DOUBLE_VEC2,
-        ValueType::Vector(3, F64) => gl::DOUBLE_VEC3,
-        ValueType::Vector(4, F64) => gl::DOUBLE_VEC4,
         ValueType::Matrix(2, 2, F32) => gl::FLOAT_MAT2,
         ValueType::Matrix(2, 3, F32) => gl::FLOAT_MAT2x3,
         ValueType::Matrix(2, 4, F32) => gl::FLOAT_MAT2x4,
@@ -56,15 +62,6 @@ fn gl_value_type(typ: ValueType) -> u32 {
         ValueType::Matrix(4, 2, F32) => gl::FLOAT_MAT4x2,
         ValueType::Matrix(4, 3, F32) => gl::FLOAT_MAT4x3,
         ValueType::Matrix(4, 4, F32) => gl::FLOAT_MAT4,
-        ValueType::Matrix(2, 4, F64) => gl::DOUBLE_MAT2x4,
-        ValueType::Matrix(2, 2, F64) => gl::DOUBLE_MAT2,
-        ValueType::Matrix(2, 3, F64) => gl::DOUBLE_MAT2x3,
-        ValueType::Matrix(3, 2, F64) => gl::DOUBLE_MAT3x2,
-        ValueType::Matrix(3, 3, F64) => gl::DOUBLE_MAT3,
-        ValueType::Matrix(3, 4, F64) => gl::DOUBLE_MAT3x4,
-        ValueType::Matrix(4, 2, F64) => gl::DOUBLE_MAT4x2,
-        ValueType::Matrix(4, 3, F64) => gl::DOUBLE_MAT4x3,
-        ValueType::Matrix(4, 4, F64) => gl::DOUBLE_MAT4,
         _ => unreachable!("{:?} unsupported in OpenGL", typ),
     }
 }
@@ -77,21 +74,15 @@ fn gl_num_components(typ: ValueType) -> i32 {
     }
 }
 
-#[derive(Debug)]
-pub struct VertexArrayImpl {
-    __non_send: PhantomData<*mut ()>,
+pub struct VertexArray {
+    gl: Gl,
     id: NonZeroU32,
-    num_layouts: Cell<usize>,
+    num_layouts: AtomicUsize,
 }
 
-#[derive(Debug)]
-pub struct VertexArray(ThreadGuard<VertexArrayImpl>);
-
-impl ops::Deref for VertexArray {
-    type Target = VertexArrayImpl;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl fmt::Debug for VertexArray {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("VertexArray").field(&self.id.get()).finish()
     }
 }
 
@@ -104,14 +95,36 @@ impl Bind for VertexArray {
 
     fn bind(&self) {
         unsafe {
-            gl::BindVertexArray(self.id.get());
+            self.gl.BindVertexArray(self.id.get());
         }
     }
 
     fn unbind(&self) {
         unsafe {
-            gl::BindVertexArray(0);
+            self.gl.BindVertexArray(0);
         }
+    }
+}
+
+impl GlObject for VertexArray {
+    const GL_NAME: GLenum = gl::VERTEX_ARRAY_OBJECT_EXT;
+
+    fn gl(&self) -> &Gl {
+        &self.gl
+    }
+
+    fn id(&self) -> u32 {
+        self.id.get()
+    }
+}
+
+impl Resource for VertexArray {
+    fn set_name(&self, name: impl ToString) {
+        set_ext_label(self, name)
+    }
+
+    fn get_name(&self) -> Option<String> {
+        get_ext_label(self)
     }
 }
 
@@ -125,10 +138,10 @@ impl ApiVertexArray for VertexArray {
         layout: impl IntoIterator<IntoIter=impl ExactSizeIterator<Item=VertexLayout>>,
     ) -> Result<(), Self::Err> {
         let mut iter = layout.into_iter();
-        self.num_layouts.set(iter.len());
+        self.num_layouts.store(iter.len(), Ordering::SeqCst);
         for (ix, vl) in iter.enumerate() {
             unsafe {
-                gl::VertexAttribPointer(
+                self.gl.VertexAttribPointer(
                     ix as _,
                     gl_num_components(vl.typ),
                     gl_value_type(vl.typ),
@@ -137,7 +150,7 @@ impl ApiVertexArray for VertexArray {
                     vl.offset as *const _,
                 );
             }
-            OpenGLError::guard()?;
+            OpenGLError::guard(&self.gl)?;
         }
         Ok(())
     }
@@ -147,9 +160,9 @@ impl ApiVertexArray for VertexArray {
         self.bind();
         buffer.bind();
         unsafe {
-            gl::EnableVertexAttribArray(ix as _);
+            self.gl.EnableVertexAttribArray(ix as _);
         }
-        OpenGLError::guard()?;
+        OpenGLError::guard(&self.gl)?;
         self.unbind();
         buffer.unbind();
         Ok(())
@@ -160,23 +173,22 @@ impl Drop for VertexArray {
     fn drop(&mut self) {
         let id = self.id.get();
         unsafe {
-            gl::DeleteVertexArrays(1, &id);
+            self.gl.DeleteVertexArrays(1, &id);
         }
     }
 }
 
 impl VertexArray {
-    pub(crate) fn new() -> Self {
-        let inner = VertexArrayImpl {
-            __non_send: PhantomData,
+    pub(crate) fn new(gl: &Gl) -> Self {
+        Self {
+            gl: gl.clone(),
             id: NonZeroU32::new(unsafe {
                 let mut id = 0;
-                gl::GenVertexArrays(1, &mut id);
+                gl.GenVertexArrays(1, &mut id);
                 id
             })
             .unwrap(),
-            num_layouts: Cell::new(0),
-        };
-        Self(ThreadGuard::new(inner))
+            num_layouts: AtomicUsize::new(0),
+        }
     }
 }

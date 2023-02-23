@@ -1,15 +1,18 @@
-use crate::bind::Bind;
-use crate::context::GraphicsContext;
-use crate::value::ValueType;
+use crate::{
+    bind::Bind,
+    base::Resource,
+    context::GraphicsContext,
+    value::ValueType
+};
 
 pub trait AsUniform<S: ?Sized + ShaderModule>: Into<S::Uniform> {
     fn value_type() -> ValueType;
 }
 
-pub trait ShaderModule: Bind + Send + Sync {
+pub trait ShaderModule: Resource + Bind {
     type Gc: GraphicsContext;
     type Err: Into<<Self::Gc as GraphicsContext>::Err>;
-    type ShaderSource;
+    type ShaderSource: Resource;
     type Uniform;
     type UniformLocation;
 

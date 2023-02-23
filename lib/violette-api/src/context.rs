@@ -10,6 +10,7 @@ use crate::{
     math::{Color, Rect},
     shader::ShaderModule
 };
+use crate::base::Resource;
 use crate::vao::VertexArray;
 
 bitflags! {
@@ -23,7 +24,7 @@ bitflags! {
 pub trait GraphicsContext: Send + Sync {
     type Api: Api<GraphicsContext=Self>;
     type Err: Into<<Self::Api as Api>::Err>;
-    type Buffer<T: 'static + AsStd140>: Buffer<T, Gc=Self>;
+    type Buffer<T: 'static + Send + Sync + AsStd140>: Buffer<T, Gc=Self>;
     type Framebuffer: Framebuffer<Gc=Self>;
     type VertexArray: VertexArray<Gc=Self>;
     type ShaderModule: ShaderModule<Gc=Self>;

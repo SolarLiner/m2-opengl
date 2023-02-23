@@ -5,7 +5,7 @@ use std::{
 use crevice::std140::AsStd140;
 use crate::{
     context::GraphicsContext,
-    window::{Window, WindowDesc}
+    window::{Window, WindowDesc},
 };
 
 pub trait Api: Send + Sync {

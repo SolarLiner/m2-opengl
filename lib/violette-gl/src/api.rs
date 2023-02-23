@@ -10,6 +10,7 @@ use std::{
         Arc,
     },
 };
+use std::ffi::CString;
 
 use cgmath::num_traits;
 use crevice::std140::AsStd140;
@@ -32,11 +33,12 @@ use winit::{dpi::LogicalSize, event_loop::EventLoop, window::Fullscreen, window:
 
 use violette_api::window::Window;
 use violette_api::{api::Api, window::WindowDesc};
+use violette_api::base::Resource;
 
 use crate::buffer::Buffer;
 use crate::thread_guard::ThreadGuard;
 use crate::window::WindowError;
-use crate::{context::OpenGLContext, window::OpenGLWindow};
+use crate::{context::OpenGLContext, Gl, window::OpenGLWindow};
 
 #[derive(Debug, Copy, Clone, Error, FromPrimitive)]
 #[repr(u32)]
@@ -62,8 +64,8 @@ pub enum GlErrorKind {
 }
 
 impl GlErrorKind {
-    pub fn current_error() -> Option<Self> {
-        let error = unsafe { gl::GetError() };
+    pub fn current_error(gl: &Gl) -> Option<Self> {
+        let error = unsafe { gl.GetError() };
         (error != gl::NO_ERROR)
             .then(|| GlErrorKind::from_u32(error).unwrap_or(GlErrorKind::UnknownError))
     }
@@ -95,16 +97,16 @@ impl fmt::Display for OpenGLError {
 }
 
 impl OpenGLError {
-    pub fn with_info_log(info: impl ToString) -> Option<Self> {
-        GlErrorKind::current_error().map(|kind| Self {
+    pub fn with_info_log(gl: &Gl, info: impl ToString) -> Option<Self> {
+        GlErrorKind::current_error(&gl).map(|kind| Self {
             kind,
             info: info.to_string(),
             backtrace: Backtrace::capture(),
         })
     }
 
-    pub fn guard() -> Result<(), Self> {
-        if let Some(kind) = GlErrorKind::current_error() {
+    pub fn guard(gl: &Gl) -> Result<(), Self> {
+        if let Some(kind) = GlErrorKind::current_error(&gl) {
             Err(Self {
                 kind,
                 info: kind.to_string(),
@@ -172,14 +174,11 @@ impl Api for OpenGLApi {
         self: Arc<Self>,
         window: Arc<Self::Window>,
     ) -> Result<Self::GraphicsContext, Self::Err> {
-        static LOADED: AtomicBool = AtomicBool::new(false);
         let context = window.context();
-        if !LOADED
-            .fetch_update(Ordering::Release, Ordering::Acquire, |_| Some(true))
-            .unwrap()
-        {
-            gl::load_with(|sym| window.get_proc_address(sym));
-        }
+        let gl = crate::load_with(|sym| unsafe {
+            let sym = CString::new(sym).unwrap();
+            context.display().get_proc_address(sym.as_c_str())
+        });
         let size = window.physical_size();
         let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             window.raw_window_handle(),
@@ -191,7 +190,7 @@ impl Api for OpenGLApi {
                 .display()
                 .create_window_surface(&context.config(), &attrs)
         }?;
-        Ok(OpenGLContext::new(context, surface))
+        Ok(OpenGLContext::new(gl, context, surface))
     }
 
     fn create_window(self: Arc<Self>, desc: WindowDesc) -> Result<Arc<Self::Window>, Self::Err> {

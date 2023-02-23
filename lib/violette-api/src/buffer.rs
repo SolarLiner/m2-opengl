@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut, Range, RangeBounds};
 
 use crevice::std140::AsStd140;
+use crate::base::Resource;
 use crate::bind::Bind;
 
 use crate::context::GraphicsContext;
@@ -19,7 +20,8 @@ pub enum BufferUsage {
     Stream,
 }
 
-pub trait Buffer<T: 'static + AsStd140>: Bind + Send + Sync {
+// TODO: Relax restriction on [`AsStd140`]
+pub trait Buffer<T: 'static + AsStd140>: Resource + Bind {
     type Gc: GraphicsContext;
     type Err: Into<<Self::Gc as GraphicsContext>::Err>;
     type ReadBuffer<'a>: ReadBuffer<'a, T> where Self: 'a;
