@@ -38,32 +38,12 @@ fn gl_scalar_type(typ: ScalarType) -> u32 {
 }
 
 fn gl_value_type(typ: ValueType) -> u32 {
-    use violette_api::value::ScalarType::*;
-    match typ {
-        ValueType::Scalar(scalar) => gl_scalar_type(scalar),
-        ValueType::Vector(2, Bool) => gl::BOOL_VEC2,
-        ValueType::Vector(3, Bool) => gl::BOOL_VEC3,
-        ValueType::Vector(4, Bool) => gl::BOOL_VEC4,
-        ValueType::Vector(2, I32) => gl::INT_VEC2,
-        ValueType::Vector(3, I32) => gl::INT_VEC3,
-        ValueType::Vector(4, I32) => gl::INT_VEC4,
-        ValueType::Vector(2, U32) => gl::UNSIGNED_INT_VEC2,
-        ValueType::Vector(3, U32) => gl::UNSIGNED_INT_VEC3,
-        ValueType::Vector(4, U32) => gl::UNSIGNED_INT_VEC4,
-        ValueType::Vector(2, F32) => gl::FLOAT_VEC2,
-        ValueType::Vector(3, F32) => gl::FLOAT_VEC3,
-        ValueType::Vector(4, F32) => gl::FLOAT_VEC4,
-        ValueType::Matrix(2, 2, F32) => gl::FLOAT_MAT2,
-        ValueType::Matrix(2, 3, F32) => gl::FLOAT_MAT2x3,
-        ValueType::Matrix(2, 4, F32) => gl::FLOAT_MAT2x4,
-        ValueType::Matrix(3, 2, F32) => gl::FLOAT_MAT3x2,
-        ValueType::Matrix(3, 3, F32) => gl::FLOAT_MAT3,
-        ValueType::Matrix(3, 4, F32) => gl::FLOAT_MAT3x4,
-        ValueType::Matrix(4, 2, F32) => gl::FLOAT_MAT4x2,
-        ValueType::Matrix(4, 3, F32) => gl::FLOAT_MAT4x3,
-        ValueType::Matrix(4, 4, F32) => gl::FLOAT_MAT4,
-        _ => unreachable!("{:?} unsupported in OpenGL", typ),
-    }
+    let scalar = match typ {
+        ValueType::Scalar(scalar) => scalar,
+        ValueType::Vector(_, scalar) => scalar,
+        ValueType::Matrix(_, _, scalar) => scalar,
+    };
+    gl_scalar_type(scalar)
 }
 
 fn gl_num_components(typ: ValueType) -> i32 {
@@ -137,7 +117,7 @@ impl ApiVertexArray for VertexArray {
         stride: usize,
         layout: impl IntoIterator<IntoIter=impl ExactSizeIterator<Item=VertexLayout>>,
     ) -> Result<(), Self::Err> {
-        let mut iter = layout.into_iter();
+        let iter = layout.into_iter();
         self.num_layouts.store(iter.len(), Ordering::SeqCst);
         for (ix, vl) in iter.enumerate() {
             unsafe {
@@ -156,7 +136,7 @@ impl ApiVertexArray for VertexArray {
     }
 
     // This takes care of binding and unbinding since this would too unwieldy to let the user do
-    fn bind_buffer<T: 'static + AsStd140>(&self, ix: usize, buffer: &<Self::Gc as GraphicsContext>::Buffer<T>) -> Result<(), Self::Err> {
+    fn bind_buffer<T: 'static + Send + Sync + AsStd140>(&self, ix: usize, buffer: &<Self::Gc as GraphicsContext>::Buffer<T>) -> Result<(), Self::Err> {
         self.bind();
         buffer.bind();
         unsafe {

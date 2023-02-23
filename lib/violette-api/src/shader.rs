@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use crate::{
     bind::Bind,
     base::Resource,
@@ -12,7 +13,7 @@ pub trait AsUniform<S: ?Sized + ShaderModule>: Into<S::Uniform> {
 pub trait ShaderModule: Resource + Bind {
     type Gc: GraphicsContext;
     type Err: Into<<Self::Gc as GraphicsContext>::Err>;
-    type ShaderSource: Resource;
+    type ShaderSource;
     type Uniform;
     type UniformLocation;
 

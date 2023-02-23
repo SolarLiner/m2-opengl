@@ -1,7 +1,7 @@
-use std::error::Error;
-use std::fmt::Formatter;
 use std::{
+    error::Error,
     fmt,
+    fmt::Formatter,
     sync::atomic::Ordering,
     sync::{Arc, RwLock, RwLockReadGuard},
 };
@@ -13,14 +13,14 @@ use glutin::{config::Config, display::GetGlDisplay, prelude::*};
 use once_cell::sync::OnceCell;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use thiserror::Error;
-use winit::{event::WindowEvent, platform::windows::WindowExtWindows, window::Window};
+use winit::{event::WindowEvent, window::Window};
 
 use violette_api::window::Window as ApiWindow;
 use violette_input::Input;
 
-use crate::context::{ContextError, OpenGLContext};
 use crate::{
     api::{OpenGLApi, OpenGLError},
+    context::{ContextError, OpenGLContext},
     thread_guard::ThreadGuard,
 };
 
@@ -119,12 +119,24 @@ impl ApiWindow for OpenGLWindow {
     }
 
     fn on_frame(&self) -> Result<(), Self::Err> {
+        if let Some(ctx) = self.context.get() {
+            ctx.make_current()?;
+        } else {
+            tracing::info!(
+                "Skipping rendering of window {:?} as it has no context defined",
+                self.inner_window.window.id()
+            );
+        }
         self.input.write().unwrap().new_frame();
         let renderer = self.renderer.read().unwrap();
         match renderer() {
-            Ok(()) => {},
+            Ok(()) => {}
             Err(err) => {
-                tracing::error!("Error during rendering of window {:?}: {}", self.inner_window.window.id(), err);
+                tracing::error!(
+                    "Error during rendering of window {:?}: {}",
+                    self.inner_window.window.id(),
+                    err
+                );
             }
         }
         Ok(())
@@ -168,15 +180,13 @@ impl OpenGLWindow {
             }
             WindowEvent::Resized(new_size) => {
                 let new_size = Vector2::new(new_size.width, new_size.height);
-                *self.physical_size.write().unwrap() =
-                    new_size;
+                *self.physical_size.write().unwrap() = new_size;
                 if let Some(context) = self.context.get() {
                     context.resize(new_size);
                 }
             }
             WindowEvent::CloseRequested => {
                 self.inner_window.window.set_visible(false);
-                self.inner_window.window.set_enable(false);
                 return true;
             }
             event => {

@@ -1,12 +1,9 @@
 use std::{
-    fmt::{
-        self,
-        Formatter
-    },
+    fmt::{self, Formatter},
     marker::PhantomData,
     num::NonZeroU32,
     ops,
-    sync::Arc
+    sync::Arc,
 };
 
 use once_cell::sync::Lazy;
@@ -41,8 +38,8 @@ pub struct Framebuffer {
 impl fmt::Debug for Framebuffer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Framebuffer")
-            .field(if let Some(id) = self.id {
-                &id.get()
+            .field(if let Some(id) = &self.id.map(|id| id.get()) {
+                id
             } else {
                 &0
             })
@@ -76,7 +73,7 @@ impl Framebuffer {
 }
 
 impl Framebuffer {
-    pub(crate) const fn backbuffer(gl: &Gl) -> Self {
+    pub(crate) fn backbuffer(gl: &Gl) -> Self {
         Self {
             gl: gl.clone(),
             id: None,
@@ -108,7 +105,7 @@ impl ApiFramebuffer for Framebuffer {
         unsafe {
             self.gl.DrawArrays(gl_draw_mode(mode), 0, count as _);
         }
-        OpenGLError::guard()
+        OpenGLError::guard(&self.gl)
     }
 
     fn draw_elements(
@@ -128,7 +125,7 @@ impl ApiFramebuffer for Framebuffer {
                 std::ptr::null(),
             );
         }
-        OpenGLError::guard()
+        OpenGLError::guard(&self.gl)
     }
 }
 
@@ -142,17 +139,17 @@ impl Bind for Framebuffer {
     fn bind(&self) {
         if let Some(id) = self.id {
             unsafe {
-                gl::BindFramebuffer(gl::FRAMEBUFFER, id.get());
+                self.gl.BindFramebuffer(gl::FRAMEBUFFER, id.get());
             }
         } else {
-            unsafe { gl::BindFramebuffer(gl::FRAMEBUFFER, 0) }
+            unsafe { self.gl.BindFramebuffer(gl::FRAMEBUFFER, 0) }
         }
     }
 
     fn unbind(&self) {
         if self.id.is_some() {
             unsafe {
-                gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+                self.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
             }
         }
     }

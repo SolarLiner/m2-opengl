@@ -1,20 +1,16 @@
-extern crate core;
-extern crate core;
-
-use std::ffi::{c_void, CString};
-use std::fmt::Debug;
-use std::mem::MaybeUninit;
-use std::net::ToSocketAddrs;
-use std::sync::Arc;
+use std::{
+    ffi::{c_void, CString},
+    sync::Arc,
+};
 
 use gl::types::GLenum;
 use thread_guard::ThreadGuard;
-use violette_api::base::Resource;
 
 pub mod api;
 pub mod arrays;
 pub mod buffer;
 pub mod context;
+pub mod debug;
 pub mod framebuffer;
 pub mod program;
 mod thread_guard;

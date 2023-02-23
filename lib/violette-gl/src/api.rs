@@ -1,13 +1,15 @@
-use std::backtrace::Backtrace;
-use std::cell::RefCell;
-use std::fmt::Formatter;
-use std::time::{Duration, Instant};
-use std::{error::Error, fmt, sync::Arc};
-use std::ffi::CString;
+use std::{
+    backtrace::Backtrace,
+    cell::RefCell,
+    error::Error,
+    fmt,
+    fmt::Formatter,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use cgmath::num_traits;
 use dashmap::DashMap;
-use glutin::config::GetGlConfig;
 use glutin::{
     config::ConfigTemplateBuilder,
     display::{DisplayFeatures, GetGlDisplay},
@@ -17,20 +19,22 @@ use glutin_winit::DisplayBuilder;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use thiserror::Error;
-use winit::event::{Event, StartCause};
-use winit::platform::run_return::EventLoopExtRunReturn;
-use winit::window::WindowId;
-use winit::{dpi::LogicalSize, event_loop::EventLoop, window::Fullscreen, window::WindowBuilder};
+use winit::{
+    dpi::LogicalSize,
+    event::{Event, StartCause},
+    event_loop::EventLoop,
+    platform::run_return::EventLoopExtRunReturn,
+    window::{Fullscreen, WindowBuilder, WindowId},
+};
 
-use violette_api::context::GraphicsContext;
-use violette_api::window::Window;
-use violette_api::{api::Api, window::WindowDesc};
-use violette_api::base::Resource;
+use violette_api::{api::Api, base::Resource, window::Window, window::WindowDesc};
 
-use crate::thread_guard::ThreadGuard;
-use crate::window::OpenGLWindow;
-use crate::window::WindowError;
-use crate::{context::OpenGLContext, Gl, window::OpenGLWindow};
+use crate::{
+    context::OpenGLContext,
+    thread_guard::ThreadGuard,
+    window::{OpenGLWindow, WindowError},
+    Gl,
+};
 
 #[derive(Debug, Copy, Clone, Error, FromPrimitive)]
 #[repr(u32)]
@@ -41,16 +45,16 @@ pub enum GlErrorKind {
     InvalidValue = gl::INVALID_VALUE,
     #[error("Invalid OpenGL operation")]
     InvalidOperation = gl::INVALID_OPERATION,
-    #[error("Stack Overflow")]
-    StackOverflow = gl::STACK_OVERFLOW,
-    #[error("Stack Underflow")]
-    StackUnderflow = gl::STACK_UNDERFLOW,
+    // #[error("Stack Overflow")]
+    // StackOverflow = gl::STACK_OVERFLOW,
+    // #[error("Stack Underflow")]
+    // StackUnderflow = gl::STACK_UNDERFLOW,
     #[error("Out of memory")]
     OutOfMemory = gl::OUT_OF_MEMORY,
     #[error("Invalid OpenGL operation on the framebuffer")]
     InvalidFramebufferOperation = gl::INVALID_FRAMEBUFFER_OPERATION,
-    #[error("Context lost")]
-    ContextLost = gl::CONTEXT_LOST,
+    // #[error("Context lost")]
+    // ContextLost = gl::CONTEX,
     #[error("Unknown OpenGL error")]
     UnknownError,
 }
@@ -66,7 +70,7 @@ impl GlErrorKind {
 #[derive(Debug)]
 pub struct OpenGLError {
     pub kind: GlErrorKind,
-    pub info: String,
+    pub info: Option<String>,
     pub backtrace: Backtrace,
 }
 
@@ -74,25 +78,29 @@ impl From<GlErrorKind> for OpenGLError {
     fn from(value: GlErrorKind) -> Self {
         Self {
             kind: value,
-            info: "".to_string(),
+            info: None,
             backtrace: Backtrace::capture(),
+        }
+    }
+}
+
+impl fmt::Display for OpenGLError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if let Some(info) = &self.info {
+            write!(f, "{}: {}", self.kind, info)
+        } else {
+            write!(f, "Caught OpenGL error: {}", self.kind)
         }
     }
 }
 
 impl Error for OpenGLError {}
 
-impl fmt::Display for OpenGLError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", self.kind, self.info)
-    }
-}
-
 impl OpenGLError {
-    pub fn with_info_log(gl: &Gl, info: impl ToString) -> Option<Self> {
-        GlErrorKind::current_error(&gl).map(|kind| Self {
-            kind,
-            info: info.to_string(),
+    pub fn with_info_log(gl: &Gl, info: impl ToString) -> Self {
+        Self {
+            kind: GlErrorKind::current_error(gl).unwrap_or(GlErrorKind::UnknownError),
+            info: Some(info.to_string()),
             backtrace: Backtrace::capture(),
         }
     }
@@ -101,7 +109,7 @@ impl OpenGLError {
         if let Some(kind) = GlErrorKind::current_error(&gl) {
             Err(Self {
                 kind,
-                info: kind.to_string(),
+                info: None,
                 backtrace: Backtrace::capture(),
             })
         } else {
@@ -162,30 +170,7 @@ impl Api for OpenGLApi {
     type Err = ApiError;
     type Window = OpenGLWindow;
 
-    fn create_graphics_context(
-        self: Arc<Self>,
-        window: Arc<Self::Window>,
-    ) -> Result<Self::GraphicsContext, Self::Err> {
-        let context = window.context();
-        let gl = crate::load_with(|sym| unsafe {
-            let sym = CString::new(sym).unwrap();
-            context.display().get_proc_address(sym.as_c_str())
-        });
-        let size = window.physical_size();
-        let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
-            window.raw_window_handle(),
-            size.x.try_into().unwrap(),
-            size.y.try_into().unwrap(),
-        );
-        let surface = unsafe {
-            context
-                .display()
-                .create_window_surface(&context.config(), &attrs)
-        }?;
-        Ok(OpenGLContext::new(gl, context, surface))
-    }
-
-    fn create_window(self: Arc<Self>, desc: WindowDesc) -> Result<Arc<Self::Window>, Self::Err> {
+    fn create_window(self: &Arc<Self>, desc: WindowDesc) -> Result<Arc<Self::Window>, Self::Err> {
         let template = ConfigTemplateBuilder::new()
             .with_alpha_size(8)
             .with_transparency(true);
@@ -271,8 +256,7 @@ impl Api for OpenGLApi {
                         window.value().request_redraw();
                     }
                 }
-                _ => {
-                }
+                _ => {}
             }
         });
         Ok(ret)

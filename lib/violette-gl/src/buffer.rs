@@ -93,7 +93,7 @@ impl<T> GlObject for Buffer<T> {
     }
 }
 
-impl<T> Resource for Buffer<T> {
+impl<T: Send + Sync> Resource for Buffer<T> {
     fn set_name(&self, name: impl ToString) {
         set_ext_label(self, name)
     }
@@ -112,8 +112,8 @@ impl<T> Bind for Buffer<T> {
     fn bind(&self) {
         tracing::trace!(
             message = "Bind buffer",
-            id = self.id().get(),
-            kind = ?self.id().1
+            id = self.id.get(),
+            kind = ?self.id.1
         );
         unsafe {
             self.gl.BindBuffer(gl_target(self.id.1), self.id.get());
@@ -146,7 +146,7 @@ impl<T: 'static + Send + Sync + AsStd140> ApiBuffer<T> for Buffer<T> {
         usage: BufferUsage,
     ) -> Result<(), Self::Err> {
         let std140 = data.into_iter().map(|t| t.as_std140()).collect::<Vec<_>>();
-        // let std140: &[u8] = bytemuck::cast_slice(&std140);
+        let std140: &[u8] = bytemuck::cast_slice(&std140);
         self.bufsize.store(std140.len(), Ordering::SeqCst);
         unsafe {
             self.gl.BufferData(
@@ -242,7 +242,7 @@ impl<'a, T: AsStd140> Drop for BufferSlice<'a, T> {
     }
 }
 
-impl<'a, T: AsStd140> ops::Deref for BufferSlice<'a, T> {
+impl<'a, T: Send + Sync + AsStd140> ops::Deref for BufferSlice<'a, T> {
     type Target = [T::Output];
 
     fn deref(&self) -> &Self::Target {
@@ -250,7 +250,7 @@ impl<'a, T: AsStd140> ops::Deref for BufferSlice<'a, T> {
     }
 }
 
-impl<'a, T: AsStd140> ReadBuffer<'a, T> for BufferSlice<'a, T> {
+impl<'a, T: Send + Sync + AsStd140> ReadBuffer<'a, T> for BufferSlice<'a, T> {
     fn len(&self) -> usize {
         self.data.len()
     }
@@ -275,7 +275,7 @@ impl<'a, T: AsStd140> Drop for BufferSliceMut<'a, T> {
     }
 }
 
-impl<'a, T: AsStd140> ops::Deref for BufferSliceMut<'a, T> {
+impl<'a, T: Send + Sync + AsStd140> ops::Deref for BufferSliceMut<'a, T> {
     type Target = [T::Output];
 
     fn deref(&self) -> &Self::Target {
@@ -283,13 +283,13 @@ impl<'a, T: AsStd140> ops::Deref for BufferSliceMut<'a, T> {
     }
 }
 
-impl<'a, T: AsStd140> ops::DerefMut for BufferSliceMut<'a, T> {
+impl<'a, T: Send + Sync + AsStd140> ops::DerefMut for BufferSliceMut<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.data
     }
 }
 
-impl<'a, T: AsStd140> ReadBuffer<'a, T> for BufferSliceMut<'a, T> {
+impl<'a, T: Send + Sync + AsStd140> ReadBuffer<'a, T> for BufferSliceMut<'a, T> {
     fn len(&self) -> usize {
         self.data.len()
     }
@@ -300,7 +300,7 @@ impl<'a, T: AsStd140> ReadBuffer<'a, T> for BufferSliceMut<'a, T> {
     }
 }
 
-impl<'a, T: AsStd140> WriteBuffer<'a, T> for BufferSliceMut<'a, T> {}
+impl<'a, T: Send + Sync + AsStd140> WriteBuffer<'a, T> for BufferSliceMut<'a, T> {}
 
 // TODO: port the fast code path (cf. impl below)
 #[cfg(feature = "fast")]

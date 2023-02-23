@@ -1,21 +1,35 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc, collections::HashSet, ffi::{CStr, CString}, marker::PhantomData, mem::ManuallyDrop, num::NonZeroU32, ops, sync::Mutex, fmt};
-use std::borrow::BorrowMut;
-use std::fmt::Formatter;
+use std::{
+    fmt::Formatter,
+    hash::{Hash, Hasher},
+    cell::RefCell,
+    collections::HashSet,
+    ffi::{CStr, CString},
+    fmt,
+    marker::PhantomData,
+    mem::ManuallyDrop,
+    num::NonZeroU32,
+    ops,
+    rc::Rc,
+    sync::Arc,
+    sync::Mutex
+};
 
 use cgmath::{Vector2, Vector3, Vector4};
 use crevice::std140::*;
 use dashmap::DashSet;
+use duplicate::duplicate_item;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use violette_api::value::ValueType;
 use violette_api::{
+    base::Resource,
+    value::ValueType,
     bind::Bind,
-    shader::{AsUniform, ShaderModule},
+    shader::{AsUniform, ShaderModule}
 };
-use violette_api::base::Resource;
+use violette_api::value::ScalarType;
 
-use crate::{api::GlErrorKind, thread_guard::ThreadGuard, api::OpenGLError, context::OpenGLContext, Gl, get_ext_label, set_ext_label};
+use crate::{api::GlErrorKind, api::OpenGLError, context::OpenGLContext, get_ext_label, set_ext_label, thread_guard::ThreadGuard, Gl, GlObject};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive)]
 #[repr(u32)]
@@ -48,7 +62,7 @@ impl Program {
         Ok(Self {
             gl: gl.clone(),
             id: unsafe {
-                NonZeroU32::new(gl::CreateProgram()).ok_or_else(|| {
+                NonZeroU32::new(gl.CreateProgram()).ok_or_else(|| {
                     OpenGLError::from(
                         GlErrorKind::current_error(gl).unwrap_or(GlErrorKind::UnknownError),
                     )
@@ -79,11 +93,29 @@ impl Bind for Program {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Hash)]
-pub struct Shader {
+struct Shader {
     gl: Gl,
     id: NonZeroU32,
 }
+
+impl fmt::Debug for Shader {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Shader").field(&self.id.get()).finish()
+    }
+}
+
+impl Hash for Shader {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+impl PartialEq for Shader {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for Shader {}
 
 impl Shader {
     pub fn with_source(gl: &Gl, typ: ShaderType, source: &str) -> Result<Self, OpenGLError> {
@@ -97,8 +129,30 @@ impl Shader {
 impl Drop for Shader {
     fn drop(&mut self) {
         unsafe {
-            gl::DeleteShader(self.id.get());
+            self.gl.DeleteShader(self.id.get());
         }
+    }
+}
+
+impl GlObject for Shader {
+    const GL_NAME: gl::types::GLenum = gl::SHADER_OBJECT_EXT;
+
+    fn gl(&self) -> &Gl {
+        &self.gl
+    }
+
+    fn id(&self) -> u32 {
+        self.id.get()
+    }
+}
+
+impl Resource for Shader {
+    fn set_name(&self, name: impl ToString) {
+        set_ext_label(self, name)
+    }
+
+    fn get_name(&self) -> Option<String> {
+        get_ext_label(self)
     }
 }
 
@@ -107,7 +161,7 @@ impl Shader {
         Ok(Self {
             gl: gl.clone(),
             id: unsafe {
-                NonZeroU32::new(gl::CreateShader(typ as _)).ok_or_else(|| {
+                NonZeroU32::new(gl.CreateShader(typ as _)).ok_or_else(|| {
                     OpenGLError::from(
                         GlErrorKind::current_error(gl).unwrap_or(GlErrorKind::UnknownError),
                     )
@@ -121,7 +175,7 @@ impl Shader {
         let source_len = source.as_bytes().len();
         unsafe {
             let lengths = [source_len as gl::types::GLint];
-            gl::ShaderSource(
+            self.gl.ShaderSource(
                 self.id.get(),
                 1,
                 &source.as_c_str().as_ptr(),
@@ -132,22 +186,22 @@ impl Shader {
 
     pub fn compile(&self) -> Result<(), OpenGLError> {
         let status = unsafe {
-            gl::CompileShader(self.id.get());
+            self.gl.CompileShader(self.id.get());
             let mut status = 0;
-            gl::GetShaderiv(self.id.get(), gl::COMPILE_STATUS, &mut status);
-            status as gl::types::GLboolean == gl::FALSE
+            self.gl.GetShaderiv(self.id.get(), gl::COMPILE_STATUS, &mut status);
+            status as gl::types::GLboolean == gl::TRUE
         };
         if !status {
             let info_log = unsafe {
                 let mut buf = vec![0; 2048];
                 let mut len = 0;
-                gl::GetShaderInfoLog(self.id.get(), 2048, &mut len, buf.as_mut_ptr().cast());
+                self.gl.GetShaderInfoLog(self.id.get(), 2048, &mut len, buf.as_mut_ptr().cast());
                 CStr::from_bytes_with_nul(&buf[..(len + 1) as _])
                     .unwrap()
                     .to_string_lossy()
                     .to_string()
             };
-            Err(OpenGLError::with_info_log(gl, info_log).unwrap())
+            Err(OpenGLError::with_info_log(&self.gl, info_log))
         } else {
             Ok(())
         }
@@ -180,6 +234,42 @@ pub enum Uniform {
     SliceInt(Rc<[i32]>),
     SliceUint(Rc<[u32]>),
     SliceFloat(Rc<[f32]>),
+}
+
+#[duplicate_item(
+ty      vec         uniform_ty;
+[i32]   [Vector2]   [Ivec2];
+[u32]   [Vector2]   [UIvec2];
+[f32]   [Vector2]   [Vec2];
+[i32]   [Vector3]   [Ivec3];
+[u32]   [Vector3]   [UIvec3];
+[f32]   [Vector3]   [Vec3];
+[i32]   [Vector4]   [Ivec4];
+[u32]   [Vector4]   [UIvec4];
+[f32]   [Vector4]   [Vec4];
+)]
+impl From<vec<ty>> for Uniform {
+    fn from(value: vec<ty>) -> Self {
+        Uniform::uniform_ty(value.into())
+    }
+}
+
+#[duplicate_item(
+vec         num_components;
+[Vector2]   [2];
+[Vector3]   [3];
+[Vector4]   [4];
+)]
+#[duplicate_item(
+ty          scalar_ty;
+[i32]       [I32];
+[u32]       [U32];
+[f32]       [F32];
+)]
+impl AsUniform<Program> for vec<ty> {
+    fn value_type() -> ValueType {
+        ValueType::Vector(num_components, ScalarType::scalar_ty)
+    }
 }
 
 impl FromPrimitive for Uniform {
@@ -240,6 +330,18 @@ impl FromPrimitive for Uniform {
     }
 }
 
+impl GlObject for Program {
+    const GL_NAME: gl::types::GLenum = gl::PROGRAM_OBJECT_EXT;
+
+    fn gl(&self) -> &Gl {
+        &self.gl
+    }
+
+    fn id(&self) -> u32 {
+        self.id.get()
+    }
+}
+
 impl Resource for Program {
     fn set_name(&self, name: impl ToString) {
         set_ext_label(self, name)
@@ -250,14 +352,21 @@ impl Resource for Program {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ShaderSource {
+    pub source: String,
+    pub kind: ShaderType,
+}
+
 impl ShaderModule for Program {
     type Gc = OpenGLContext;
     type Err = OpenGLError;
-    type ShaderSource = Shader;
+    type ShaderSource = ShaderSource;
     type Uniform = Uniform;
     type UniformLocation = u32;
 
     fn add_shader_source(&self, source: Self::ShaderSource) -> Result<(), Self::Err> {
+        let source = Shader::with_source(&self.gl, source.kind, &source.source)?;
         unsafe { self.gl.AttachShader(self.id.get(), source.id.get()) }
         self.shaders.insert(source);
         OpenGLError::guard(&self.gl)
@@ -267,20 +376,22 @@ impl ShaderModule for Program {
         let status = unsafe {
             self.gl.LinkProgram(self.id.get());
             let mut status = 0;
-            self.gl.GetProgramiv(self.id.get(), gl::LINK_STATUS, &mut status);
+            self.gl
+                .GetProgramiv(self.id.get(), gl::LINK_STATUS, &mut status);
             status as gl::types::GLboolean == gl::TRUE
         };
         if !status {
             let info_log = unsafe {
                 let mut buf = vec![0; 2048];
                 let mut len = 0;
-                self.gl.GetProgramInfoLog(self.id.get(), 2048, &mut len, buf.as_mut_ptr().cast());
+                self.gl
+                    .GetProgramInfoLog(self.id.get(), 2048, &mut len, buf.as_mut_ptr().cast());
                 CStr::from_bytes_with_nul(&buf[..len as _])
                     .unwrap()
                     .to_string_lossy()
                     .to_string()
             };
-            return Err(OpenGLError::with_info_log(&self.gl, info_log).unwrap());
+            return Err(OpenGLError::with_info_log(&self.gl, info_log));
         }
 
         for shader in self.shaders.iter() {
@@ -297,7 +408,8 @@ impl ShaderModule for Program {
         unsafe {
             let mut loc = 0;
             let name = CString::new(name).unwrap();
-            self.gl.GetUniformLocation(self.id.get(), name.as_c_str().as_ptr());
+            self.gl
+                .GetUniformLocation(self.id.get(), name.as_c_str().as_ptr());
             (loc >= 0).then_some(loc as _)
         }
     }
@@ -318,15 +430,42 @@ impl ShaderModule for Program {
                 Uniform::Ivec4(v) => self.gl.Uniform4iv(location, 1, v.as_ptr()),
                 Uniform::UIvec4(v) => self.gl.Uniform4uiv(location, 1, v.as_ptr()),
                 Uniform::Vec4(m) => self.gl.Uniform4fv(location, 1, m.as_ptr()),
-                Uniform::Mat2(m) => self.gl.UniformMatrix2fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat3(m) => self.gl.UniformMatrix3fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat4(m) => self.gl.UniformMatrix4fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat23(m) => self.gl.UniformMatrix2x3fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat24(m) => self.gl.UniformMatrix2x4fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat32(m) => self.gl.UniformMatrix3x2fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat34(m) => self.gl.UniformMatrix3x4fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat42(m) => self.gl.UniformMatrix4x2fv(location, 1, gl::FALSE, m.as_ptr().cast()),
-                Uniform::Mat43(m) => self.gl.UniformMatrix4x3fv(location, 1, gl::FALSE, m.as_ptr().cast()),
+                Uniform::Mat2(m) => {
+                    self.gl
+                        .UniformMatrix2fv(location, 1, gl::FALSE, m.as_ptr().cast())
+                }
+                Uniform::Mat3(m) => {
+                    self.gl
+                        .UniformMatrix3fv(location, 1, gl::FALSE, m.as_ptr().cast())
+                }
+                Uniform::Mat4(m) => {
+                    self.gl
+                        .UniformMatrix4fv(location, 1, gl::FALSE, m.as_ptr().cast())
+                }
+                Uniform::Mat23(m) => {
+                    self.gl
+                        .UniformMatrix2x3fv(location, 1, gl::FALSE, m.as_ptr().cast())
+                }
+                Uniform::Mat24(m) => {
+                    self.gl
+                        .UniformMatrix2x4fv(location, 1, gl::FALSE, m.as_ptr().cast())
+                }
+                Uniform::Mat32(m) => {
+                    self.gl
+                        .UniformMatrix3x2fv(location, 1, gl::FALSE, m.as_ptr().cast())
+                }
+                Uniform::Mat34(m) => {
+                    self.gl
+                        .UniformMatrix3x4fv(location, 1, gl::FALSE, m.as_ptr().cast())
+                }
+                Uniform::Mat42(m) => {
+                    self.gl
+                        .UniformMatrix4x2fv(location, 1, gl::FALSE, m.as_ptr().cast())
+                }
+                Uniform::Mat43(m) => {
+                    self.gl
+                        .UniformMatrix4x3fv(location, 1, gl::FALSE, m.as_ptr().cast())
+                }
                 _ => todo!(),
             }
         }

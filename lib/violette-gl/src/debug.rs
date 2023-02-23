@@ -3,6 +3,7 @@ use std::{cell::RefCell, ffi::c_void};
 use gl::types::{GLchar, GLenum, GLsizei, GLuint};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use crate::Gl;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
 #[repr(u32)]
@@ -77,14 +78,14 @@ extern "system" fn message_callback(
     }
 }
 
-pub fn set_message_callback<F: 'static + Fn(GlDebugData)>(cb: F) {
-    if !gl::DebugMessageCallback::is_loaded() {
+pub fn set_message_callback<F: 'static + Fn(GlDebugData)>(gl: &Gl, cb: F) {
+    if !gl.DebugMessageCallback.is_loaded() {
         tracing::warn!("glDebugMessageCallback is not available, cannot set debug callback");
     } else {
         unsafe {
             USER_CALLBACK.get_mut().replace(Box::new(cb));
-            gl::Enable(gl::DEBUG_OUTPUT);
-            gl::DebugMessageCallback(Some(message_callback), std::ptr::null_mut());
+            gl.Enable(gl::DEBUG_OUTPUT);
+            gl.DebugMessageCallback(Some(message_callback), std::ptr::null_mut());
         }
     }
 }

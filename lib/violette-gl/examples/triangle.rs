@@ -1,32 +1,43 @@
-use std::borrow::Cow;
-use std::fs::File;
-use std::time::Instant;
+use std::{
+    fs::File,
+    borrow::Cow,
+    time::Instant
+};
 
 use cgmath::{Vector2, Vector3};
 use crevice::std140::Vec2;
 use num_traits::Zero;
-use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::{EnvFilter, Layer};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{
+    fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
+};
 
-use violette_api::bind::Bind;
-use violette_api::buffer::BufferUsage;
-use violette_api::context::ClearBuffers;
-use violette_api::framebuffer::{DrawMode, Framebuffer};
-use violette_api::math::{Color, Rect};
-use violette_api::shader::ShaderModule;
-use violette_api::value::{ScalarType, ValueType};
-use violette_api::vao::{VertexArray, VertexLayout};
-use violette_api::window::Window;
 use violette_api::{
     api::Api,
-    buffer::{Buffer, BufferKind::Vertex},
-    context::GraphicsContext,
-    window::WindowDesc,
+    bind::Bind,
+    buffer::{
+        BufferUsage,
+        Buffer,
+        BufferKind::Vertex
+    },
+    context::{
+        ClearBuffers,
+        GraphicsContext
+    },
+    framebuffer::{DrawMode, Framebuffer},
+    math::{Color, Rect},
+    shader::ShaderModule,
+    value::{ScalarType, ValueType},
+    vao::{VertexArray, VertexLayout},
+    window::{
+        Window,
+        WindowDesc
+    }
 };
-use violette_gl::api::OpenGLApi;
-use violette_gl::program::{Shader, ShaderType};
+use violette_gl::{
+    program::ShaderSource,
+    api::OpenGLApi,
+    program::ShaderType
+};
 
 const VERTEX_BUFFER: [Vector2<f32>; 3] = [
     Vector2::new(-0.5, -0.5),
@@ -75,28 +86,41 @@ fn main() -> eyre::Result<()> {
         }],
     )?;
     vao.bind_buffer(0, &buffer)?;
+    vao.unbind();
+    buffer.unbind();
 
-    let vertex_shader = Shader::with_source(ShaderType::Vertex, VERTEX_SHADER)?;
-    let fragment_shader = Shader::with_source(ShaderType::Fragment, FRAGMENT_SHADER)?;
     let program = context.create_shader_module()?;
-    program.add_shader_source(vertex_shader)?;
-    program.add_shader_source(fragment_shader)?;
+    program.add_shader_source(ShaderSource {
+        source: VERTEX_SHADER.to_string(),
+        kind: ShaderType::Vertex,
+    })?;
+    program.add_shader_source(ShaderSource {
+        source: FRAGMENT_SHADER.to_string(),
+        kind: ShaderType::Fragment,
+    })?;
     program.link()?;
 
     let uniform_color = program.uniform_location("color").unwrap();
 
     let start = Instant::now();
     window.clone().attach_renderer(move || {
-        let (s,c) = start.elapsed().as_secs_f32().sin_cos();
+        let (s, c) = start.elapsed().as_secs_f32().sin_cos();
         let color = Vector3::new(s, 0.5, c);
         context.backbuffer().bind();
-        context.viewport(Rect::from_pos_size(Vector2::zero(), window.physical_size().cast().unwrap()));
+        context.viewport(Rect::from_pos_size(
+            Vector2::zero(),
+            window.physical_size().cast().unwrap(),
+        ));
         context.set_clear_color(Color::BLACK);
         context.clear(ClearBuffers::COLOR);
         program.bind();
         program.set_uniform(uniform_color, color);
-        vao.bind();
-        context.backbuffer().draw_arrays(&program, &vao, DrawMode::Triangles, 3)?;
+        // vao.bind();
+        buffer.bind();
+        context
+            .backbuffer()
+            .draw_arrays(&program, &vao, DrawMode::Triangles, 3)?;
+        buffer.unbind();
         context.swap_buffers();
         Ok(())
     });
@@ -116,8 +140,6 @@ fn install_tracing() {
     //     .with_thread_ids(true)
     //     .with_span_events(FmtSpan::ENTER | FmtSpan::EXIT)
     //     .with_writer(File::create("log.jsonl").unwrap());
-    tracing_subscriber::registry()
-        .with(fmt_layer)
-        .init();
+    tracing_subscriber::registry().with(fmt_layer).init();
     // .with(json_layer);
 }

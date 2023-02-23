@@ -1,31 +1,52 @@
-use std::error::Error;
-use std::fmt;
-use std::fmt::Formatter;
-use std::ops::Deref;
-use std::sync::Arc;
+use std::ffi::CString;
+use std::{
+    error::Error,
+    fmt::{self, Formatter},
+    ops::Deref,
+    sync::Arc,
+};
+use std::sync::Weak;
 
 use cgmath::Vector2;
 use crevice::std140::AsStd140;
 use glutin::{
     context::PossiblyCurrentContext,
+    context::{ContextApi, ContextAttributesBuilder, GlProfile, Robustness, Version},
+    display::GetGlDisplay,
     prelude::*,
+    surface::SurfaceAttributesBuilder,
     surface::{Surface, WindowSurface},
 };
+use raw_window_handle::HasRawWindowHandle;
+use thiserror::Error;
 use winit::window::Window;
 
-use violette_api::context::GraphicsContext;
+use violette_api::window::Window as ApiWindow;
 use violette_api::{
     buffer::BufferKind,
     context::ClearBuffers,
+    context::GraphicsContext,
     math::{Color, Rect},
 };
 
-use crate::{api::{OpenGLApi, OpenGLError}, Gl};
-use crate::arrays::VertexArray;
-use crate::buffer::Buffer;
-use crate::framebuffer::{Framebuffer, FramebufferImpl};
-use crate::program::Program;
-use crate::thread_guard::ThreadGuard;
+use crate::{
+    window::OpenGLWindow,
+    api::{OpenGLApi, OpenGLError},
+    arrays::VertexArray,
+    buffer::Buffer,
+    framebuffer::{Framebuffer},
+    program::Program,
+    thread_guard::ThreadGuard,
+    Gl
+};
+
+#[derive(Debug, Error)]
+pub enum ContextError {
+    #[error("Windowing error: {0}")]
+    Glutin(#[from] glutin::error::Error),
+    #[error("OpenGL error: {0}")]
+    OpenGL(#[from] OpenGLError),
+}
 
 pub struct WindowDesc {
     pub name: String,
@@ -49,39 +70,101 @@ pub struct OpenGLContextImpl {
 
 impl fmt::Debug for OpenGLContextImpl {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("OpenGLContextImpl")
-            .finish_non_exhaustive()
+        f.debug_tuple("OpenGLContextImpl").finish()
+    }
+}
+
+impl OpenGLContextImpl {
+    fn create(gl: Gl, window: &OpenGLWindow) -> Result<Self, ContextError> {
+        let size = window.physical_size();
+        let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
+            window.raw_window_handle(),
+            size.x.try_into().unwrap(),
+            size.y.try_into().unwrap(),
+        );
+        let config = window.config();
+        let context_attributes = ContextAttributesBuilder::new()
+            .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
+            .with_profile(GlProfile::Core)
+            .with_robustness(Robustness::RobustLoseContextOnReset)
+            .with_debug(cfg!(debug_assertions))
+            .build(Some(window.raw_window_handle()));
+        let context = unsafe { config.display().create_context(config, &context_attributes) }?;
+        let surface = unsafe { config.display().create_window_surface(&config, &attrs) }?;
+        let context = Arc::new(ThreadGuard::new(context.make_current(&surface)?));
+        Ok(Self {
+            gl,
+            gl_surface: surface,
+            gl_context: context,
+        })
+    }
+
+    fn make_current(&self) -> Result<(), ContextError> {
+        self.gl_context.make_current(&self.gl_surface)?;
+        Ok(())
     }
 }
 
 #[derive(Debug)]
 pub struct OpenGLContext {
     ctx_impl: ThreadGuard<OpenGLContextImpl>,
+    window: Weak<OpenGLWindow>,
     backbuffer: Arc<Framebuffer>,
 }
 
 impl OpenGLContext {
-    pub(crate) fn new(
-        gl: Gl,
-        context: Arc<ThreadGuard<PossiblyCurrentContext>>,
-        surface: Surface<WindowSurface>,
-    ) -> Self {
-        let inner = OpenGLContextImpl {
-            gl,
-            gl_context: context,
-            gl_surface: surface,
-        };
-        Self {
+    pub(crate) fn new(window: Arc<OpenGLWindow>) -> Result<Self, ContextError> {
+        tracing::debug!("Load OpenGL symbols");
+        let gl = crate::load_with(|sym| {
+            window
+                .config()
+                .display()
+                .get_proc_address(CString::new(sym).unwrap().as_c_str())
+        });
+        tracing::debug!("Set OpenGL debug message callbacks");
+        crate::debug::set_message_callback(&gl, |data| {
+            use crate::debug::CallbackSeverity::*;
+            match data.severity {
+                Notification => {
+                    tracing::debug!(target: "gl", source=?data.source, message=%data.message, r#type=?data.r#type)
+                }
+                Low => {
+                    tracing::info!(target: "gl", source=?data.source, message=%data.message, r#type=?data.r#type)
+                }
+                Medium => {
+                    tracing::warn!(target: "gl", source=?data.source, message=%data.message, r#type=?data.r#type)
+                }
+                High => {
+                    tracing::error!(target: "gl", source=?data.source, message=%data.message, r#type=?data.r#type)
+                }
+            };
+        });
+        let inner = OpenGLContextImpl::create(gl.clone(), &window)?;
+        Ok(Self {
             ctx_impl: ThreadGuard::new(inner),
-            backbuffer: Arc::new(Framebuffer(ThreadGuard::new(FramebufferImpl::backbuffer()))),
-        }
+            backbuffer: Arc::new(Framebuffer::backbuffer(&gl)),
+            window: Arc::downgrade(&window),
+        })
+    }
+
+    pub(crate) fn resize(&self, size: Vector2<u32>) {
+        tracing::debug!(message="Context resize", size=?size);
+        self.ctx_impl.gl_surface.resize(
+            &self.ctx_impl.gl_context,
+            size.x.try_into().unwrap(),
+            size.y.try_into().unwrap(),
+        );
+    }
+
+    pub(crate) fn make_current(&self) -> Result<(), ContextError> {
+        self.ctx_impl.make_current()
     }
 }
 
 impl GraphicsContext for OpenGLContext {
-    type Api = OpenGLApi;
+    type Window = OpenGLWindow;
     type Err = OpenGLError;
-    type Buffer<T:'static + Send + Sync + AsStd140> = Buffer<T>;
+    type Buffer<T: 'static + Send + Sync + AsStd140> = Buffer<T>;
     type Framebuffer = Framebuffer;
     type VertexArray = VertexArray;
     type ShaderModule = Program;
@@ -152,19 +235,19 @@ impl GraphicsContext for OpenGLContext {
         }
     }
 
-    fn create_buffer<T: 'static + AsStd140>(
+    fn create_buffer<T: 'static + Send + Sync + AsStd140>(
         &self,
         kind: BufferKind,
     ) -> Result<Arc<Self::Buffer<T>>, Self::Err> {
-        Ok(Arc::new(Buffer::new(&self.gl(), kind)))
+        Ok(Arc::new(Buffer::new(self.gl(), kind)))
     }
 
     fn create_vertex_array(&self) -> Result<Arc<Self::VertexArray>, Self::Err> {
-        Ok(Arc::new(VertexArray::new(&self.gl())))
+        Ok(Arc::new(VertexArray::new(self.gl())))
     }
 
     fn create_shader_module(&self) -> Result<Arc<Self::ShaderModule>, Self::Err> {
-        Ok(Arc::new(Program::new()?))
+        Ok(Arc::new(Program::new(self.gl())?))
     }
 
     fn create_framebuffer(&self) -> Result<Arc<Self::Framebuffer>, Self::Err> {
@@ -172,7 +255,10 @@ impl GraphicsContext for OpenGLContext {
     }
 
     fn swap_buffers(&self) {
-        self.ctx_impl.gl_surface.swap_buffers(&self.ctx_impl.gl_context).unwrap();
+        self.ctx_impl
+            .gl_surface
+            .swap_buffers(&self.ctx_impl.gl_context)
+            .unwrap();
     }
 }
 
