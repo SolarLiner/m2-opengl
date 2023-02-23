@@ -11,6 +11,7 @@ use crate::{
     vao::VertexArray,
     window::Window
 };
+use crate::texture::{AsTextureFormat, Dimension, Texture};
 
 bitflags! {
     pub struct ClearBuffers: u8 {
@@ -27,6 +28,7 @@ pub trait GraphicsContext: Send + Sync {
     type Framebuffer: Framebuffer<Gc=Self>;
     type VertexArray: VertexArray<Gc=Self>;
     type ShaderModule: ShaderModule<Gc=Self>;
+    type Texture<F: AsTextureFormat>: Texture<F, Gc=Self>;
 
     fn backbuffer(&self) -> Arc<Self::Framebuffer>;
     fn clear(&self, mode: ClearBuffers);
@@ -41,5 +43,7 @@ pub trait GraphicsContext: Send + Sync {
     fn create_vertex_array(&self) -> Result<Arc<Self::VertexArray>, Self::Err>;
     fn create_shader_module(&self) -> Result<Arc<Self::ShaderModule>, Self::Err>;
     fn create_framebuffer(&self) -> Result<Arc<Self::Framebuffer>, Self::Err>;
+    fn create_texture<F: AsTextureFormat>(&self, dimensions: Dimension) -> Result<Arc<Self::Texture<F>>, Self::Err>;
+    fn upload_texture<F: AsTextureFormat + image::Pixel>(&self, image: &image::ImageBuffer<F, Vec<<F as AsTextureFormat>::Subpixel>>) -> Result<Arc<Self::Texture<F>>, Self::Err>;
     fn swap_buffers(&self);
 }

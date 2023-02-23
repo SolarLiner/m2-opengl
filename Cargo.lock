@@ -1761,6 +1761,7 @@ dependencies = [
  "bytemuck",
  "crevice",
  "duplicate",
+ "image",
  "nalgebra-glm",
  "num-traits",
  "raw-window-handle",

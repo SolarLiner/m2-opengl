@@ -15,6 +15,7 @@ pub mod framebuffer;
 pub mod program;
 mod thread_guard;
 pub mod window;
+pub mod texture;
 
 type Gl = Arc<ThreadGuard<gl::Gl>>;
 
