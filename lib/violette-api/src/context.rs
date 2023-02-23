@@ -1,15 +1,13 @@
 use std::sync::Arc;
 
 use bitflags::bitflags;
-use crevice::std140::AsStd140;
+use bytemuck::Pod;
 
 use crate::{
-    api::Api,
     buffer::{Buffer, BufferKind},
     framebuffer::Framebuffer,
     math::{Color, Rect},
     shader::ShaderModule,
-    base::Resource,
     vao::VertexArray,
     window::Window
 };
@@ -25,7 +23,7 @@ bitflags! {
 pub trait GraphicsContext: Send + Sync {
     type Window: Window<Gc=Self>;
     type Err: Into<<Self::Window as Window>::Err>;
-    type Buffer<T: 'static + Send + Sync + AsStd140>: Buffer<T, Gc=Self>;
+    type Buffer<T: 'static + Send + Sync + Pod>: Buffer<T, Gc=Self>;
     type Framebuffer: Framebuffer<Gc=Self>;
     type VertexArray: VertexArray<Gc=Self>;
     type ShaderModule: ShaderModule<Gc=Self>;
@@ -39,7 +37,7 @@ pub trait GraphicsContext: Send + Sync {
     fn set_scissor_test(&self, enabled: bool);
     fn set_depth_test(&self, enabled: bool);
     fn viewport(&self, rect: Rect<f32>);
-    fn create_buffer<T: Send + Sync + AsStd140>(&self, kind: BufferKind) -> Result<Arc<Self::Buffer<T>>, Self::Err>;
+    fn create_buffer<T: Send + Sync + Pod>(&self, kind: BufferKind) -> Result<Arc<Self::Buffer<T>>, Self::Err>;
     fn create_vertex_array(&self) -> Result<Arc<Self::VertexArray>, Self::Err>;
     fn create_shader_module(&self) -> Result<Arc<Self::ShaderModule>, Self::Err>;
     fn create_framebuffer(&self) -> Result<Arc<Self::Framebuffer>, Self::Err>;

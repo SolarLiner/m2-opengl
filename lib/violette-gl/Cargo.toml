@@ -7,8 +7,7 @@ edition = "2021"
 
 [dependencies]
 atomic_float = "0.1.0"
-bytemuck = "1.13.0"
-cgmath = "0.18.0"
+bytemuck = { version = "1.13.0" }
 crevice = { version = "0.12.0", features = ["cgmath"] }
 crossbeam-channel = "0.5.6"
 duplicate = "0.4.1"

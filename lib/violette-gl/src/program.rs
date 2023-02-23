@@ -1,7 +1,6 @@
 use std::{
     fmt::Formatter,
     hash::{Hash, Hasher},
-    cell::RefCell,
     collections::HashSet,
     ffi::{CStr, CString},
     fmt,
@@ -10,12 +9,13 @@ use std::{
     num::NonZeroU32,
     ops,
     rc::Rc,
-    sync::Arc,
-    sync::Mutex
+    sync::{
+        Arc,
+        Mutex
+    }
 };
 
-use cgmath::{Vector2, Vector3, Vector4};
-use crevice::std140::*;
+use violette_api::math::*;
 use dashmap::DashSet;
 use duplicate::duplicate_item;
 use num_derive::FromPrimitive;
@@ -237,16 +237,16 @@ pub enum Uniform {
 }
 
 #[duplicate_item(
-ty      vec         uniform_ty;
-[i32]   [Vector2]   [Ivec2];
-[u32]   [Vector2]   [UIvec2];
-[f32]   [Vector2]   [Vec2];
-[i32]   [Vector3]   [Ivec3];
-[u32]   [Vector3]   [UIvec3];
-[f32]   [Vector3]   [Vec3];
-[i32]   [Vector4]   [Ivec4];
-[u32]   [Vector4]   [UIvec4];
-[f32]   [Vector4]   [Vec4];
+ty      vec        uniform_ty;
+[i32]   [Vec2]     [Ivec2];
+[u32]   [Vec2]     [UIvec2];
+[f32]   [Vec2]     [Vec2];
+[i32]   [Vec3]     [Ivec3];
+[u32]   [Vec3]     [UIvec3];
+[f32]   [Vec3]     [Vec3];
+[i32]   [Vec4]     [Ivec4];
+[u32]   [Vec4]     [UIvec4];
+[f32]   [Vec4]     [Vec4];
 )]
 impl From<vec<ty>> for Uniform {
     fn from(value: vec<ty>) -> Self {
@@ -255,20 +255,20 @@ impl From<vec<ty>> for Uniform {
 }
 
 #[duplicate_item(
-vec         num_components;
-[Vector2]   [2];
-[Vector3]   [3];
-[Vector4]   [4];
+mat         mat_uniform;
+[Mat2]      [Mat2];
+[Mat2x3]    [Mat23];
+[Mat2x4]    [Mat24];
+[Mat3x2]    [Mat32];
+[Mat3]      [Mat3];
+[Mat3x4]    [Mat34];
+[Mat4x2]    [Mat42];
+[Mat4x3]    [Mat43];
+[Mat4]      [Mat4];
 )]
-#[duplicate_item(
-ty          scalar_ty;
-[i32]       [I32];
-[u32]       [U32];
-[f32]       [F32];
-)]
-impl AsUniform<Program> for vec<ty> {
-    fn value_type() -> ValueType {
-        ValueType::Vector(num_components, ScalarType::scalar_ty)
+impl From<mat<f32>> for Uniform {
+    fn from(value: mat<f32>) -> Self {
+        Uniform::mat_uniform(value.into())
     }
 }
 

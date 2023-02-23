@@ -1,11 +1,15 @@
-use std::borrow::Cow;
-use std::error::Error;
-use std::ops::Deref;
-use std::sync::{Arc, RwLockReadGuard};
-use cgmath::Vector2;
+use std::{
+    error::Error,
+    borrow::Cow,
+    ops::Deref,
+    sync::{Arc, RwLockReadGuard}
+};
+use nalgebra_glm::TVec2 as Vector2;
 use violette_input::Input;
-use crate::api::Api;
-use crate::context::GraphicsContext;
+use crate::{
+    api::Api,
+    context::GraphicsContext
+};
 
 pub struct WindowDesc {
     pub logical_size: Vector2<f32>,

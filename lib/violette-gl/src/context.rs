@@ -1,43 +1,48 @@
 use std::ffi::CString;
+use std::sync::Weak;
 use std::{
-    error::Error,
     fmt::{self, Formatter},
-    ops::Deref,
     sync::Arc,
 };
-use std::sync::Weak;
 
-use cgmath::Vector2;
-use crevice::std140::AsStd140;
+use bytemuck::Pod;
 use glutin::{
-    context::PossiblyCurrentContext,
-    context::{ContextApi, ContextAttributesBuilder, GlProfile, Robustness, Version},
+    context::{
+        PossiblyCurrentContext,
+        ContextApi,
+        ContextAttributesBuilder,
+        GlProfile,
+        Robustness,
+        Version
+    },
     display::GetGlDisplay,
     prelude::*,
-    surface::SurfaceAttributesBuilder,
-    surface::{Surface, WindowSurface},
+    surface::{
+        SurfaceAttributesBuilder,
+        Surface,
+        WindowSurface
+    }
 };
+use violette_api::math::glm::TVec2 as Vector2;
 use raw_window_handle::HasRawWindowHandle;
 use thiserror::Error;
-use winit::window::Window;
 
-use violette_api::window::Window as ApiWindow;
 use violette_api::{
     buffer::BufferKind,
-    context::ClearBuffers,
-    context::GraphicsContext,
+    context::{ClearBuffers, GraphicsContext},
     math::{Color, Rect},
+    window::Window as ApiWindow,
 };
 
 use crate::{
-    window::OpenGLWindow,
     api::{OpenGLApi, OpenGLError},
     arrays::VertexArray,
     buffer::Buffer,
-    framebuffer::{Framebuffer},
+    framebuffer::Framebuffer,
     program::Program,
     thread_guard::ThreadGuard,
-    Gl
+    window::OpenGLWindow,
+    Gl,
 };
 
 #[derive(Debug, Error)]
@@ -164,7 +169,7 @@ impl OpenGLContext {
 impl GraphicsContext for OpenGLContext {
     type Window = OpenGLWindow;
     type Err = OpenGLError;
-    type Buffer<T: 'static + Send + Sync + AsStd140> = Buffer<T>;
+    type Buffer<T: 'static + Send + Sync + Pod> = Buffer<T>;
     type Framebuffer = Framebuffer;
     type VertexArray = VertexArray;
     type ShaderModule = Program;
@@ -235,7 +240,7 @@ impl GraphicsContext for OpenGLContext {
         }
     }
 
-    fn create_buffer<T: 'static + Send + Sync + AsStd140>(
+    fn create_buffer<T: 'static + Send + Sync + Pod>(
         &self,
         kind: BufferKind,
     ) -> Result<Arc<Self::Buffer<T>>, Self::Err> {

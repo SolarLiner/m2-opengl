@@ -1,14 +1,8 @@
-use std::sync::Arc;
-use crate::{
-    bind::Bind,
-    base::Resource,
-    context::GraphicsContext,
-    value::ValueType
-};
+use crate::{base::Resource, bind::Bind, context::GraphicsContext, value::AsValueType};
 
-pub trait AsUniform<S: ?Sized + ShaderModule>: Into<S::Uniform> {
-    fn value_type() -> ValueType;
-}
+pub trait AsUniform<S: ?Sized + ShaderModule>: Into<S::Uniform> + AsValueType {}
+
+impl<S: ShaderModule, T: Into<S::Uniform> + AsValueType> AsUniform<S> for T {}
 
 pub trait ShaderModule: Resource + Bind {
     type Gc: GraphicsContext;

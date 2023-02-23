@@ -1,48 +1,28 @@
-use std::{
-    fs::File,
-    borrow::Cow,
-    time::Instant
-};
+use std::{borrow::Cow, fs::File, time::Instant};
 
-use cgmath::{Vector2, Vector3};
-use crevice::std140::Vec2;
 use num_traits::Zero;
-use tracing_subscriber::{
-    fmt::format::FmtSpan, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer,
-};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
+use violette_api::base::Resource;
+use violette_api::math::{Vec2, Vec3};
 use violette_api::{
     api::Api,
     bind::Bind,
-    buffer::{
-        BufferUsage,
-        Buffer,
-        BufferKind::Vertex
-    },
-    context::{
-        ClearBuffers,
-        GraphicsContext
-    },
+    buffer::{Buffer, BufferKind::Vertex, BufferUsage},
+    context::{ClearBuffers, GraphicsContext},
     framebuffer::{DrawMode, Framebuffer},
     math::{Color, Rect},
     shader::ShaderModule,
     value::{ScalarType, ValueType},
     vao::{VertexArray, VertexLayout},
-    window::{
-        Window,
-        WindowDesc
-    }
+    window::{Window, WindowDesc},
 };
-use violette_gl::{
-    program::ShaderSource,
-    api::OpenGLApi,
-    program::ShaderType
-};
+use violette_gl::{api::OpenGLApi, program::ShaderSource, program::ShaderType};
 
-const VERTEX_BUFFER: [Vector2<f32>; 3] = [
-    Vector2::new(-0.5, -0.5),
-    Vector2::new(0.0, 0.5),
-    Vector2::new(0.5, -0.5),
+const VERTEX_BUFFER: [Vec2<f32>; 3] = [
+    Vec2::new(-0.5, -0.5),
+    Vec2::new(0.0, 0.5),
+    Vec2::new(0.5, -0.5),
 ];
 
 const VERTEX_SHADER: &str = r#"
@@ -69,27 +49,24 @@ fn main() -> eyre::Result<()> {
     let api = OpenGLApi::new();
     let window = api.create_window(WindowDesc {
         title: Some(Cow::Borrowed("Hello Triangle")),
-        logical_size: Vector2::new(600., 600.),
+        logical_size: Vec2::new(600., 600.),
         ..Default::default()
     })?;
     let context = window.context()?;
-    let buffer = context.create_buffer(Vertex)?;
+    let buffer = context.create_buffer(Vertex)?.named("Vertex buffer");
     buffer.bind();
     buffer.set_data(&VERTEX_BUFFER, BufferUsage::Static)?;
-    let vao = context.create_vertex_array()?;
+    let vao = context.create_vertex_array()?.named("Vertex VAO");
     vao.bind();
     vao.set_layout(
-        std::mem::size_of::<Vec2>(),
-        [VertexLayout {
-            typ: ValueType::Vector(2, ScalarType::F32),
-            offset: 0,
-        }],
+        std::mem::size_of::<Vec2<f32>>(),
+        [VertexLayout::from_type::<Vec2<f32>>(0)],
     )?;
     vao.bind_buffer(0, &buffer)?;
     vao.unbind();
     buffer.unbind();
 
-    let program = context.create_shader_module()?;
+    let program = context.create_shader_module()?.named("Main program");
     program.add_shader_source(ShaderSource {
         source: VERTEX_SHADER.to_string(),
         kind: ShaderType::Vertex,
@@ -105,22 +82,21 @@ fn main() -> eyre::Result<()> {
     let start = Instant::now();
     window.clone().attach_renderer(move || {
         let (s, c) = start.elapsed().as_secs_f32().sin_cos();
-        let color = Vector3::new(s, 0.5, c);
-        context.backbuffer().bind();
+        let color = Vec3::new(s, 0.5, c);
+        let frame = context.backbuffer();
+        frame.bind();
         context.viewport(Rect::from_pos_size(
-            Vector2::zero(),
-            window.physical_size().cast().unwrap(),
+            Vec2::zero(),
+            window.physical_size().cast(),
         ));
         context.set_clear_color(Color::BLACK);
         context.clear(ClearBuffers::COLOR);
         program.bind();
         program.set_uniform(uniform_color, color);
-        // vao.bind();
-        buffer.bind();
-        context
-            .backbuffer()
-            .draw_arrays(&program, &vao, DrawMode::Triangles, 3)?;
-        buffer.unbind();
+        vao.bind();
+        frame.draw_arrays(DrawMode::Triangles, 3)?;
+        vao.unbind();
+        program.unbind();
         context.swap_buffers();
         Ok(())
     });

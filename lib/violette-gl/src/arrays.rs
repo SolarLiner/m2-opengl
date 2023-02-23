@@ -1,26 +1,28 @@
 use std::{
+    ffi::CString,
     fmt,
+    fmt::Formatter,
     marker::PhantomData,
     num::NonZeroU32,
     ops,
-    cell::Cell,
-    ffi::CString,
-    fmt::Formatter,
-    sync::atomic::{AtomicUsize, Ordering}
+    sync::atomic::{AtomicUsize, Ordering},
 };
-use crevice::std140::AsStd140;
-use gl::types::*;
 
+use bytemuck::Pod;
+
+use gl::types::*;
+use violette_api::base::Resource;
 use violette_api::{
     bind::Bind,
     context::GraphicsContext,
+    value::{ScalarType, ValueType},
     vao::{VertexArray as ApiVertexArray, VertexLayout},
-    value::{ScalarType, ValueType}
 };
-use violette_api::base::Resource;
 
-use crate::{api::OpenGLError, context::OpenGLContext, get_ext_label, Gl, GlObject, set_ext_label};
-use crate::thread_guard::ThreadGuard;
+use crate::{
+    api::OpenGLError, context::OpenGLContext, get_ext_label, set_ext_label,
+    thread_guard::ThreadGuard, Gl, GlObject,
+};
 
 fn gl_scalar_type(typ: ScalarType) -> u32 {
     match typ {
@@ -115,7 +117,7 @@ impl ApiVertexArray for VertexArray {
     fn set_layout(
         &self,
         stride: usize,
-        layout: impl IntoIterator<IntoIter=impl ExactSizeIterator<Item=VertexLayout>>,
+        layout: impl IntoIterator<IntoIter = impl ExactSizeIterator<Item = VertexLayout>>,
     ) -> Result<(), Self::Err> {
         let iter = layout.into_iter();
         self.num_layouts.store(iter.len(), Ordering::SeqCst);
@@ -136,7 +138,11 @@ impl ApiVertexArray for VertexArray {
     }
 
     // This takes care of binding and unbinding since this would too unwieldy to let the user do
-    fn bind_buffer<T: 'static + Send + Sync + AsStd140>(&self, ix: usize, buffer: &<Self::Gc as GraphicsContext>::Buffer<T>) -> Result<(), Self::Err> {
+    fn bind_buffer<T: 'static + Send + Sync + Pod>(
+        &self,
+        ix: usize,
+        buffer: &<Self::Gc as GraphicsContext>::Buffer<T>,
+    ) -> Result<(), Self::Err> {
         self.bind();
         buffer.bind();
         unsafe {

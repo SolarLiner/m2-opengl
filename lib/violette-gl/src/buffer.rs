@@ -12,6 +12,7 @@ use std::{
     },
     sync::atomic::{AtomicUsize, Ordering}
 };
+use bytemuck::Pod;
 
 use crevice::std140::{AsStd140, Std140};
 use once_cell::sync::OnceCell;
@@ -77,6 +78,7 @@ impl<T> fmt::Debug for Buffer<T> {
 impl<T> Drop for Buffer<T> {
     fn drop(&mut self) {
         let id = self.id.get();
+        tracing::trace!(message = "Delete buffer", id=id);
         unsafe { self.gl.DeleteBuffers(1, &id) };
     }
 }
@@ -130,29 +132,28 @@ impl<T> Bind for Buffer<T> {
     }
 }
 
-impl<T: 'static + Send + Sync + AsStd140> ApiBuffer<T> for Buffer<T> {
+impl<T: 'static + Send + Sync + Pod> ApiBuffer<T> for Buffer<T> {
     type Gc = OpenGLContext;
     type Err = OpenGLError;
     type ReadBuffer<'a> = BufferSlice<'a, T>;
     type WriteBuffer<'a> = BufferSliceMut<'a, T>;
 
     fn len(&self) -> usize {
-        self.bufsize.load(Ordering::SeqCst) / T::std140_size_static()
+        self.bufsize.load(Ordering::SeqCst) / std::mem::size_of::<T>()
     }
 
     fn set_data<'a>(
         &self,
-        data: impl IntoIterator<Item = &'a T>,
+        data: &[T],
         usage: BufferUsage,
     ) -> Result<(), Self::Err> {
-        let std140 = data.into_iter().map(|t| t.as_std140()).collect::<Vec<_>>();
-        let std140: &[u8] = bytemuck::cast_slice(&std140);
-        self.bufsize.store(std140.len(), Ordering::SeqCst);
+        let bytes: &[u8] = bytemuck::cast_slice(data);
+        self.bufsize.store(bytes.len(), Ordering::SeqCst);
         unsafe {
             self.gl.BufferData(
                 gl_target(self.id.1),
-                std140.len() as _,
-                std140.as_ptr().cast(),
+                bytes.len() as _,
+                bytes.as_ptr().cast(),
                 gl_usage(usage),
             )
         };
@@ -167,6 +168,7 @@ impl<T: 'static + Send + Sync + AsStd140> ApiBuffer<T> for Buffer<T> {
         let byte_range = self.byte_range(range);
         let offset = byte_range.start;
         let size = byte_range.end - offset;
+        tracing::trace!(message="Map buffer {}", id=self.id.get());
         Ok(BufferSliceMut {
             buffer: self,
             byte_range,
@@ -183,6 +185,7 @@ impl<T: 'static + Send + Sync + AsStd140> ApiBuffer<T> for Buffer<T> {
         let byte_range = self.byte_range(range);
         let offset = byte_range.start;
         let size = byte_range.end - offset;
+        tracing::trace!(message="Map buffer {}", id=self.id.get());
         Ok(BufferSlice {
             buffer: self,
             byte_range,
@@ -202,6 +205,7 @@ impl<T> Buffer<T> {
         unsafe {
             gl.GenBuffers(1, &mut id);
         }
+        tracing::trace!(message = "Create buffer", id=id);
         Self {
             __holding: PhantomData,
             gl: gl.clone(),
@@ -211,9 +215,9 @@ impl<T> Buffer<T> {
     }
 }
 
-impl<T: 'static + Send + Sync + AsStd140> Buffer<T> {
+impl<T: 'static + Send + Sync + Pod> Buffer<T> {
     fn byte_range(&self, range: impl RangeBounds<usize>) -> Range<usize> {
-        let alignment = next_multiple(T::Output::ALIGNMENT, get_gl_alignment(&self.gl));
+        let alignment = next_multiple(std::mem::size_of::<T>(), get_gl_alignment(&self.gl));
         let start = match range.start_bound() {
             Bound::Included(i) => *i,
             Bound::Excluded(i) => *i + 1,
@@ -228,89 +232,91 @@ impl<T: 'static + Send + Sync + AsStd140> Buffer<T> {
     }
 }
 
-pub struct BufferSlice<'a, T: AsStd140> {
+pub struct BufferSlice<'a, T> {
     buffer: &'a Buffer<T>,
-    data: &'a [T::Output],
+    data: &'a [T],
     byte_range: Range<usize>,
 }
 
-impl<'a, T: AsStd140> Drop for BufferSlice<'a, T> {
+impl<'a, T> Drop for BufferSlice<'a, T> {
     fn drop(&mut self) {
+        tracing::trace!(message="Unmap buffer {}", id=self.buffer.id.get());
         unsafe {
             self.buffer.gl.UnmapBuffer(gl_target(self.buffer.id.1));
         }
     }
 }
 
-impl<'a, T: Send + Sync + AsStd140> ops::Deref for BufferSlice<'a, T> {
-    type Target = [T::Output];
+impl<'a, T: Pod> ops::Deref for BufferSlice<'a, T> {
+    type Target = [T];
 
     fn deref(&self) -> &Self::Target {
         self.data
     }
 }
 
-impl<'a, T: Send + Sync + AsStd140> ReadBuffer<'a, T> for BufferSlice<'a, T> {
+impl<'a, T: Pod> ReadBuffer<'a, T> for BufferSlice<'a, T> {
     fn len(&self) -> usize {
         self.data.len()
     }
 
     fn slice(&self) -> Range<usize> {
-        (self.byte_range.start / T::std140_size_static())
-            ..(self.byte_range.end / T::std140_size_static())
+        (self.byte_range.start / std::mem::size_of::<T>())
+            ..(self.byte_range.end / std::mem::size_of::<T>())
     }
 }
 
-pub struct BufferSliceMut<'a, T: AsStd140> {
+pub struct BufferSliceMut<'a, T> {
     buffer: &'a Buffer<T>,
-    data: &'a mut [T::Output],
+    data: &'a mut [T],
     byte_range: Range<usize>,
 }
 
-impl<'a, T: AsStd140> Drop for BufferSliceMut<'a, T> {
+impl<'a, T> Drop for BufferSliceMut<'a, T> {
     fn drop(&mut self) {
+        tracing::trace!(message="Unmap buffer {}", id=self.buffer.id.get());
         unsafe {
             self.buffer.gl.UnmapBuffer(gl_target(self.buffer.id.1));
         }
     }
 }
 
-impl<'a, T: Send + Sync + AsStd140> ops::Deref for BufferSliceMut<'a, T> {
-    type Target = [T::Output];
+impl<'a, T: Pod> ops::Deref for BufferSliceMut<'a, T> {
+    type Target = [T];
 
     fn deref(&self) -> &Self::Target {
         self.data
     }
 }
 
-impl<'a, T: Send + Sync + AsStd140> ops::DerefMut for BufferSliceMut<'a, T> {
+impl<'a, T: Pod> ops::DerefMut for BufferSliceMut<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.data
     }
 }
 
-impl<'a, T: Send + Sync + AsStd140> ReadBuffer<'a, T> for BufferSliceMut<'a, T> {
+impl<'a, T: Pod> ReadBuffer<'a, T> for BufferSliceMut<'a, T> {
     fn len(&self) -> usize {
         self.data.len()
     }
 
     fn slice(&self) -> Range<usize> {
-        (self.byte_range.start / T::std140_size_static())
-            ..(self.byte_range.end / T::std140_size_static())
+        (self.byte_range.start / std::mem::size_of::<T>())
+            ..(self.byte_range.end / std::mem::size_of::<T>())
     }
 }
 
-impl<'a, T: Send + Sync + AsStd140> WriteBuffer<'a, T> for BufferSliceMut<'a, T> {}
+impl<'a, T: Pod> WriteBuffer<'a, T> for BufferSliceMut<'a, T> {}
 
-// TODO: port the fast code path (cf. impl below)
 #[cfg(feature = "fast")]
-#[cfg(never)]
-static GL_ALIGNMENT: Lazy<NonZeroUsize> = Lazy::new(|| unsafe {
-    let mut val = 0;
-    gl::GetIntegerv(gl::UNIFORM_BUFFER_OFFSET_ALIGNMENT, &mut val);
-    tracing::trace!("OpenGL alignment: {}", val);
-    NonZeroUsize::new_unchecked(val as _)
-});
+fn get_gl_alignment(gl: &Gl) -> NonZeroUsize {
+    static CELL: OnceCell<NonZeroUsize> = OnceCell::new();
+    *CELL.get_or_init(|| unsafe {
+        let mut val = 0;
+        gl.GetIntegerv(gl::UNIFORM_BUFFER_OFFSET_ALIGNMENT, &mut val);
+        NonZeroUsize::new_unchecked(val as _)
+    })
+}
 
 #[cfg(not(feature = "fast"))]
 fn get_gl_alignment(gl: &Gl) -> NonZeroUsize {

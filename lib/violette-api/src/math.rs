@@ -1,26 +1,40 @@
+use std::hash::{Hash, Hasher};
 use std::ops;
 
-use cgmath::{
-    num_traits::{Num, NumCast, ToPrimitive},
-    Vector2,
+pub use nalgebra_glm::{
+    Qua as Quat, TMat2 as Mat2, TMat2x3 as Mat2x3, TMat2x4 as Mat2x4, TMat3 as Mat3, TMat3x2 as Mat3x2,
+    TMat3x4 as Mat3x4, TMat4 as Mat4, TMat4x2 as Mat4x2, TMat4x3 as Mat4x3, TVec2 as Vec2,
+    TVec3 as Vec3, TVec4 as Vec4,
+    Scalar,
 };
+pub use nalgebra_glm as glm;
+use num_traits::{Num, NumCast, ToPrimitive};
 
-#[derive(Debug, Copy, Clone, Hash)]
+#[derive(Debug, Copy, Clone)]
 pub struct Rect<T> {
-    pos: Vector2<T>,
-    size: Vector2<T>,
+    pos: Vec2<T>,
+    size: Vec2<T>,
+}
+
+impl<T: Scalar + Hash> Hash for Rect<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.pos.x.hash(state);
+        self.pos.y.hash(state);
+        self.size.x.hash(state);
+        self.size.y.hash(state);
+    }
 }
 
 impl<T> From<[T; 4]> for Rect<T> {
     fn from([x, y, w, h]: [T; 4]) -> Self {
         Self {
-            pos: Vector2::new(x, y),
-            size: Vector2::new(w, h),
+            pos: Vec2::new(x, y),
+            size: Vec2::new(w, h),
         }
     }
 }
 
-impl<T> Into<[T; 4]> for Rect<T> {
+impl<T: Scalar> Into<[T; 4]> for Rect<T> {
     fn into(self) -> [T; 4] {
         let [x, y]: [T; 2] = self.pos.into();
         let [w, h]: [T; 2] = self.size.into();
@@ -28,8 +42,8 @@ impl<T> Into<[T; 4]> for Rect<T> {
     }
 }
 
-impl<T: ToPrimitive> Rect<T> {
-    pub fn cast<U: NumCast>(self) -> Rect<U> {
+impl<T: Scalar + ToPrimitive> Rect<T> {
+    pub fn cast<U: Scalar + NumCast>(self) -> Rect<U> {
         Rect {
             pos: self.pos.map(|x| U::from(x).unwrap()),
             size: self.size.map(|x| U::from(x).unwrap()),
@@ -37,8 +51,8 @@ impl<T: ToPrimitive> Rect<T> {
     }
 }
 
-impl<T> Rect<T> {
-    pub fn from_pos_size(bottom_left: Vector2<T>, size: Vector2<T>) -> Self {
+impl<T: Scalar> Rect<T> {
+    pub fn from_pos_size(bottom_left: Vec2<T>, size: Vec2<T>) -> Self {
         Self {
             pos: bottom_left,
             size,
@@ -50,7 +64,7 @@ impl<T> Rect<T> {
     }
 }
 
-impl<T> Rect<T>
+impl<T: Scalar> Rect<T>
 where
     Self: Copy,
 {
@@ -59,9 +73,9 @@ where
     }
 }
 
-impl<T: Copy + Num> Rect<T>
+impl<T: Copy + Scalar + Num> Rect<T>
 where
-    Vector2<T>: ops::Add<Vector2<T>, Output = Vector2<T>>,
+    Vec2<T>: ops::Add<Vec2<T>, Output = Vec2<T>>,
 {
     pub fn left(&self) -> T {
         self.pos.x
@@ -76,19 +90,19 @@ where
         self.pos.y + self.size.y
     }
 
-    pub fn bottom_left(&self) -> Vector2<T> {
+    pub fn bottom_left(&self) -> Vec2<T> {
         self.pos
     }
 
-    pub fn bottom_right(&self) -> Vector2<T> {
-        Vector2::new(self.right(), self.bottom())
+    pub fn bottom_right(&self) -> Vec2<T> {
+        Vec2::new(self.right(), self.bottom())
     }
 
-    pub fn top_left(&self) -> Vector2<T> {
-        Vector2::new(self.left(), self.top())
+    pub fn top_left(&self) -> Vec2<T> {
+        Vec2::new(self.left(), self.top())
     }
 
-    pub fn top_right(&self) -> Vector2<T> {
+    pub fn top_right(&self) -> Vec2<T> {
         self.pos + self.size
     }
 }

@@ -12,6 +12,6 @@ pub enum DrawMode {
 pub trait Framebuffer: Resource + Bind {
     type Gc: GraphicsContext;
     type Err: Into<<Self::Gc as GraphicsContext>::Err>;
-    fn draw_arrays(&self, shader: &<Self::Gc as GraphicsContext>::ShaderModule, vao: &<Self::Gc as GraphicsContext>::VertexArray, mode: DrawMode, count: usize) -> Result<(), Self::Err>;
-    fn draw_elements(&self, shader: &<Self::Gc as GraphicsContext>::ShaderModule, vao: &<Self::Gc as GraphicsContext>::VertexArray, mode: DrawMode, count: usize) -> Result<(), Self::Err>;
+    fn draw_arrays(&self, mode: DrawMode, count: usize) -> Result<(), Self::Err>;
+    fn draw_elements(&self, mode: DrawMode, count: usize) -> Result<(), Self::Err>;
 }

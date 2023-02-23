@@ -95,13 +95,9 @@ impl ApiFramebuffer for Framebuffer {
 
     fn draw_arrays(
         &self,
-        shader: &<Self::Gc as GraphicsContext>::ShaderModule,
-        vao: &<Self::Gc as GraphicsContext>::VertexArray,
         mode: DrawMode,
         count: usize,
     ) -> Result<(), Self::Err> {
-        shader.bind();
-        vao.bind();
         unsafe {
             self.gl.DrawArrays(gl_draw_mode(mode), 0, count as _);
         }
@@ -110,13 +106,9 @@ impl ApiFramebuffer for Framebuffer {
 
     fn draw_elements(
         &self,
-        shader: &<Self::Gc as GraphicsContext>::ShaderModule,
-        vao: &<Self::Gc as GraphicsContext>::VertexArray,
         mode: DrawMode,
         count: usize,
     ) -> Result<(), Self::Err> {
-        shader.bind();
-        vao.bind();
         unsafe {
             self.gl.DrawElements(
                 gl_draw_mode(mode),

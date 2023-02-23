@@ -1,15 +1,25 @@
-use crevice::std140::AsStd140;
+use bytemuck::Pod;
 
 use crate::{
     bind::Bind,
-    context::GraphicsContext
+    context::GraphicsContext,
+    base::Resource,
+    value::ValueType
 };
-use crate::base::Resource;
-use crate::value::ValueType;
+use crate::value::AsValueType;
 
 pub struct VertexLayout {
     pub offset: usize,
     pub typ: ValueType,
+}
+
+impl VertexLayout {
+    pub fn from_type<T: AsValueType>(offset: usize) -> Self {
+        Self {
+            offset,
+            typ: T::value_type(),
+        }
+    }
 }
 
 pub trait VertexArray: Resource + Bind {
@@ -21,7 +31,7 @@ pub trait VertexArray: Resource + Bind {
         stride: usize,
         layout: impl IntoIterator<IntoIter=impl ExactSizeIterator<Item=VertexLayout>>,
     ) -> Result<(), Self::Err>;
-    fn bind_buffer<T: Send + Sync + AsStd140>(&self, ix: usize, buffer: &<Self::Gc as GraphicsContext>::Buffer<T>) -> Result<(), Self::Err>;
+    fn bind_buffer<T: Send + Sync + Pod>(&self, ix: usize, buffer: &<Self::Gc as GraphicsContext>::Buffer<T>) -> Result<(), Self::Err>;
 }
 
 

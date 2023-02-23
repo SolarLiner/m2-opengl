@@ -1,10 +1,11 @@
 use std::ops::{Deref, DerefMut, Range, RangeBounds};
+use bytemuck::Pod;
 
-use crevice::std140::AsStd140;
-use crate::base::Resource;
-use crate::bind::Bind;
-
-use crate::context::GraphicsContext;
+use crate::{
+    base::Resource,
+    bind::Bind,
+    context::GraphicsContext
+};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum BufferKind {
@@ -20,8 +21,7 @@ pub enum BufferUsage {
     Stream,
 }
 
-// TODO: Relax restriction on [`AsStd140`]
-pub trait Buffer<T: 'static + AsStd140>: Resource + Bind {
+pub trait Buffer<T: 'static + Pod>: Resource + Bind {
     type Gc: GraphicsContext;
     type Err: Into<<Self::Gc as GraphicsContext>::Err>;
     type ReadBuffer<'a>: ReadBuffer<'a, T> where Self: 'a;
@@ -33,7 +33,7 @@ pub trait Buffer<T: 'static + AsStd140>: Resource + Bind {
     }
     fn set_data<'a>(
         &self,
-        data: impl IntoIterator<Item = &'a T>,
+        data: &[T],
         usage: BufferUsage,
     ) -> Result<(), Self::Err>;
     fn slice_mut(&self, range: impl RangeBounds<usize>)
@@ -41,7 +41,7 @@ pub trait Buffer<T: 'static + AsStd140>: Resource + Bind {
     fn slice(&self, range: impl RangeBounds<usize>) -> Result<Self::ReadBuffer<'_>, Self::Err>;
 }
 
-pub trait ReadBuffer<'a, T: AsStd140>: Deref<Target = [T::Output]> {
+pub trait ReadBuffer<'a, T: Pod>: Deref<Target = [T]> {
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0
@@ -49,4 +49,4 @@ pub trait ReadBuffer<'a, T: AsStd140>: Deref<Target = [T::Output]> {
     fn slice(&self) -> Range<usize>;
 }
 
-pub trait WriteBuffer<'a, T: AsStd140>: ReadBuffer<'a, T> + DerefMut {}
+pub trait WriteBuffer<'a, T: Pod>: ReadBuffer<'a, T> + DerefMut {}

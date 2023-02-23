@@ -7,7 +7,7 @@ use std::{
 };
 
 use atomic_float::AtomicF32;
-use cgmath::Vector2;
+use violette_api::math::glm::{TVec2 as Vector2};
 use crossbeam_channel::{bounded as channel, Receiver, Sender};
 use glutin::{config::Config, display::GetGlDisplay, prelude::*};
 use once_cell::sync::OnceCell;

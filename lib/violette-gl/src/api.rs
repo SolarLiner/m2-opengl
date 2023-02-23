@@ -2,13 +2,14 @@ use std::{
     backtrace::Backtrace,
     cell::RefCell,
     error::Error,
-    fmt,
-    fmt::Formatter,
+    fmt::{
+        self,
+        Formatter
+    },
     sync::Arc,
     time::{Duration, Instant},
 };
 
-use cgmath::num_traits;
 use dashmap::DashMap;
 use glutin::{
     config::ConfigTemplateBuilder,
@@ -30,10 +31,12 @@ use winit::{
 use violette_api::{api::Api, base::Resource, window::Window, window::WindowDesc};
 
 use crate::{
-    context::OpenGLContext,
     thread_guard::ThreadGuard,
-    window::{OpenGLWindow, WindowError},
-    Gl,
+    window::{
+        OpenGLWindow,
+        WindowError
+    },
+    Gl
 };
 
 #[derive(Debug, Copy, Clone, Error, FromPrimitive)]
