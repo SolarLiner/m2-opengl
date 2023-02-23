@@ -80,7 +80,7 @@ impl fmt::Debug for OpenGLContextImpl {
 }
 
 impl OpenGLContextImpl {
-    fn create(gl: Gl, window: &OpenGLWindow) -> Result<Self, ContextError> {
+    fn create(window: &OpenGLWindow) -> Result<Self, ContextError> {
         let size = window.physical_size();
         let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             window.raw_window_handle(),
@@ -97,28 +97,6 @@ impl OpenGLContextImpl {
         let context = unsafe { config.display().create_context(config, &context_attributes) }?;
         let surface = unsafe { config.display().create_window_surface(&config, &attrs) }?;
         let context = Arc::new(ThreadGuard::new(context.make_current(&surface)?));
-        Ok(Self {
-            gl,
-            gl_surface: surface,
-            gl_context: context,
-        })
-    }
-
-    fn make_current(&self) -> Result<(), ContextError> {
-        self.gl_context.make_current(&self.gl_surface)?;
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub struct OpenGLContext {
-    ctx_impl: ThreadGuard<OpenGLContextImpl>,
-    window: Weak<OpenGLWindow>,
-    backbuffer: Arc<Framebuffer>,
-}
-
-impl OpenGLContext {
-    pub(crate) fn new(window: Arc<OpenGLWindow>) -> Result<Self, ContextError> {
         tracing::debug!("Load OpenGL symbols");
         let gl = crate::load_with(|sym| {
             window
@@ -144,10 +122,33 @@ impl OpenGLContext {
                 }
             };
         });
-        let inner = OpenGLContextImpl::create(gl.clone(), &window)?;
+        Ok(Self {
+            gl,
+            gl_surface: surface,
+            gl_context: context,
+        })
+    }
+
+    fn make_current(&self) -> Result<(), ContextError> {
+        self.gl_context.make_current(&self.gl_surface)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct OpenGLContext {
+    ctx_impl: ThreadGuard<OpenGLContextImpl>,
+    window: Weak<OpenGLWindow>,
+    backbuffer: Arc<Framebuffer>,
+}
+
+impl OpenGLContext {
+    pub(crate) fn new(window: Arc<OpenGLWindow>) -> Result<Self, ContextError> {
+        let inner = OpenGLContextImpl::create(&window)?;
+        let backbuffer = Arc::new(Framebuffer::backbuffer(&inner.gl));
         Ok(Self {
             ctx_impl: ThreadGuard::new(inner),
-            backbuffer: Arc::new(Framebuffer::backbuffer(&gl)),
+            backbuffer,
             window: Arc::downgrade(&window),
         })
     }

@@ -69,10 +69,12 @@ fn main() -> eyre::Result<()> {
     let program = context.create_shader_module()?.named("Main program");
     program.add_shader_source(ShaderSource {
         source: VERTEX_SHADER.to_string(),
+        name: Some("<inline vertex shader>".to_string()),
         kind: ShaderType::Vertex,
     })?;
     program.add_shader_source(ShaderSource {
         source: FRAGMENT_SHADER.to_string(),
+        name: Some("<inline fragment shader>".to_string()),
         kind: ShaderType::Fragment,
     })?;
     program.link()?;

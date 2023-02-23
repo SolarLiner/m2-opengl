@@ -16,10 +16,7 @@ use violette_api::{
     framebuffer::{DrawMode, Framebuffer as ApiFramebuffer},
 };
 
-use crate::{
-    api::GlErrorKind, api::OpenGLError, context::OpenGLContext, thread_guard::ThreadGuard, Gl,
-    GlObject,
-};
+use crate::{api::GlErrorKind, api::OpenGLError, context::OpenGLContext, thread_guard::ThreadGuard, Gl, GlObject, set_ext_label, get_ext_label};
 
 fn gl_draw_mode(mode: DrawMode) -> u32 {
     match mode {
@@ -81,11 +78,29 @@ impl Framebuffer {
     }
 }
 
+impl GlObject for Framebuffer {
+    const GL_NAME: GLenum = gl::FRAMEBUFFER;
+
+    fn gl(&self) -> &Gl {
+        &self.gl
+    }
+
+    fn id(&self) -> u32 {
+        if let Some(id) = self.id {
+            id.get()
+        } else {
+            0
+        }
+    }
+}
+
 impl Resource for Framebuffer {
-    fn set_name(&self, name: impl ToString) {}
+    fn set_name(&self, name: impl ToString) {
+        set_ext_label(self, name)
+    }
 
     fn get_name(&self) -> Option<String> {
-        None
+        get_ext_label(self)
     }
 }
 

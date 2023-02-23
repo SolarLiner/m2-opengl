@@ -126,6 +126,7 @@ impl ApiWindow for OpenGLWindow {
                 "Skipping rendering of window {:?} as it has no context defined",
                 self.inner_window.window.id()
             );
+            return Ok(());
         }
         self.input.write().unwrap().new_frame();
         let renderer = self.renderer.read().unwrap();

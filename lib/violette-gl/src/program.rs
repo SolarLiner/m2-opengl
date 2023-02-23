@@ -14,6 +14,7 @@ use std::{
         Mutex
     }
 };
+use std::ptr::null;
 
 use violette_api::math::*;
 use dashmap::DashSet;
@@ -81,15 +82,15 @@ impl Bind for Program {
     }
 
     fn bind(&self) {
-        // unsafe {
-        //     gl::BindShader(self.id.get());
-        // }
+        unsafe {
+            self.gl.UseProgram(self.id.get());
+        }
     }
 
     fn unbind(&self) {
-        // unsafe {
-        //     gl::BindShader(0);
-        // }
+        unsafe {
+            self.gl.UseProgram(0);
+        }
     }
 }
 
@@ -355,6 +356,7 @@ impl Resource for Program {
 #[derive(Debug, Clone)]
 pub struct ShaderSource {
     pub source: String,
+    pub name: Option<String>,
     pub kind: ShaderType,
 }
 
@@ -366,9 +368,12 @@ impl ShaderModule for Program {
     type UniformLocation = u32;
 
     fn add_shader_source(&self, source: Self::ShaderSource) -> Result<(), Self::Err> {
-        let source = Shader::with_source(&self.gl, source.kind, &source.source)?;
-        unsafe { self.gl.AttachShader(self.id.get(), source.id.get()) }
-        self.shaders.insert(source);
+        let shader = Shader::with_source(&self.gl, source.kind, &source.source)?;
+        if let Some(name) = &source.name {
+            shader.set_name(name);
+        }
+        unsafe { self.gl.AttachShader(self.id.get(), shader.id.get()) }
+        self.shaders.insert(shader);
         OpenGLError::guard(&self.gl)
     }
 

@@ -29,6 +29,10 @@ trait GlObject {
     fn id(&self) -> u32;
 }
 
+// TODO: Figure out why glLabelObject does not work
+
+fn get_ext_label<T>(_obj: &T) -> Option<String> {None}
+#[cfg(never)]
 fn get_ext_label<T: GlObject>(obj: &T) -> Option<String> {
     if obj.gl().GetObjectLabelEXT.is_loaded() {
         let name_result = unsafe {
@@ -45,7 +49,7 @@ fn get_ext_label<T: GlObject>(obj: &T) -> Option<String> {
         };
         match name_result {
             Ok(name) => Some(name.to_string_lossy().to_string()),
-            Err(err) => {
+            Err(..) => {
                 tracing::warn!("Could not fetch label from OpenGL: NUL byte found");
                 None
             }
@@ -55,6 +59,8 @@ fn get_ext_label<T: GlObject>(obj: &T) -> Option<String> {
     }
 }
 
+fn set_ext_label<T>(_obj: &T, _name: impl ToString) {}
+#[cfg(never)]
 fn set_ext_label<T: GlObject>(obj: &T, name: impl ToString) {
     if obj.gl().LabelObjectEXT.is_loaded() {
         let name_str = CString::new(name.to_string()).unwrap();
