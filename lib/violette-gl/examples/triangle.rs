@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fs::File, time::Instant};
+use std::{borrow::Cow, time::Instant};
 
 use num_traits::Zero;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
@@ -13,7 +13,6 @@ use violette_api::{
     framebuffer::{DrawMode, Framebuffer},
     math::{Color, Rect},
     shader::ShaderModule,
-    value::{ScalarType, ValueType},
     vao::{VertexArray, VertexLayout},
     window::{Window, WindowDesc},
 };

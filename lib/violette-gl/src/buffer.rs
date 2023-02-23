@@ -1,6 +1,5 @@
 use std::{
     fmt::Formatter,
-    cell::Cell,
     collections::Bound,
     fmt,
     marker::PhantomData,
@@ -14,7 +13,7 @@ use std::{
 };
 use bytemuck::Pod;
 
-use crevice::std140::{AsStd140, Std140};
+
 use once_cell::sync::OnceCell;
 use gl::types::GLenum;
 
@@ -30,7 +29,7 @@ use violette_api::{
 };
 use violette_api::base::Resource;
 
-use crate::{api::OpenGLError, context::OpenGLContext, thread_guard::ThreadGuard, Gl, GlObject, set_ext_label, get_ext_label};
+use crate::{api::OpenGLError, context::OpenGLContext, Gl, GlObject, set_ext_label, get_ext_label};
 
 fn gl_target(kind: BufferKind) -> u32 {
     match kind {

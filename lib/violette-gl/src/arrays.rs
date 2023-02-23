@@ -1,10 +1,7 @@
 use std::{
-    ffi::CString,
     fmt,
     fmt::Formatter,
-    marker::PhantomData,
     num::NonZeroU32,
-    ops,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -20,8 +17,7 @@ use violette_api::{
 };
 
 use crate::{
-    api::OpenGLError, context::OpenGLContext, get_ext_label, set_ext_label,
-    thread_guard::ThreadGuard, Gl, GlObject,
+    api::OpenGLError, context::OpenGLContext, get_ext_label, set_ext_label, Gl, GlObject,
 };
 
 fn gl_scalar_type(typ: ScalarType) -> u32 {

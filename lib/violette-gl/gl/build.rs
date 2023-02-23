@@ -1,6 +1,6 @@
 use std::{env, io::BufWriter, path::PathBuf, fs::File};
 
-use gl_generator::{Registry, DebugStructGenerator, StructGenerator};
+use gl_generator::{Registry, StructGenerator};
 
 fn main() {
     let dest = env::var("OUT_DIR").unwrap();

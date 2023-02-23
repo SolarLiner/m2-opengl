@@ -2,9 +2,8 @@ use std::{
     sync::Arc,
     error::Error
 };
-use crevice::std140::AsStd140;
+
 use crate::{
-    context::GraphicsContext,
     window::{Window, WindowDesc},
 };
 

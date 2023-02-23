@@ -2,7 +2,7 @@ use std::{
     error::Error,
     borrow::Cow,
     ops::Deref,
-    sync::{Arc, RwLockReadGuard}
+    sync::{Arc}
 };
 use nalgebra_glm::TVec2 as Vector2;
 use violette_input::Input;

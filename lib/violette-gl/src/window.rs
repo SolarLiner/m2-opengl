@@ -9,7 +9,7 @@ use std::{
 use atomic_float::AtomicF32;
 use violette_api::math::glm::{TVec2 as Vector2};
 use crossbeam_channel::{bounded as channel, Receiver, Sender};
-use glutin::{config::Config, display::GetGlDisplay, prelude::*};
+use glutin::{config::Config, prelude::*};
 use once_cell::sync::OnceCell;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use thiserror::Error;

@@ -28,7 +28,7 @@ use winit::{
     window::{Fullscreen, WindowBuilder, WindowId},
 };
 
-use violette_api::{api::Api, base::Resource, window::Window, window::WindowDesc};
+use violette_api::{api::Api, window::Window, window::WindowDesc};
 
 use crate::{
     thread_guard::ThreadGuard,
@@ -109,7 +109,7 @@ impl OpenGLError {
     }
 
     pub fn guard(gl: &Gl) -> Result<(), Self> {
-        if let Some(kind) = GlErrorKind::current_error(&gl) {
+        if let Some(kind) = GlErrorKind::current_error(gl) {
             Err(Self {
                 kind,
                 info: None,
@@ -237,7 +237,7 @@ impl Api for OpenGLApi {
                     if remove_window {
                         self.windows.remove(&window_id);
                     }
-                    if self.windows.len() == 0 {
+                    if self.windows.is_empty() {
                         tracing::debug!("All windows destroyed, quitting");
                         control_flow.set_exit();
                     }

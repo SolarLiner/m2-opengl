@@ -35,7 +35,7 @@ use violette_api::{
 };
 
 use crate::{
-    api::{OpenGLApi, OpenGLError},
+    api::{OpenGLError},
     arrays::VertexArray,
     buffer::Buffer,
     framebuffer::Framebuffer,
@@ -95,7 +95,7 @@ impl OpenGLContextImpl {
             .with_debug(cfg!(debug_assertions))
             .build(Some(window.raw_window_handle()));
         let context = unsafe { config.display().create_context(config, &context_attributes) }?;
-        let surface = unsafe { config.display().create_window_surface(&config, &attrs) }?;
+        let surface = unsafe { config.display().create_window_surface(config, &attrs) }?;
         let context = Arc::new(ThreadGuard::new(context.make_current(&surface)?));
         tracing::debug!("Load OpenGL symbols");
         let gl = crate::load_with(|sym| {

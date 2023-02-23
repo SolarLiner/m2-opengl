@@ -34,10 +34,10 @@ impl<T> From<[T; 4]> for Rect<T> {
     }
 }
 
-impl<T: Scalar> Into<[T; 4]> for Rect<T> {
-    fn into(self) -> [T; 4] {
-        let [x, y]: [T; 2] = self.pos.into();
-        let [w, h]: [T; 2] = self.size.into();
+impl<T: Scalar> From<Rect<T>> for [T; 4] {
+    fn from(val: Rect<T>) -> Self {
+        let [x, y]: [T; 2] = val.pos.into();
+        let [w, h]: [T; 2] = val.size.into();
         [x, y, w, h]
     }
 }
@@ -140,9 +140,9 @@ impl From<[f32; 4]> for Color {
     }
 }
 
-impl Into<[f32; 4]> for Color {
-    fn into(self) -> [f32; 4] {
-        self.0
+impl From<Color> for [f32; 4] {
+    fn from(val: Color) -> Self {
+        val.0
     }
 }
 

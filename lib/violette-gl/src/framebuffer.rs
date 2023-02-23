@@ -1,22 +1,18 @@
 use std::{
     fmt::{self, Formatter},
-    marker::PhantomData,
     num::NonZeroU32,
-    ops,
-    sync::Arc,
 };
 
-use once_cell::sync::Lazy;
+
 
 use gl::types::GLenum;
 use violette_api::base::Resource;
 use violette_api::{
     bind::Bind,
-    context::GraphicsContext,
     framebuffer::{DrawMode, Framebuffer as ApiFramebuffer},
 };
 
-use crate::{api::GlErrorKind, api::OpenGLError, context::OpenGLContext, thread_guard::ThreadGuard, Gl, GlObject, set_ext_label, get_ext_label};
+use crate::{api::OpenGLError, context::OpenGLContext, Gl, GlObject, set_ext_label, get_ext_label};
 
 fn gl_draw_mode(mode: DrawMode) -> u32 {
     match mode {

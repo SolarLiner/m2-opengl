@@ -1,20 +1,12 @@
 use std::{
     fmt::Formatter,
     hash::{Hash, Hasher},
-    collections::HashSet,
     ffi::{CStr, CString},
     fmt,
-    marker::PhantomData,
-    mem::ManuallyDrop,
     num::NonZeroU32,
-    ops,
-    rc::Rc,
-    sync::{
-        Arc,
-        Mutex
-    }
+    rc::Rc
 };
-use std::ptr::null;
+
 
 use violette_api::math::*;
 use dashmap::DashSet;
@@ -24,13 +16,12 @@ use num_traits::FromPrimitive;
 
 use violette_api::{
     base::Resource,
-    value::ValueType,
     bind::Bind,
     shader::{AsUniform, ShaderModule}
 };
-use violette_api::value::ScalarType;
 
-use crate::{api::GlErrorKind, api::OpenGLError, context::OpenGLContext, get_ext_label, set_ext_label, thread_guard::ThreadGuard, Gl, GlObject};
+
+use crate::{api::GlErrorKind, api::OpenGLError, context::OpenGLContext, get_ext_label, set_ext_label, Gl, GlObject};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive)]
 #[repr(u32)]
@@ -274,7 +265,7 @@ impl From<mat<f32>> for Uniform {
 }
 
 impl FromPrimitive for Uniform {
-    fn from_isize(n: isize) -> Option<Self> {
+    fn from_isize(_n: isize) -> Option<Self> {
         None
     }
 
@@ -411,7 +402,7 @@ impl ShaderModule for Program {
 
     fn uniform_location(&self, name: &str) -> Option<Self::UniformLocation> {
         unsafe {
-            let mut loc = 0;
+            let loc = 0;
             let name = CString::new(name).unwrap();
             self.gl
                 .GetUniformLocation(self.id.get(), name.as_c_str().as_ptr());
