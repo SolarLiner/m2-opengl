@@ -13,6 +13,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-platform/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-ui/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/violette/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/violette/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/violette/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/bin/many-spheres/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-renderer/src" isTestSource="false" />
