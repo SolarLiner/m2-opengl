@@ -109,6 +109,8 @@ impl UiImpl {
                             (callback.0)(info, self);
                         }
                         Framebuffer::viewport(0, 0, size.width as _, size.height as _);
+                        Framebuffer::enable_blending(Blend::One, Blend::OneMinusSrcAlpha);
+                        Framebuffer::disable_depth_test();
                     }
                 }
             }

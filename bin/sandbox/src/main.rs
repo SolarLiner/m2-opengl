@@ -32,11 +32,10 @@ use rose_platform::{
 use rose_renderer::{Mesh, Renderer};
 use violette::texture::Texture;
 
-use crate::io::LoadMeshExt;
-use crate::ui::{TabViewer, UiState};
 use crate::{
+    ui::{TabViewer, UiState},
     io::ObjectData,
-    scene::{Entity, Scene},
+    scene::{Entity, Scene}
 };
 
 mod io;

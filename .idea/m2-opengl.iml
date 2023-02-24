@@ -23,6 +23,7 @@
       <sourceFolder url="file://$MODULE_DIR$/bin/sandbox/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/pan-orbit-camera/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/asset-server/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/sandbox-bevy/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

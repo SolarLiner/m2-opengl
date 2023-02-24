@@ -1,0 +1,28 @@
+[package]
+name = "sandbox-bevy"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = { version = "0.9.1", default-features = false, features = ["bevy_asset", "bevy_winit", "trace", "trace_tracy"] }
+glutin = "0.30.3"
+glutin-winit = "0.2.1"
+
+rose-core = { path = "../../lib/rose-core" }
+rose-platform = { path = "../../lib/rose-platform", features = ["ui"] }
+rose-ui = { path = "../../lib/rose-ui" }
+rose-renderer = { path = "../../lib/rose-renderer", features = ["debug-ui"] }
+pan-orbit-camera = { path = "../../lib/pan-orbit-camera" }
+violette = { path = "../../lib/violette" }
+
+bytemuck.workspace = true
+egui.workspace = true
+eyre.workspace = true
+glam = { workspace = true, features = ["serde"] }
+tracing.workspace = true
+winit.workspace = true
+
+[features]
+tracy = ["rose-platform/tracy"]

@@ -8,14 +8,14 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egui-winit = "0.20.1"
 eyre = "0.6.8"
-glam = { version = "0.22.0", features = ["bytemuck", "rand", "num-traits"] }
-tracing = "0.1.33"
 violette = { path = "../violette" }
 violette-derive = { path = "../violette-derive" }
 rose-core = { path = "../rose-core" }
-winit = "0.27.5"
 
 bytemuck.workspace = true
 egui.workspace = true
+egui-winit.workspace = true
+glam = { workspace = true, features = ["bytemuck", "rand", "num-traits"] }
+tracing.workspace = true
+winit.workspace = true
