@@ -1,4 +1,4 @@
-use bytemuck::{Pod, Zeroable, offset_of};
+use bytemuck::{offset_of, Pod, Zeroable};
 use violette::vertex::{VertexAttributes, VertexDesc};
 use violette_derive::VertexAttributes;
 

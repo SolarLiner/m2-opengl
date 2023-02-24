@@ -29,7 +29,7 @@ fn test_download_mipmap(_: PhysicalSize<f32>) {
     )
     .unwrap()
     .to_rgb8();
-    let mut texture = Texture::from_image(img.clone()).unwrap();
+    let mut texture = Texture::from_image(img).unwrap();
     texture.generate_mipmaps().unwrap();
     let mipmap = texture.download_image::<image::Rgb<_>>(2).unwrap();
     mipmap.save("downloaded_mipmap.png").unwrap();
@@ -42,7 +42,7 @@ fn test_download_mipmap_last(_: PhysicalSize<f32>) {
     )
     .unwrap()
     .to_rgb8();
-    let mut texture = Texture::from_image(img.clone()).unwrap();
+    let mut texture = Texture::from_image(img).unwrap();
     texture.generate_mipmaps().unwrap();
     let dimensions = texture.mipmap_size(texture.num_mipmaps() - 1).unwrap();
     eprintln!("Last mipmap dimensions: {:?}", dimensions);

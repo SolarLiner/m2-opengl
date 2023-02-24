@@ -1,8 +1,4 @@
-use std::{
-    f32::consts::TAU,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{f32::consts::TAU, sync::Arc, time::Instant};
 
 use camera_controller::OrbitCameraController;
 use glam::{vec2, vec3, UVec2, Vec2, Vec3};
@@ -13,7 +9,7 @@ use rose_core::{
     mesh::MeshBuilder,
     transform::{Transform, TransformExt},
 };
-use rose_platform::Application;
+use rose_platform::{Application, RenderContext, TickContext, UiContext};
 use rose_renderer::{Mesh, Renderer};
 use violette::framebuffer::Framebuffer;
 
@@ -91,7 +87,7 @@ impl Application for ManySpheres {
                 }
             })
             .collect();
-        Framebuffer::backbuffer().clear_color([0.1, 0.1, 0.4, 1.])?;
+        Framebuffer::clear_color([0.1, 0.1, 0.4, 1.]);
         Ok(Self {
             renderer,
             camera_controller,
@@ -104,37 +100,37 @@ impl Application for ManySpheres {
         self.renderer.resize(UVec2::from_array(size.into()))
     }
 
-    fn tick(&mut self, dt: Duration) -> eyre::Result<()> {
+    fn tick(&mut self, ctx: TickContext) -> eyre::Result<()> {
         let t = self.start.elapsed().as_secs_f32();
         for sphere in &mut self.spheres {
             let offset_y = f32::sin(sphere.phase + sphere.freq * t * TAU) * sphere.amplitude;
             sphere.transform.position = sphere.orig_pos + Vec3::Y * offset_y;
         }
         self.camera_controller
-            .update(dt, self.renderer.camera_mut());
+            .update(ctx.dt, self.renderer.camera_mut());
         Ok(())
     }
 
-    fn render(&mut self) -> eyre::Result<()> {
-        self.renderer.begin_render()?;
+    fn render(&mut self, ctx: RenderContext) -> eyre::Result<()> {
+        self.renderer.begin_render(Vec3::ZERO.extend(1.))?;
         for sphere in &self.spheres {
             self.renderer.submit_mesh(
                 Arc::downgrade(&sphere.material),
                 Arc::downgrade(&sphere.mesh).transformed(sphere.transform),
             );
         }
-        self.renderer.flush()
+        self.renderer.flush(ctx.dt)
     }
 
-    fn ui(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("top_menu").show(ctx, |ui| {
+    fn ui(&mut self, ctx: UiContext) {
+        egui::TopBottomPanel::top("top_menu").show(ctx.egui, |ui| {
             ui.horizontal(|ui| {
                 self.camera_controller.ui_toolbar(ui);
                 self.renderer.ui_toolbar(ui);
             });
         });
-        self.camera_controller.ui(ctx);
-        self.renderer.ui(ctx);
+        self.camera_controller.ui(ctx.egui);
+        self.renderer.ui(ctx.egui);
     }
 }
 

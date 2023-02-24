@@ -130,7 +130,7 @@ impl Application for App {
 
     #[tracing::instrument(target = "App::render", skip_all)]
     fn render(&mut self, ctx: RenderContext) -> Result<()> {
-        self.renderer.begin_render()?;
+        self.renderer.begin_render(Vec3::ZERO.extend(1.))?;
         self.renderer.submit_mesh(
             Arc::downgrade(&self.material),
             Arc::downgrade(&self.mesh).transformed(self.transform),

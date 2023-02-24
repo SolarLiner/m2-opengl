@@ -99,7 +99,7 @@ impl Renderer {
 
     #[tracing::instrument]
     pub fn resize(&mut self, size: UVec2) -> Result<()> {
-        Framebuffer::backbuffer().viewport(0, 0, size.x as _, size.y as _);
+        Framebuffer::viewport(0, 0, size.x as _, size.y as _);
         self.geom_pass.write().unwrap().resize(size)?;
         self.post_process.resize(size)?;
         self.camera.projection.update(size.as_vec2());
@@ -133,9 +133,9 @@ impl Renderer {
         self.last_render_submitted = 0;
 
         let backbuffer = Framebuffer::backbuffer();
-        backbuffer.clear_color(clear_color.to_array())?;
-        backbuffer.clear_depth(1.)?;
-        backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
+        Framebuffer::clear_color(clear_color.to_array());
+        Framebuffer::clear_depth(1.);
+        backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
 
         self.post_process.auto_exposure_enabled = self.post_process_iface.auto_exposure;
         self.post_process.luminance_bias = self.post_process_iface.exposure;
@@ -147,7 +147,7 @@ impl Renderer {
             .read()
             .unwrap()
             .framebuffer()
-            .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH)?;
+            .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
         Ok(())
     }
 
@@ -331,7 +331,7 @@ impl Renderer {
             let geom_pass = self.geom_pass.clone();
             painter.add(egui::PaintCallback {
                 rect,
-                callback: Arc::new(rose_ui::painter::UiCallback::new(move |info, ui| {
+                        callback: Arc::new(rose_ui::painter::UiCallback::new(move |_info, ui| {
                     let geom_pass = geom_pass.read().unwrap();
                     let _ = match ix {
                         0 => geom_pass.debug_position(ui.framebuffer()),
@@ -364,7 +364,7 @@ fn make_texture_frame(
         painter.rect_filled(rect, 0., egui::Rgba::from_gray(0.));
         painter.add(egui::PaintCallback {
             rect,
-            callback: Arc::new(rose_ui::painter::UiCallback::new(move |info, ui| {
+            callback: Arc::new(rose_ui::painter::UiCallback::new(move |_info, ui| {
                 draw(ui.framebuffer());
             })),
         });

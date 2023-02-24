@@ -1,8 +1,8 @@
 extern crate proc_macro;
-use darling::{FromField, FromDeriveInput, ast, ToTokens};
+use darling::{ast, FromDeriveInput, FromField, ToTokens};
 
 use quote::quote;
-use syn::{parse_macro_input};
+use syn::parse_macro_input;
 
 #[derive(Debug, Clone, FromField)]
 #[darling(attributes(attribute))]
@@ -23,7 +23,16 @@ struct VertexInput {
 pub fn derive_vertex_attributes(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(item);
     let input = VertexInput::from_derive_input(&input).expect("Cannot parse non-derive input");
-    let attributes = input.data.as_ref().take_struct().expect("Cannot be an enum").fields.into_iter().cloned().filter(|attr| !attr.ignore).collect::<Vec<_>>();
+    let attributes = input
+        .data
+        .as_ref()
+        .take_struct()
+        .expect("Cannot be an enum")
+        .fields
+        .into_iter()
+        .cloned()
+        .filter(|attr| !attr.ignore)
+        .collect::<Vec<_>>();
 
     let ident = input.ident;
 
@@ -39,5 +48,6 @@ pub fn derive_vertex_attributes(item: proc_macro::TokenStream) -> proc_macro::To
                 vec![#(#input),*].leak()
             }
         }
-    ).into()
+    )
+    .into()
 }

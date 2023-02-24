@@ -109,3 +109,8 @@ target/
 # Zipped archives
 *.zip
 *.gz
+
+# Flamegraph output
+flamegraph.svg
+perf.data
+perf.data.old

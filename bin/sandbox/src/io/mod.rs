@@ -1,16 +1,11 @@
-use std::{
-    ops::Deref, path::Path, sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
+use self::obj::WavefrontLoader;
 use eyre::{Context, Result};
 use once_cell::sync::Lazy;
-use self::obj::WavefrontLoader;
 
-use rose_core::{
-    material::Material,
-    transform::TransformExt
-};
 use crate::scene::Scene;
+use rose_core::material::Material;
 
 mod obj;
 
@@ -30,7 +25,7 @@ pub trait MeshLoader<D: ObjectData> {
 impl<T: ObjectData> ObjectData for Box<T> {
     #[inline(always)]
     fn insert_into_scene(&self, scene: &mut Scene) -> Result<Vec<u64>> {
-        T::insert_into_scene(&*self, scene)
+        T::insert_into_scene(self, scene)
     }
 }
 

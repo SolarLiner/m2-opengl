@@ -48,8 +48,7 @@ impl RenderStats {
     pub fn percentile(&self, pc: usize) -> u64 {
         self.fps_hist
             .buckets()
-            .skip(pc)
-            .next()
+            .nth(pc)
             .map(|bucket| bucket.start())
             .unwrap_or(0)
     }
@@ -140,8 +139,9 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
         .with_alpha_size(8)
         .with_transparency(true);
 
-    let display_builder =
-        DisplayBuilder::new().with_window_builder(Some(App::window_features(WindowBuilder::new()).with_title(title)));
+    let display_builder = DisplayBuilder::new().with_window_builder(Some(
+        App::window_features(WindowBuilder::new()).with_title(title),
+    ));
 
     let (window, gl_config) = display_builder
         .build(&event_loop, template, |configs| {

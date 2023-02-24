@@ -4,7 +4,7 @@ use std::{
 };
 use egui::Ui;
 
-use glam::{vec2, Mat3, Quat, Vec2, Vec3};
+use glam::{vec2, Quat, Vec2, Vec3};
 use winit::event::{ElementState, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent};
 
 use rose_core::camera::Camera;
