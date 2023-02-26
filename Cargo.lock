@@ -312,6 +312,7 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dae99b246505811f5bc19d2de1e406ec5d2816b421d58fa223779eb576f472c9"
 dependencies = [
+ "bevy_dylib",
  "bevy_internal",
 ]
 
@@ -415,6 +416,15 @@ dependencies = [
  "bevy_log",
  "bevy_time",
  "bevy_utils",
+]
+
+[[package]]
+name = "bevy_dylib"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d193c3d56e3bdd106596327d15dd67ddfd862f8b5aa8260677efefe3ddef736"
+dependencies = [
+ "bevy_internal",
 ]
 
 [[package]]
@@ -532,7 +542,6 @@ dependencies = [
  "tracing-error",
  "tracing-log",
  "tracing-subscriber",
- "tracing-tracy",
  "tracing-wasm",
 ]
 
@@ -1231,6 +1240,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
+name = "csv"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af91f40b7355f82b0a891f50e70399475945bb0b0da4f1700ce60761c9d3e359"
+dependencies = [
+ "csv-core",
+ "itoa",
+ "ryu",
+ "serde",
+]
+
+[[package]]
+name = "csv-core"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b2466559f260f48ad25fe6317b3c8dac77b5bdb5763ac7d9d6103530663bc90"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "ctor"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1373,6 +1403,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac1b7517328c04c2aa68422fc60a41b92208182142ed04a25879c26c8f878794"
 dependencies = [
  "libloading",
+]
+
+[[package]]
+name = "dolly"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8bd01a2e160b741ea8fe693264718dda9e75a85e3fd38269b97e76361077f11"
+dependencies = [
+ "glam",
 ]
 
 [[package]]
@@ -3290,17 +3329,23 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bytemuck",
+ "color-eyre",
+ "csv",
+ "dolly",
  "egui",
  "eyre",
  "glam",
  "glutin",
  "glutin-winit",
+ "once_cell",
  "pan-orbit-camera",
+ "rand",
  "rose-core",
  "rose-platform",
  "rose-renderer",
  "rose-ui",
  "tracing",
+ "tracing-subscriber",
  "violette",
  "winit",
 ]

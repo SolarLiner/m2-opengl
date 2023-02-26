@@ -46,6 +46,10 @@ impl Ui {
         })
     }
 
+    pub fn context(&self) -> &egui::Context {
+        &self.ctx
+    }
+
     pub fn on_event(&mut self, event: &winit::event::WindowEvent) -> egui_winit::EventResponse {
         self.winit.on_event(&self.ctx, event)
     }

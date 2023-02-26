@@ -1,7 +1,7 @@
 use std::ops::Mul;
 
 use float_ord::FloatOrd;
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat4, Quat, Vec3, Vec4Swizzles};
 
 use crate::camera::Camera;
 
@@ -10,6 +10,15 @@ pub struct Transform {
     pub position: Vec3,
     pub rotation: Quat,
     pub scale: Vec3,
+}
+
+impl Transform {
+    pub fn set_from_matrix(&mut self, transform: Mat4) {
+        let (scale, rotation, translation) = transform.to_scale_rotation_translation();
+        self.position = translation;
+        self.rotation = rotation;
+        self.scale = scale;
+    }
 }
 
 impl Transform {
@@ -38,7 +47,8 @@ impl Transform {
     }
 
     pub fn distance_to_camera(&self, camera: &Camera) -> FloatOrd<f32> {
-        let dist = self.position.distance(camera.transform.position);
+        let pos = camera.transform.w_axis.xyz();
+        let dist = self.position.distance(pos);
         FloatOrd(dist)
     }
 }

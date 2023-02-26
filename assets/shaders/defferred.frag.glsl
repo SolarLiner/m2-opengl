@@ -99,7 +99,7 @@ void main() {
     vec3 position = texture(frame_position, v_uv).rgb;
     vec3 albedo = texture(frame_albedo, v_uv).rgb;
     vec3 normal = texture(frame_normal, v_uv).rgb;
-    vec3 rough_metal = texture(frame_rough_metal, v_uv).rgb;
+    vec2 rough_metal = texture(frame_rough_metal, v_uv).rg;
 
     float roughness = rough_metal.r;
     float metallic = rough_metal.g;
@@ -112,10 +112,10 @@ void main() {
     vec3 view_dir = normalize(position - camera_pos);// <- world space
 
     float light_distance;
-    vec3 light_dir;// <- world space
+    vec3 light_dir; // <- world space
     if (light.kind == LIGHT_KIND_POINT) {
         light_distance = distance(light.pos_dir, position);// <- nominal
-        light_dir = normalize(light.pos_dir - position);// <- nominal, world space
+        light_dir = -normalize(light.pos_dir - position);// <- nominal, world space
     } else {
         light_distance = 1.;
         light_dir = -light.pos_dir;// <- nominal, world space

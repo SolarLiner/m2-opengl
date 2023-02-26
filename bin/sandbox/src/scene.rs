@@ -141,7 +141,7 @@ impl Scene {
             match &instance.entity {
                 Entity::Camera(projection) => Some(Camera {
                     projection: projection.clone(),
-                    transform: instance.transform,
+                    transform: instance.transform.matrix(),
                 }),
                 _ => None,
             }
@@ -156,7 +156,7 @@ impl Scene {
 
     pub fn update_camera(&mut self, CameraId(id): CameraId, camera: &Camera) {
         if let Some(inst) = self.get_mut(id) {
-            inst.transform.clone_from(&camera.transform);
+            inst.transform.set_from_matrix(camera.transform);
             match &mut inst.entity {
                 Entity::Camera(projection) => projection.clone_from(&camera.projection),
                 _ => unreachable!(),

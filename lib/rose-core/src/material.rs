@@ -224,7 +224,7 @@ impl Material {
     ) -> Result<()> {
         let mut ordering = (0..meshes.len()).collect::<Vec<_>>();
         ordering.sort_by_cached_key(|ix| meshes[*ix].transform.distance_to_camera(camera));
-        let mat_view_proj = camera.projection.matrix() * camera.transform.matrix();
+        let mat_view_proj = camera.projection.matrix() * camera.transform;
         self.program
             .set_uniform(self.uniform_view_proj, mat_view_proj)?;
 

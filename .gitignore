@@ -104,6 +104,7 @@ target/
 *.pdb
 
 # Custom
+*.json
 *.jsonl
 
 # Zipped archives

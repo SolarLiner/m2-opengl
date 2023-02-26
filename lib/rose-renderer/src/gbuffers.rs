@@ -1,4 +1,4 @@
-use glam::UVec2;
+use glam::{UVec2, Vec3};
 use std::num::NonZeroU32;
 
 use eyre::{Context, Result};
@@ -173,7 +173,7 @@ impl GeometryBuffers {
     #[tracing::instrument(skip_all)]
     pub fn process(&self, camera: &Camera, lights: &LightBuffer) -> Result<&Texture<[f32; 3]>> {
         self.screen_pass
-            .set_uniform(self.uniform_camera_pos, camera.transform.position)?;
+            .set_uniform(self.uniform_camera_pos, camera.transform.transform_point3(Vec3::ZERO))?;
         Framebuffer::enable_blending(Blend::One, Blend::One);
         Framebuffer::clear_color([0., 0., 0., 1.]);
         self.output_fbo.do_clear(ClearBuffer::COLOR);

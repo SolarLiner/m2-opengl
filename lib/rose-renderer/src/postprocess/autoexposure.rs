@@ -75,15 +75,15 @@ impl AutoExposure {
         self.screen_draw.draw(&self.fbo)?;
         self.target.generate_mipmaps()?;
         let last_mipmap = self.target.num_mipmaps() - 1;
-        tracing::debug!(message="Sampling last mipmap for average", mipmap=%last_mipmap);
+        tracing::trace!(message="Sampling last mipmap for average", mipmap=%last_mipmap);
         let luminance_data = self.target.download(last_mipmap)?;
         let mut luminance_data = luminance_data[0];
         if luminance_data.is_nan() {
             luminance_data = 1.;
         }
-        tracing::debug!(%luminance_data, ev=%luminance_data.log2());
+        tracing::trace!(%luminance_data, ev=%luminance_data.log2());
         self.avg_luminance += (luminance_data - self.avg_luminance) * lerp;
-        tracing::debug!(avg_luminance=?self.avg_luminance, luminance=?luminance_data);
+        tracing::trace!(avg_luminance=?self.avg_luminance, luminance=?luminance_data);
         Ok(self.avg_luminance)
     }
 }

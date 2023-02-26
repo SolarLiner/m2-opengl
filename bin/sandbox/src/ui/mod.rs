@@ -1,15 +1,12 @@
-use std::{
-    any::Any,
-    cell::RefCell,
-    sync::{RwLock, Weak},
-};
+use std::cell::RefCell;
 
 use egui::{
     epaint::ahash::HashSet, Align, Color32, Context, Layout, RichText, Sense, Ui, Widget,
     WidgetText,
 };
 use egui_dock::{NodeIndex, Style, Tree};
-use glam::Vec3;
+use egui_gizmo::{Gizmo, GizmoMode};
+use glam::{vec4, Mat4, Vec3};
 
 use pan_orbit_camera::OrbitCameraController;
 use rose_core::light::Light;
@@ -38,9 +35,10 @@ pub enum Tabs {
     SceneHierarchy,
     Properties,
     RendererDebug,
-    CamreaControls,
+    CameraControls,
     Postprocess,
     NewLight,
+    Viewport,
 }
 
 impl Tabs {
@@ -48,9 +46,10 @@ impl Tabs {
         Self::SceneHierarchy,
         Self::Properties,
         Self::RendererDebug,
-        Self::CamreaControls,
+        Self::CameraControls,
         Self::Postprocess,
         Self::NewLight,
+        Self::Viewport,
     ];
 
     fn ui(&self, ui: &mut Ui, viewer: &mut TabViewer) {
@@ -61,9 +60,10 @@ impl Tabs {
                 None => self.ui_properties_default(ui),
             },
             Self::RendererDebug => viewer.renderer.ui_debug_panel(ui),
-            Self::CamreaControls => viewer.camera_controller.ui_inner(ui),
+            Self::CameraControls => viewer.camera_controller.ui_inner(ui),
             Self::Postprocess => viewer.renderer.ui_postprocessing(ui),
             Self::NewLight => self.ui_add_light(ui, viewer),
+            Self::Viewport => self.ui_viewport(ui, viewer),
         }
     }
 
@@ -72,9 +72,10 @@ impl Tabs {
             Self::SceneHierarchy => "Scene hierarchy",
             Self::Properties => "Properties",
             Self::RendererDebug => "Renderer debug",
-            Self::CamreaControls => "Camera controls",
+            Self::CameraControls => "Camera controls",
             Self::Postprocess => "Post processing",
             Self::NewLight => "Add light",
+            Self::Viewport => "Viewport",
         }
     }
 
@@ -271,6 +272,37 @@ impl Tabs {
             }
         });
     }
+
+    fn ui_viewport(&self, ui: &mut Ui, viewer: &mut TabViewer) {
+        egui::Frame::none().show(ui, |ui| {
+            let (ui_rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+            let rect = vec4(
+                ui_rect.left(),
+                ui_rect.bottom(),
+                ui_rect.width(),
+                ui_rect.height(),
+            ) * ui.ctx().pixels_per_point();
+            let (x, y, w, h) = rect.as_ivec4().into();
+            viewer.renderer.set_viewport(x, y, w, h);
+            let camera = viewer.renderer.camera_mut();
+            if let Some(inst) = viewer
+                .selection
+                .as_ref()
+                .copied()
+                .and_then(|i| viewer.scene.get_mut(i))
+            {
+                let gizmo = Gizmo::new("manipulator")
+                    .view_matrix(camera.transform.to_cols_array_2d())
+                    .projection_matrix(camera.projection.matrix().to_cols_array_2d())
+                    .model_matrix(inst.transform.matrix().to_cols_array_2d())
+                    .mode(viewer.gizmo_mode);
+                if let Some(response) = gizmo.interact(ui) {
+                    inst.transform =
+                        Transform::from_matrix(Mat4::from_cols_array_2d(&response.transform));
+                }
+            }
+        });
+    }
 }
 
 pub struct UiState {
@@ -279,13 +311,26 @@ pub struct UiState {
 }
 
 impl UiState {
+    // pub fn new() -> Self {
+    //     let mut tabs = Tree::new(vec![Tabs::SceneHierarchy]);
+    //     tabs.split_below(NodeIndex::root(), 0.5, vec![Tabs::Properties]);
+    //     Self {
+    //         tabs,
+    //         open_tabs: HashSet::from_iter([Tabs::SceneHierarchy, Tabs::Properties]),
+    //     }
+    // }
+
     pub fn new() -> Self {
-        let mut tabs = Tree::new(vec![Tabs::SceneHierarchy]);
-        tabs.split_below(NodeIndex::root(), 0.5, vec![Tabs::Properties]);
-        Self {
-            tabs,
-            open_tabs: HashSet::from_iter([Tabs::SceneHierarchy, Tabs::Properties]),
-        }
+        let mut tabs = Tree::new(vec![Tabs::Viewport]);
+        let [main, left] = tabs.split_left(
+            NodeIndex::root(),
+            0.2,
+            vec![Tabs::SceneHierarchy, Tabs::Properties],
+        );
+        let [main, bottom] =
+            tabs.split_below(main, 0.2, vec![Tabs::Postprocess, Tabs::CameraControls]);
+        let open_tabs = HashSet::from_iter(tabs.tabs().copied());
+        Self { tabs, open_tabs }
     }
 
     pub(crate) fn show(&mut self, ctx: &Context, viewer: &mut TabViewer) {
@@ -340,6 +385,7 @@ pub struct TabViewer<'a> {
     pub(crate) renderer: &'a mut Renderer,
     pub(crate) camera_controller: &'a mut OrbitCameraController,
     pub(crate) added_nodes: Vec<(NodeIndex, Tabs)>,
+    pub(crate) gizmo_mode: GizmoMode,
 }
 
 impl<'a> egui_dock::TabViewer for TabViewer<'a> {

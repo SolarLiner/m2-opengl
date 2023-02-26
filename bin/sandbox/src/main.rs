@@ -368,7 +368,7 @@ impl Sandbox {
                 .frame(egui::Frame::none())
                 .show(ctx.egui, |ui| {
                     let gizmo = Gizmo::new("manipulator")
-                        .view_matrix(camera.transform.matrix().to_cols_array_2d())
+                        .view_matrix(camera.transform.to_cols_array_2d())
                         .projection_matrix(camera.projection.matrix().to_cols_array_2d())
                         .model_matrix(inst.transform.matrix().to_cols_array_2d())
                         .mode(self.gizmo_mode);
@@ -482,11 +482,11 @@ impl Application for Sandbox {
         }
 
         self.renderer
-            .begin_render(self.total_ambient_lighting.extend(1.))?;
+            .begin_render()?;
         for (material, mesh) in scene.objects() {
             self.renderer.submit_mesh(material, mesh);
         }
-        self.renderer.flush(ctx.dt)
+        self.renderer.flush(self.total_ambient_lighting.extend(1.), ctx.dt)
     }
 
     fn ui(&mut self, ctx: UiContext) {
@@ -502,14 +502,15 @@ impl Application for Sandbox {
                 renderer: &mut self.renderer,
                 camera_controller: &mut self.camera_controller,
                 added_nodes: vec![],
+                gizmo_mode: self.gizmo_mode,
             };
 
-            // self.ui_state.show(ctx.egui, &mut tabs);
-            egui::SidePanel::left("tabs")
-                .min_width(150.)
-                .show(ctx.egui, |ui| self.ui_state.show_inner(ui, &mut tabs));
+            self.ui_state.show(ctx.egui, &mut tabs);
+            // egui::SidePanel::left("tabs")
+            //     .min_width(150.)
+            //     .show(ctx.egui, |ui| self.ui_state.show_inner(ui, &mut tabs));
         }
-        self.ui_gizmo(ctx);
+        // self.ui_gizmo(ctx);
     }
 }
 

@@ -2,9 +2,9 @@ use std::{
     f32::consts::{PI, TAU},
     time::Duration,
 };
-use egui::Ui;
 
-use glam::{vec2, Quat, Vec2, Vec3};
+use egui::Ui;
+use glam::{vec2, Mat4, Quat, Vec2, Vec3};
 use winit::event::{ElementState, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent};
 
 use rose_core::camera::Camera;
@@ -32,10 +32,12 @@ impl Default for OrbitCameraController {
 
 impl OrbitCameraController {
     pub fn from_camera(camera: &Camera) -> Self {
-        let radius = camera.transform.position.length();
-        let focus = camera.transform.position + camera.transform.forward() * radius;
+        let (scale, rot, pos) = camera.transform.to_scale_rotation_translation();
+        let fwd = rot.mul_vec3(Vec3::Z);
+        let radius = pos.length();
+        let focus = pos + fwd * radius;
         Self {
-            tgt_rotation: camera.transform.rotation,
+            tgt_rotation: rot,
             focus,
             radius,
             ..Default::default()
@@ -45,8 +47,10 @@ impl OrbitCameraController {
         let window_size = vec2(camera.projection.width, camera.projection.height);
         let input =
             self.sensitivity * input / window_size * vec2(window_size.x / window_size.y, 1.);
-        let left = camera.transform.left() * input.x;
-        let up = camera.transform.down() * input.y;
+        let left = camera.transform.transform_vector3(-Vec3::X);
+        let left = left * input.x;
+        let down = camera.transform.transform_vector3(-Vec3::Y);
+        let up = down * input.y;
         let translation = (left + up) * self.radius;
         self.focus += translation;
     }
@@ -68,9 +72,9 @@ impl OrbitCameraController {
     }
 
     pub fn update(&mut self, _dt: Duration, camera: &mut Camera) {
-        camera.transform.rotation = self.tgt_rotation;
-        camera.transform.position = self.focus + camera.transform.backward() * self.radius;
-        camera.transform = camera.transform.looking_at(self.focus);
+        let fwd = self.tgt_rotation.mul_vec3(-Vec3::Z);
+        let position = self.focus + fwd * self.radius;
+        camera.transform = Mat4::from_rotation_translation(self.tgt_rotation, position);
     }
 
     pub fn ui_toolbar(&mut self, ui: &mut egui::Ui) {
@@ -107,7 +111,7 @@ impl OrbitCameraController {
                     .clamp_range(0f32..=50.)
                     .speed(0.3),
             )
-                .labelled_by(pos_label.id);
+            .labelled_by(pos_label.id);
         });
     }
 

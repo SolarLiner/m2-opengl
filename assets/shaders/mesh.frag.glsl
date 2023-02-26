@@ -54,7 +54,7 @@ void main() {
     frame_normal = vs_normal;
     #endif
 
-    #if HAS_ROUGH_METAL_TEXTURE
+    #ifdef HAS_ROUGH_METAL_TEXTURE
     frame_rough_metal = texture(rough_metal, vs_uv).rg;
     #else
     frame_rough_metal = rough_metal.rg;

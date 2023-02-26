@@ -87,7 +87,7 @@ impl Postprocess {
         let (width, height) = input.mipmap_size(0).unwrap();
         let accomodate = dt.as_secs_f32() * 100.;
         let lerp = accomodate / (1. + accomodate);
-        tracing::debug!(?accomodate, ?lerp);
+        tracing::trace!(?accomodate, ?lerp);
         if self.auto_exposure_enabled {
             let avg_luminance = self
                 .auto_exposure

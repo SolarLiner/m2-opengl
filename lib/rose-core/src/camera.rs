@@ -41,6 +41,6 @@ impl Projection {
 
 #[derive(Debug, Clone, Default)]
 pub struct Camera {
-    pub transform: Transform,
+    pub transform: Mat4,
     pub projection: Projection,
 }

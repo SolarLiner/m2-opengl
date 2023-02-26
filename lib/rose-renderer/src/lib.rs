@@ -50,11 +50,18 @@ pub struct Renderer {
     queued_meshes: HashMap<usize, Vec<Transformed<Weak<Mesh>>>>,
     render_span: ThreadGuard<Option<EnteredSpan>>,
     debug_window_open: bool,
+    draw_viewport: (i32, i32, i32, i32),
     begin_scene_at: Option<Instant>,
     last_scene_duration: Option<Duration>,
     last_render_duration: Option<Duration>,
     last_render_submitted: usize,
     last_render_rendered: usize,
+}
+
+impl Renderer {
+    pub fn set_viewport(&mut self, x: i32, y: i32, w: i32, h: i32) {
+        self.draw_viewport = (x, y, w, h);
+    }
 }
 
 impl Renderer {
@@ -86,6 +93,7 @@ impl Renderer {
             last_render_submitted: 0,
             last_render_rendered: 0,
             debug_window_open: false,
+            draw_viewport: (0, 0, size.x as _, size.y as _),
         })
     }
 
@@ -122,7 +130,7 @@ impl Renderer {
         self.lights = light_buffer;
     }
 
-    pub fn begin_render(&mut self, clear_color: Vec4) -> Result<()> {
+    pub fn begin_render(&mut self) -> Result<()> {
         self.render_span
             .replace(tracing::debug_span!("render").entered());
         let now = Instant::now();
@@ -132,22 +140,12 @@ impl Renderer {
         self.last_render_rendered = 0;
         self.last_render_submitted = 0;
 
-        let backbuffer = Framebuffer::backbuffer();
-        Framebuffer::clear_color(clear_color.to_array());
-        Framebuffer::clear_depth(1.);
-        backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
-
         self.post_process.auto_exposure_enabled = self.post_process_iface.auto_exposure;
         self.post_process.luminance_bias = self.post_process_iface.exposure;
         self.post_process.bloom_radius = self.post_process_iface.bloom.size;
         self.post_process
             .set_bloom_strength(self.post_process_iface.bloom.strength)?;
 
-        self.geom_pass
-            .read()
-            .unwrap()
-            .framebuffer()
-            .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
         Ok(())
     }
 
@@ -156,7 +154,7 @@ impl Renderer {
         let mesh_ptr = Weak::as_ptr(&mesh) as usize;
         let material_ptr = Weak::as_ptr(&material) as usize;
         self.last_render_submitted += 1;
-        tracing::debug!(message="Submitting mesh", %mesh_ptr, %material_ptr);
+        tracing::trace!(message="Submitting mesh", %mesh_ptr, %material_ptr);
         let mat_ix = if let Some(ix) = self
             .queued_materials
             .iter()
@@ -176,8 +174,23 @@ impl Renderer {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn flush(&mut self, dt: Duration) -> Result<()> {
+    pub fn flush(&mut self, clear_color: Vec4, dt: Duration) -> Result<()> {
         let render_start = Instant::now();
+        // let backbuffer = Framebuffer::backbuffer();
+        // Framebuffer::clear_color(clear_color.to_array());
+        // Framebuffer::clear_depth(1.);
+        // backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
+
+        let (x, y, w, h) = self.draw_viewport;
+        Framebuffer::viewport(x, y, w, h);
+        self.camera.projection.width = x as _;
+        self.camera.projection.height = y as _;
+        self.geom_pass
+            .read()
+            .unwrap()
+            .framebuffer()
+            .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
+
         let geom_pass = self.geom_pass.read().unwrap();
         for (mat_ix, meshes) in self.queued_meshes.drain() {
             let Some(material) = self.queued_materials[mat_ix].upgrade() else {
@@ -218,7 +231,8 @@ impl Renderer {
             .num_columns(2)
             .show(ui, |ui| {
                 let label = ui.label("Auto exposure");
-                ui.checkbox(&mut pp_iface.auto_exposure, "Enabled").labelled_by(label.id);
+                ui.checkbox(&mut pp_iface.auto_exposure, "Enabled")
+                    .labelled_by(label.id);
                 ui.end_row();
 
                 let exposure_label = ui.label("Exposure");
@@ -228,9 +242,9 @@ impl Renderer {
                         .show_value(true)
                         .suffix(" EV")
                         .custom_formatter(|v, _| format!("{:+1.1}", v.log2()))
-                        .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev)))
+                        .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev))),
                 )
-                    .labelled_by(exposure_label.id);
+                .labelled_by(exposure_label.id);
                 ui.end_row();
 
                 let bloom_size_label = ui.label("Bloom size");
@@ -240,7 +254,7 @@ impl Renderer {
                         .clamp_to_range(false)
                         .show_value(true),
                 )
-                    .labelled_by(bloom_size_label.id);
+                .labelled_by(bloom_size_label.id);
                 ui.end_row();
 
                 let bloom_strength_label = ui.label("Bloom strength");
@@ -250,9 +264,9 @@ impl Renderer {
                         .show_value(true)
                         .suffix(" %")
                         .custom_formatter(|x, _| format!("{:2.1}", x * 100.))
-                        .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.))
+                        .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.)),
                 )
-                    .labelled_by(bloom_strength_label.id);
+                .labelled_by(bloom_strength_label.id);
                 ui.end_row();
             });
     }
@@ -331,7 +345,7 @@ impl Renderer {
             let geom_pass = self.geom_pass.clone();
             painter.add(egui::PaintCallback {
                 rect,
-                        callback: Arc::new(rose_ui::painter::UiCallback::new(move |_info, ui| {
+                callback: Arc::new(rose_ui::painter::UiCallback::new(move |_info, ui| {
                     let geom_pass = geom_pass.read().unwrap();
                     let _ = match ix {
                         0 => geom_pass.debug_position(ui.framebuffer()),
