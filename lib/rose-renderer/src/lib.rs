@@ -185,13 +185,10 @@ impl Renderer {
         Framebuffer::viewport(x, y, w, h);
         self.camera.projection.width = x as _;
         self.camera.projection.height = y as _;
-        self.geom_pass
-            .read()
-            .unwrap()
+        let geom_pass = self.geom_pass.read().unwrap();
+        geom_pass
             .framebuffer()
             .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
-
-        let geom_pass = self.geom_pass.read().unwrap();
         for (mat_ix, meshes) in self.queued_meshes.drain() {
             let Some(material) = self.queued_materials[mat_ix].upgrade() else {
                 tracing::warn!("Dropped material value, cannot recover from weakref");
@@ -205,6 +202,9 @@ impl Renderer {
             self.last_render_rendered += meshes.len();
             geom_pass.draw_meshes(&self.camera, &material, &mut meshes)?;
         }
+
+        let pp_size = self.post_process.size().as_ivec2();
+        Framebuffer::viewport(0, 0, pp_size.x, pp_size.y);
 
         let shaded_tex = geom_pass.process(&self.camera, &self.lights)?;
         self.post_process

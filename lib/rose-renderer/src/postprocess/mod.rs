@@ -30,6 +30,12 @@ pub struct Postprocess {
 }
 
 impl Postprocess {
+    pub fn size(&self) -> UVec2 {
+        self.texture.size_vec().truncate()
+    }
+}
+
+impl Postprocess {
     pub fn new(size: UVec2) -> Result<Self> {
         let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width resize"); };
         let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
