@@ -3,16 +3,16 @@ use std::{collections::HashMap, num::NonZeroU32};
 use bytemuck::{offset_of, Pod, Zeroable};
 use egui::epaint::{self, Primitive};
 use eyre::Result;
-use glam::{vec2, IVec2, Vec2, Vec4};
+use glam::{vec2, IVec2, Vec2};
 use winit::dpi::PhysicalSize;
 
 use rose_core::mesh::Mesh;
+use rose_core::utils::thread_guard::ThreadGuard;
 use violette::{
-    base::GlType,
     framebuffer::{Blend, Framebuffer},
     gl,
     program::{Program, UniformLocation},
-    texture::{Texture, TextureFormat},
+    texture::Texture,
     vertex::{VertexAttributes, VertexDesc},
 };
 
@@ -34,11 +34,11 @@ impl VertexAttributes for Vertex {
 }
 
 #[allow(clippy::type_complexity)]
-pub struct UiCallback(Box<dyn 'static + Fn(egui::PaintCallbackInfo, &UiImpl) + Send + Sync>);
+pub struct UiCallback(ThreadGuard<Box<dyn 'static + Fn(egui::PaintCallbackInfo, &UiImpl)>>);
 
 impl UiCallback {
-    pub fn new<F: 'static + Fn(egui::PaintCallbackInfo, &UiImpl) + Send + Sync>(func: F) -> Self {
-        Self(Box::new(func))
+    pub fn new<F: 'static + Fn(egui::PaintCallbackInfo, &UiImpl)>(func: F) -> Self {
+        Self(ThreadGuard::new(Box::new(func)))
     }
 }
 
@@ -106,7 +106,11 @@ impl UiImpl {
                             screen_size_px: [size.width, size.height],
                         };
                         if let Some(callback) = callback.callback.downcast_ref::<UiCallback>() {
-                            (callback.0)(info, self);
+                            if let Some(cb) = callback.0.get() {
+                                cb(info, self);
+                            } else {
+                                tracing::error!("Ui painter callback not created within the render thread -- this cannot work as OpenGL is not multithreaded")
+                            }
                         }
                         Framebuffer::viewport(0, 0, size.width as _, size.height as _);
                     }
@@ -150,9 +154,7 @@ impl UiImpl {
                 let newtype_pixels = bytemuck::cast_slice(&image.pixels).to_vec();
                 newtype_pixels
             }
-            egui::ImageData::Font(image) => {
-                image.pixels.clone()
-            }
+            egui::ImageData::Font(image) => image.pixels.clone(),
         };
         if let Some(texture) = self.textures.get_mut(&id) {
             if let Some(pos) = delta.pos {
@@ -160,7 +162,13 @@ impl UiImpl {
                 let size = IVec2::from_array(delta.image.size().map(|x| x as _));
                 texture.set_sub_data_2d(0, pos.x, pos.y, size.x, size.y, &pixels)?;
             } else {
-                tracing::debug!("Reset image {:?} to {}x{} with [_; {}] pixels", id, width.get(), height.get(), pixels.len());
+                tracing::debug!(
+                    "Reset image {:?} to {}x{} with [_; {}] pixels",
+                    id,
+                    width.get(),
+                    height.get(),
+                    pixels.len()
+                );
                 texture.clear_resize(width, height, unsafe { NonZeroU32::new_unchecked(1) })?;
                 texture.set_data(&pixels)?;
             }

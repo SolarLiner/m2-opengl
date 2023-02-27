@@ -1,4 +1,5 @@
 use std::{f32::consts::TAU, sync::Arc, time::Instant};
+use std::rc::Rc;
 
 use camera_controller::OrbitCameraController;
 use glam::{vec2, vec3, UVec2, Vec2, Vec3};
@@ -9,6 +10,8 @@ use rose_core::{
     mesh::MeshBuilder,
     transform::{Transform, TransformExt},
 };
+use rose_core::camera::Camera;
+use rose_core::utils::thread_guard::ThreadGuard;
 use rose_platform::{Application, RenderContext, TickContext, UiContext};
 use rose_renderer::{Mesh, Renderer};
 use violette::framebuffer::Framebuffer;
@@ -21,12 +24,13 @@ struct Sphere {
     freq: f32,
     orig_pos: Vec3,
     transform: Transform,
-    mesh: Arc<Mesh>,
-    material: Arc<Material>,
+    mesh: ThreadGuard<Rc<Mesh>>,
+    material: ThreadGuard<Rc<Material>>,
 }
 
 struct ManySpheres {
-    renderer: Renderer,
+    camera: Camera,
+    renderer: ThreadGuard<Renderer>,
     camera_controller: OrbitCameraController,
     spheres: Vec<Sphere>,
     start: Instant,
@@ -48,14 +52,17 @@ impl Application for ManySpheres {
             },
         ])?;
 
+        let mut camera = Camera::default();
+        camera.projection.width = sizef.x;
+        camera.projection.height = sizef.y;
         let mut camera_controller = OrbitCameraController::default();
         camera_controller.set_orientation(
-            renderer.camera_mut(),
+            &mut camera,
             vec2(10f32.to_radians(), 30f32.to_radians()),
         );
-        camera_controller.update(Default::default(), renderer.camera_mut());
+        camera_controller.update(Default::default(), &mut camera);
 
-        let mesh = Arc::new(MeshBuilder::new(Vertex::new).uv_sphere(0.1, 6, 12)?);
+        let mesh = Rc::new(MeshBuilder::new(Vertex::new).uv_sphere(0.1, 6, 12)?);
         let materials = [
             [0.1, 0.4, 0.8],
             [0.8, 0.1, 0.4],
@@ -63,7 +70,7 @@ impl Application for ManySpheres {
             [0.6, 0.6, 0.6],
         ]
         .map(|color| Material::create(color, None, [0.2, 0.]).unwrap())
-        .map(Arc::new);
+        .map(Rc::new);
 
         let mut rng = rand::thread_rng();
         let spheres = (0..50)
@@ -74,8 +81,8 @@ impl Application for ManySpheres {
                 let freq = rng.gen_range(0.1..=1.);
                 let material = materials.choose(&mut rand::thread_rng()).unwrap();
                 Sphere {
-                    mesh: mesh.clone(),
-                    material: material.clone(),
+                    mesh: ThreadGuard::new(mesh.clone()),
+                    material: ThreadGuard::new(material.clone()),
                     orig_pos,
                     transform: Transform {
                         position: orig_pos,
@@ -89,7 +96,8 @@ impl Application for ManySpheres {
             .collect();
         Framebuffer::clear_color([0.1, 0.1, 0.4, 1.]);
         Ok(Self {
-            renderer,
+            renderer: ThreadGuard::new(renderer),
+            camera,
             camera_controller,
             spheres,
             start: Instant::now(),
@@ -107,7 +115,7 @@ impl Application for ManySpheres {
             sphere.transform.position = sphere.orig_pos + Vec3::Y * offset_y;
         }
         self.camera_controller
-            .update(ctx.dt, self.renderer.camera_mut());
+            .update(ctx.dt, &mut self.camera);
         Ok(())
     }
 
@@ -115,11 +123,11 @@ impl Application for ManySpheres {
         self.renderer.begin_render(Vec3::ZERO.extend(1.))?;
         for sphere in &self.spheres {
             self.renderer.submit_mesh(
-                Arc::downgrade(&sphere.material),
-                Arc::downgrade(&sphere.mesh).transformed(sphere.transform),
+                Rc::downgrade(&sphere.material),
+                Rc::downgrade(&sphere.mesh).transformed(sphere.transform),
             );
         }
-        self.renderer.flush(ctx.dt)
+        self.renderer.flush(&self.camera, ctx.dt)
     }
 
     fn ui(&mut self, ctx: UiContext) {

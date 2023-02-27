@@ -1,8 +1,10 @@
+use std::thread::Thread;
 use bytemuck::{Pod, Zeroable};
 use eyre::Result;
 use glam::{vec2, vec3, Vec2, Vec3};
 
 use rose_core::mesh::Mesh;
+use rose_core::utils::thread_guard::ThreadGuard;
 use rose_platform::{Application, PhysicalSize, RenderContext, UiContext};
 use violette::{
     framebuffer::{ClearBuffer, Framebuffer},
@@ -20,9 +22,9 @@ struct Vertex {
 
 struct TriangleApp {
     mesh_scale: f32,
-    mat_program: Program,
+    mat_program: ThreadGuard<Program>,
     uniform_scale: UniformLocation,
-    mesh: Mesh<Vertex>,
+    mesh: ThreadGuard<Mesh<Vertex>>,
     size: PhysicalSize<i32>,
 }
 
@@ -54,9 +56,9 @@ impl Application for TriangleApp {
         let uniform_scale = mat_program.uniform("scale").unwrap();
         Ok(Self {
             mesh_scale: 1.,
-            mat_program,
+            mat_program: ThreadGuard::new(mat_program),
             uniform_scale,
-            mesh,
+            mesh: ThreadGuard::new(mesh),
             size: size.cast(),
         })
     }

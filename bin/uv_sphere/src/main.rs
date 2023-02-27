@@ -1,4 +1,5 @@
 use std::{sync::Arc, time::Duration};
+use std::rc::Rc;
 
 use eyre::Result;
 use glam::{vec3, UVec2, Vec2, Vec3};
@@ -10,6 +11,8 @@ use rose_core::{
     mesh::MeshBuilder,
     transform::{Transform, TransformExt},
 };
+use rose_core::camera::Camera;
+use rose_core::utils::thread_guard::ThreadGuard;
 use rose_platform::{
     events::{ElementState, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent},
     Application, PhysicalSize, RenderContext, TickContext, UiContext, WindowBuilder,
@@ -20,9 +23,10 @@ use violette::texture::Texture;
 mod camera_controller;
 
 struct App {
-    renderer: Renderer,
-    mesh: Arc<Mesh>,
-    material: Arc<Material>,
+    camera: Camera,
+    renderer: ThreadGuard<Renderer>,
+    mesh: ThreadGuard<Rc<Mesh>>,
+    material: ThreadGuard<Rc<Material>>,
     transform: Transform,
     ctrl_pressed: bool,
     dragging: Option<MouseButton>,
@@ -56,25 +60,30 @@ impl Application for App {
                 color: vec3(1., 1.5, 2.),
             },
         ];
+        let mut camera = Camera::default();
         let mut camera_controller = OrbitCameraController::default();
         let mut renderer = Renderer::new(size)?;
         renderer.add_lights(lights)?;
-        camera_controller.update(Duration::default(), renderer.camera_mut());
+        camera_controller.update(Duration::default(), &mut camera);
 
         Ok(Self {
-            renderer,
+            renderer: ThreadGuard::new(renderer),
+            camera,
             camera_controller,
             ctrl_pressed: false,
             dragging: None,
             last_mouse_pos: Vec2::ZERO,
-            material: Arc::new(material),
-            mesh: Arc::new(mesh),
+            material: ThreadGuard::new(Rc::new(material)),
+            mesh: ThreadGuard::new(Rc::new(mesh)),
             transform: Transform::default(),
         })
     }
 
     fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
-        self.renderer.resize(UVec2::from_array(size.into()))
+        let size = UVec2::from_array(size.into());
+        let sizef = size.as_vec2();
+        self.camera.projection.update(sizef);
+        self.renderer.resize(size)
     }
 
     fn interact(&mut self, event: WindowEvent) -> Result<()> {
@@ -85,10 +94,10 @@ impl Application for App {
                 match self.dragging {
                     Some(MouseButton::Left) => self
                         .camera_controller
-                        .orbit(self.renderer.camera_mut(), position - self.last_mouse_pos),
+                        .orbit(&mut self.camera, position - self.last_mouse_pos),
                     Some(MouseButton::Right) => self
                         .camera_controller
-                        .pan(self.renderer.camera_mut(), position - self.last_mouse_pos),
+                        .pan(&mut self.camera, position - self.last_mouse_pos),
                     _ => {}
                 }
                 self.last_mouse_pos = position;
@@ -108,11 +117,11 @@ impl Application for App {
             }
             WindowEvent::MouseWheel { delta, .. } => match delta {
                 MouseScrollDelta::LineDelta(_, y) => {
-                    self.camera_controller.scroll(self.renderer.camera_mut(), y)
+                    self.camera_controller.scroll(&mut self.camera, y)
                 }
                 MouseScrollDelta::PixelDelta(delta) => self
                     .camera_controller
-                    .scroll(self.renderer.camera_mut(), delta.y as _),
+                    .scroll(&mut self.camera, delta.y as _),
             },
             WindowEvent::ModifiersChanged(state) => {
                 self.ctrl_pressed = state.contains(ModifiersState::CTRL)
@@ -124,7 +133,7 @@ impl Application for App {
     #[tracing::instrument(target = "App::tick", skip(self))]
     fn tick(&mut self, ctx: TickContext) -> Result<()> {
         self.camera_controller
-            .update(ctx.dt, self.renderer.camera_mut());
+            .update(ctx.dt, &mut self.camera);
         Ok(())
     }
 
@@ -132,10 +141,10 @@ impl Application for App {
     fn render(&mut self, ctx: RenderContext) -> Result<()> {
         self.renderer.begin_render(Vec3::ZERO.extend(1.))?;
         self.renderer.submit_mesh(
-            Arc::downgrade(&self.material),
-            Arc::downgrade(&self.mesh).transformed(self.transform),
+            Rc::downgrade(&self.material),
+            Rc::downgrade(&self.mesh).transformed(self.transform),
         );
-        self.renderer.flush(ctx.dt)?;
+        self.renderer.flush(&self.camera, ctx.dt)?;
         Ok(())
     }
 

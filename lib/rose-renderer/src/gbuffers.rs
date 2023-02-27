@@ -22,6 +22,7 @@ pub struct GeometryBuffers {
     debug_texture: ScreenDraw,
     deferred_fbo: Framebuffer,
     output_fbo: Framebuffer,
+    size: UVec2,
     pos: Texture<[f32; 3]>,
     albedo: Texture<[f32; 3]>,
     normal: Texture<[f32; 3]>,
@@ -101,6 +102,7 @@ impl GeometryBuffers {
         Ok(Self {
             deferred_fbo,
             output_fbo,
+            size,
             pos,
             albedo,
             normal,
@@ -168,6 +170,10 @@ impl GeometryBuffers {
             .set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
         Ok(())
+    }
+
+    pub fn size(&self) -> UVec2 {
+        self.size
     }
 
     #[tracing::instrument(skip_all)]

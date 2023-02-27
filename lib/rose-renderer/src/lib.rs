@@ -1,9 +1,11 @@
 use std::cell::RefCell;
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock, Weak},
+    rc::{Weak},
     time::{Duration, Instant},
 };
+use std::rc::Rc;
+use std::sync::Arc;
 
 use egui::vec2;
 use eyre::Result;
@@ -40,9 +42,8 @@ pub struct BloomInterface {
 
 #[derive(Debug)]
 pub struct Renderer {
-    camera: Camera,
     lights: LightBuffer,
-    geom_pass: Arc<RwLock<GeometryBuffers>>,
+    geom_pass: Rc<RefCell<GeometryBuffers>>,
     post_process: Postprocess,
     post_process_iface: PostprocessInterface,
     queued_materials: Vec<Weak<Material>>,
@@ -60,15 +61,12 @@ impl Renderer {}
 
 impl Renderer {
     pub fn new(size: UVec2) -> Result<Self> {
-        let mut camera = Camera::default();
-        camera.projection.update(size.as_vec2());
         let lights = LightBuffer::new();
         let geom_pass = GeometryBuffers::new(size)?;
         let post_process = Postprocess::new(size)?;
         Ok(Self {
-            camera,
             lights,
-            geom_pass: Arc::new(RwLock::new(geom_pass)),
+            geom_pass: Rc::new(RefCell::new(geom_pass)),
             post_process,
             post_process_iface: PostprocessInterface {
                 exposure: 1.,
@@ -93,16 +91,11 @@ impl Renderer {
         &mut self.post_process_iface
     }
 
-    pub fn camera_mut(&mut self) -> &mut Camera {
-        &mut self.camera
-    }
-
     #[tracing::instrument]
     pub fn resize(&mut self, size: UVec2) -> Result<()> {
         Framebuffer::viewport(0, 0, size.x as _, size.y as _);
-        self.geom_pass.write().unwrap().resize(size)?;
+        self.geom_pass.borrow_mut().resize(size)?;
         self.post_process.resize(size)?;
-        self.camera.projection.update(size.as_vec2());
         Ok(())
     }
 
@@ -143,8 +136,7 @@ impl Renderer {
             .set_bloom_strength(self.post_process_iface.bloom.strength)?;
 
         self.geom_pass
-            .read()
-            .unwrap()
+            .borrow()
             .framebuffer()
             .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
         Ok(())
@@ -175,9 +167,9 @@ impl Renderer {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn flush(&mut self, dt: Duration) -> Result<()> {
+    pub fn flush(&mut self, camera: &Camera, dt: Duration) -> Result<()> {
         let render_start = Instant::now();
-        let geom_pass = self.geom_pass.read().unwrap();
+        let geom_pass = self.geom_pass.borrow();
         for (mat_ix, meshes) in self.queued_meshes.drain() {
             let Some(material) = self.queued_materials[mat_ix].upgrade() else {
                 tracing::warn!("Dropped material value, cannot recover from weakref");
@@ -189,10 +181,10 @@ impl Renderer {
             };
 
             self.last_render_rendered += meshes.len();
-            geom_pass.draw_meshes(&self.camera, &material, &mut meshes)?;
+            geom_pass.draw_meshes(camera, &material, &mut meshes)?;
         }
 
-        let shaded_tex = geom_pass.process(&self.camera, &self.lights)?;
+        let shaded_tex = geom_pass.process(camera, &self.lights)?;
         self.post_process
             .draw(&Framebuffer::backbuffer(), shaded_tex, dt)?;
         self.last_render_duration.replace(render_start.elapsed());
@@ -308,7 +300,7 @@ impl Renderer {
                         })
                         .inner;
                     const SIDE: f32 = 256.;
-                    let size = vec2(self.camera.projection.width, self.camera.projection.height);
+                    let size = self.geom_pass.borrow().size().as_vec2();
                     let size = if size.x > size.y {
                         vec2(SIDE, size.y / size.x * SIDE)
                     } else {
@@ -322,7 +314,7 @@ impl Renderer {
                     painter.add(egui::PaintCallback {
                         rect,
                         callback: Arc::new(rose_ui::painter::UiCallback::new(move |_info, ui| {
-                            let geom_pass = geom_pass.read().unwrap();
+                            let geom_pass = geom_pass.borrow();
                             let _ = match ix {
                                 0 => geom_pass.debug_position(ui.framebuffer()),
                                 1 => geom_pass.debug_albedo(ui.framebuffer()),

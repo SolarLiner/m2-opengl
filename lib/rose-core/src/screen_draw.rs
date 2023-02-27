@@ -9,14 +9,15 @@ use violette::{
     program::Program,
     vertex::{DrawMode, VertexArray},
 };
+use crate::utils::thread_guard::ThreadGuard;
 
 const INDICES: [u32; 6] = [/* Face 1: */ 0, 2, 1, /* Face 2: */ 0, 3, 2];
-static SCREEN_INDEX_BUFFER: Lazy<ElementBuffer<u32>> =
-    Lazy::new(|| Buffer::with_data(&INDICES).unwrap());
-static SCREEN_VAO: Lazy<VertexArray> = Lazy::new(|| {
+static SCREEN_INDEX_BUFFER: Lazy<ThreadGuard<ElementBuffer<u32>>> =
+    Lazy::new(|| ThreadGuard::new(Buffer::with_data(&INDICES).unwrap()));
+static SCREEN_VAO: Lazy<ThreadGuard<VertexArray>> = Lazy::new(|| {
     let mut vao = VertexArray::new();
     vao.with_element_buffer(&*SCREEN_INDEX_BUFFER).unwrap();
-    vao
+    ThreadGuard::new(vao)
 });
 
 #[derive(Debug)]
