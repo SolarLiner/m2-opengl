@@ -55,7 +55,7 @@ impl PanOrbitSystem {
         {
             if input.mouse.state.is_pressed(&MouseButton::Left) {
                 transform.rotation *=
-                    Quat::from_rotation_y(-delta.x) * Quat::from_rotation_x(-delta.y);
+                    Quat::from_rotation_y(delta.x) * Quat::from_rotation_x(delta.y);
             }
             if input.mouse.state.is_pressed(&MouseButton::Right) {
                 let pos = transform.right() * delta.x + transform.down() * delta.y;
