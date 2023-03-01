@@ -1,21 +1,14 @@
-use glam::{EulerRot, Quat, Vec3};
-use serde::{Deserialize, Serialize};
 use assets_manager::{
-    AnyCache,
-    Asset,
-    BoxedError,
-    Compound,
-    Handle,
-    SharedString,
-    loader::TomlLoader
+    loader::TomlLoader, AnyCache, Asset, BoxedError, Compound, Handle, SharedString,
 };
-use hecs::Bundle;
 use eyre::WrapErr;
+use glam::{EulerRot, Quat, Vec3, Vec3Swizzles};
+use hecs::Bundle;
+use serde::{Deserialize, Serialize};
+
 use rose_core::transform::Transform;
-use crate::{
-    assets::material::Material,
-    assets::mesh::MeshAsset
-};
+
+use crate::{assets::material::Material, assets::mesh::MeshAsset};
 
 #[derive(Debug, Copy, Clone, Deserialize, Serialize)]
 #[serde(default)]
@@ -50,6 +43,20 @@ impl Default for TransformDesc {
     }
 }
 
+impl TransformDesc {
+    pub fn right(&self) -> Vec3 {
+        let [a, b, c] = self.rotation.zyx().to_array();
+        let quat = Quat::from_euler(EulerRot::ZYX, a, b, c);
+        quat * Vec3::X
+    }
+
+    pub fn down(&self) -> Vec3 {
+        let [a,b,c] = self.rotation.zyx().to_array();
+        let quat = Quat::from_euler(EulerRot::ZYX, a,b,c);
+        quat * Vec3::NEG_Y
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ObjectDesc {
     pub mesh: SharedString,
@@ -72,10 +79,7 @@ impl Compound for Object {
         let obj = cache.load::<ObjectDesc>(id)?.cloned();
         let mesh = cache.load(&obj.mesh)?.cloned();
         let material = cache.load(&obj.material)?.cloned();
-        Ok(Self {
-            mesh,
-            material,
-        })
+        Ok(Self { mesh, material })
     }
 }
 
@@ -87,8 +91,15 @@ pub struct ObjectBundle {
 }
 
 impl ObjectBundle {
-    pub fn from_asset_cache(cache: AnyCache<'static>, transform: Transform, id: &str) -> eyre::Result<Self> {
-        let desc = cache.load::<ObjectDesc>(id).with_context(|| format!("Loading asset {:?}", id))?.cloned();
+    pub fn from_asset_cache(
+        cache: AnyCache<'static>,
+        transform: Transform,
+        id: &str,
+    ) -> eyre::Result<Self> {
+        let desc = cache
+            .load::<ObjectDesc>(id)
+            .with_context(|| format!("Loading asset {:?}", id))?
+            .cloned();
         Ok(Self {
             transform,
             mesh: cache.load(&desc.mesh)?,

@@ -11,7 +11,7 @@ use rose_core::{
 };
 use rose_core::camera::Camera;
 use rose_core::utils::thread_guard::ThreadGuard;
-use rose_platform::{Application, RenderContext, TickContext, UiContext};
+use rose_platform::{Application, PhysicalSize, RenderContext, TickContext, UiContext};
 use rose_renderer::{Mesh, Renderer};
 use rose_renderer::material::{Material, Vertex};
 use violette::framebuffer::Framebuffer;
@@ -37,7 +37,7 @@ struct ManySpheres {
 }
 
 impl Application for ManySpheres {
-    fn new(size: rose_platform::PhysicalSize<f32>) -> eyre::Result<Self> {
+    fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
         let sizef = Vec2::from_array(size.into());
         let size = sizef.as_uvec2();
         let mut renderer = Renderer::new(size)?;
@@ -104,8 +104,8 @@ impl Application for ManySpheres {
         })
     }
 
-    fn resize(&mut self, size: rose_platform::PhysicalSize<u32>) -> eyre::Result<()> {
-        self.renderer.resize(UVec2::from_array(size.into()))
+    fn resize(&mut self, _size: PhysicalSize<u32>, scale_factor: f64) -> Result<()> {
+        self.renderer.resize(UVec2::from_array(_size.into()))
     }
 
     fn tick(&mut self, ctx: TickContext) -> eyre::Result<()> {

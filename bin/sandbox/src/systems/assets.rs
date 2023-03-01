@@ -15,7 +15,7 @@ impl AssetSystem {
         })
     }
     
-    pub fn run(&self) {
+    pub fn on_frame(&self) {
         self.assets.hot_reload();
     }
 }

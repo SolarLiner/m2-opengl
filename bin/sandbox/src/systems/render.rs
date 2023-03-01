@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    rc::Rc,
-    time::Instant
-};
+use std::{collections::HashMap, rc::Rc, time::Instant};
 
 use assets_manager::{Handle, SharedString};
 use eyre::Result;
@@ -13,27 +9,23 @@ use rose_core::{
     camera::Camera,
     light::{GpuLight, Light},
     transform::{Transform, TransformExt},
-    utils::thread_guard::ThreadGuard
+    utils::thread_guard::ThreadGuard,
 };
 use rose_platform::PhysicalSize;
 use rose_renderer::{
-    material::{
-        MaterialInstance,
-        TextureSlot as MaterialSlot
-    },
-    Mesh,
-    Renderer
+    material::{MaterialInstance, TextureSlot as MaterialSlot},
+    Mesh, Renderer,
 };
 use violette::{
     framebuffer::{ClearBuffer, Framebuffer},
-    texture::Texture
+    texture::Texture,
 };
 
+use crate::assets::material::{Material, TextureSlot};
 use crate::{
     assets::mesh::MeshAsset,
-    components::{Active, CameraParams, Inactive}
+    components::{Active, CameraParams, Inactive},
 };
-use crate::assets::material::{Material, TextureSlot};
 
 pub struct RenderSystem {
     pub clear_color: Vec3,
@@ -41,7 +33,8 @@ pub struct RenderSystem {
     last_frame: Instant,
     renderer: ThreadGuard<Renderer>,
     meshes_map: HashMap<SharedString, ThreadGuard<Rc<Mesh>>>,
-    materials_map: HashMap<SharedString, ThreadGuard<Rc<rose_renderer::material::MaterialInstance>>>,
+    materials_map:
+        HashMap<SharedString, ThreadGuard<Rc<rose_renderer::material::MaterialInstance>>>,
     default_material_instance: ThreadGuard<Rc<MaterialInstance>>,
 }
 
@@ -56,7 +49,7 @@ impl RenderSystem {
 }
 
 impl RenderSystem {
-    pub fn new(size: UVec2) -> eyre::Result<Self> {
+    pub fn new(size: UVec2) -> Result<Self> {
         let mut renderer = Renderer::new(size)?;
         renderer.set_light_buffer(GpuLight::create_buffer([
             Light::Ambient {
@@ -79,8 +72,9 @@ impl RenderSystem {
         })
     }
 
-    pub fn run(&mut self, world: &mut World) -> Result<()> {
+    pub fn on_frame(&mut self, world: &mut World) -> Result<()> {
         self.handle_mesh_assets(world)?;
+        self.handle_material_assets(world)?;
         let has_camera = self.update_camera(world);
         if !has_camera {
             tracing::warn!("No camera found to render with. Add an entity with the `Transform` and `CameraProps`, and make it active by also adding the `Active` component.");
@@ -97,12 +91,19 @@ impl RenderSystem {
     }
 
     fn submit_meshes(&mut self, world: &mut World) {
-        for (_, (mesh_handle, transform)) in
-        world.query::<(&Handle<MeshAsset>, &Transform)>().iter()
+        for (_, (mesh_handle, material_handle, transform)) in world
+            .query::<(&Handle<MeshAsset>, Option<&Handle<Material>>, &Transform)>()
+            .iter()
         {
+            tracing::trace!(message="Submitting mesh", mesh=%mesh_handle.id(), material=%material_handle.map(|h| h.id().clone()).unwrap_or("<none>".into()));
             let mesh = &self.meshes_map[mesh_handle.id()];
+            let material = if let Some(handle) = material_handle {
+                self.materials_map[handle.id()].clone()
+            } else {
+                self.default_material_instance.clone()
+            };
             self.renderer.submit_mesh(
-                Rc::downgrade(&*self.default_material_instance),
+                Rc::downgrade(&*material),
                 Rc::downgrade(&*mesh).transformed(*transform),
             );
         }
@@ -144,15 +145,19 @@ impl RenderSystem {
     fn handle_material_assets(&mut self, world: &mut World) -> Result<()> {
         for (_, handle) in world.query::<&Handle<Material>>().iter() {
             if handle.reloaded_global() || !self.materials_map.contains_key(handle.id()) {
+                tracing::info!(message="Loading material", handle=%handle.id());
                 let mat = handle.read();
                 let inst = MaterialInstance::create(
                     into_material_slot3(&mat.color)?,
                     if let Some(normal) = &mat.normal {
                         Some(Texture::from_image(normal.to_rgb32f())?)
-                    } else {None},
+                    } else {
+                        None
+                    },
                     into_material_slot2(&mat.rough_metal)?,
                 )?;
-                self.materials_map.insert(handle.id().clone(), ThreadGuard::new(Rc::new(inst)));
+                self.materials_map
+                    .insert(handle.id().clone(), ThreadGuard::new(Rc::new(inst)));
             }
         }
         Ok(())
@@ -171,8 +176,14 @@ fn into_material_slot2(slot: &TextureSlot) -> Result<MaterialSlot<2>> {
         TextureSlot::Color(vec) => MaterialSlot::Color(vec.truncate().to_array()),
         TextureSlot::Texture(img) => {
             let img = img.to_rgb32f();
-            let storage = img.chunks_exact(3).flat_map(|s| [s[0], s[1]]).collect::<Vec<_>>();
-            MaterialSlot::Texture(Texture::from_2d_pixels(img.width().try_into().unwrap(), &storage)?)
+            let storage = img
+                .chunks_exact(3)
+                .flat_map(|s| [s[0], s[1]])
+                .collect::<Vec<_>>();
+            MaterialSlot::Texture(Texture::from_2d_pixels(
+                img.width().try_into().unwrap(),
+                &storage,
+            )?)
         }
     })
 }

@@ -2,13 +2,10 @@ use std::ops;
 use std::sync::Arc;
 
 use assets_manager::{
-    AnyCache,
-    Asset,
-    BoxedError,
-    Compound,
-    SharedString,
-    loader::{ImageLoader, LoadFrom, TomlLoader}
+    loader::{ImageLoader, LoadFrom, TomlLoader},
+    AnyCache, Asset, BoxedError, Compound, SharedString,
 };
+use color_eyre::Help;
 use eyre::Result;
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
@@ -24,7 +21,10 @@ impl ops::Deref for Image {
     }
 }
 
-impl Asset for Image { type Loader = LoadFrom<image::DynamicImage, ImageLoader>; }
+impl Asset for Image {
+    const EXTENSIONS: &'static [&'static str] = &["jpg", "jpeg", "png"];
+    type Loader = LoadFrom<image::DynamicImage, ImageLoader>;
+}
 
 impl From<image::DynamicImage> for Image {
     fn from(value: image::DynamicImage) -> Self {
@@ -53,11 +53,10 @@ pub enum TextureSlot {
 impl Compound for TextureSlot {
     fn load(cache: AnyCache, id: &SharedString) -> eyre::Result<Self, BoxedError> {
         let desc = cache.load::<TextureSlotDesc>(id)?.cloned();
+        tracing::debug!("Loading texture slot {:?}", desc);
         Ok(match desc {
             TextureSlotDesc::Color(col) => Self::Color(col),
-            TextureSlotDesc::Texture(path) => Self::Texture(
-                cache.load(&path)?.cloned(),
-            ),
+            TextureSlotDesc::Texture(path) => Self::Texture(cache.load(&path)?.cloned()),
         })
     }
 }
@@ -85,18 +84,22 @@ pub struct Material {
 impl Compound for Material {
     fn load(cache: AnyCache, id: &SharedString) -> eyre::Result<Self, BoxedError> {
         fn slot_from_cache(cache: AnyCache, desc: TextureSlotDesc) -> Result<TextureSlot> {
+            tracing::debug!("{:?}", desc);
             Ok(match desc {
                 TextureSlotDesc::Color(col) => TextureSlot::Color(col),
-                TextureSlotDesc::Texture(id) => TextureSlot::Texture(cache.load(&id)?.cloned()),
+                TextureSlotDesc::Texture(id) => TextureSlot::Texture(
+                    cache
+                        .load(&id)
+                        .with_note(|| format!("Loading {:?}", id))?
+                        .cloned(),
+                ),
             })
         }
         let desc = cache.load::<MaterialDesc>(id)?.cloned();
         Ok(Self {
             color: slot_from_cache(cache, desc.color)?,
             normal: if let Some(path) = desc.normal {
-                Some(
-                    cache.load(&path)?.cloned(),
-                )
+                Some(cache.load(&path)?.cloned())
             } else {
                 None
             },

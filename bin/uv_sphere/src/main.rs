@@ -40,7 +40,7 @@ impl Application for App {
     }
 
     #[tracing::instrument(target = "App::new")]
-    fn new(size: PhysicalSize<f32>) -> Result<Self> {
+    fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
         let _sizef = Vec2::from_array(size.into());
         let size = UVec2::from_array(size.cast::<u32>().into());
         let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 64)?;
@@ -75,8 +75,8 @@ impl Application for App {
         })
     }
 
-    fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
-        let size = UVec2::from_array(size.into());
+    fn resize(&mut self, _size: PhysicalSize<u32>, scale_factor: f64) -> Result<()> {
+        let size = UVec2::from_array(_size.into());
         let sizef = size.as_vec2();
         self.camera.projection.update(sizef);
         self.renderer.resize(size)

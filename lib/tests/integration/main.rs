@@ -9,7 +9,7 @@ pub mod tests;
 struct TestRunner(PhysicalSize<f32>);
 
 impl Application for TestRunner {
-    fn new(size: PhysicalSize<f32>) -> eyre::Result<Self> {
+    fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
         Ok(Self(size))
     }
 

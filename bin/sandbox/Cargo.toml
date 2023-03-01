@@ -15,7 +15,9 @@ obj-rs = "0.7.0"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_yaml = "0.9.17"
 toml = "0.7.2"
+toml_edit = "0.19.4"
 
+input = { path = "../../lib/input" }
 rose-core = { path = "../../lib/rose-core" }
 rose-platform = { path = "../../lib/rose-platform" }
 rose-renderer = { path = "../../lib/rose-renderer" }

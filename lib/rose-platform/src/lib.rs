@@ -101,8 +101,8 @@ pub trait Application: Sized + Send + Sync {
     fn window_features(wb: WindowBuilder) -> WindowBuilder {
         wb
     }
-    fn new(size: PhysicalSize<f32>) -> Result<Self>;
-    fn resize(&mut self, _size: PhysicalSize<u32>) -> Result<()> {
+    fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self>;
+    fn resize(&mut self, _size: PhysicalSize<u32>, scale_factor: f64) -> Result<()> {
         Ok(())
     }
     fn interact(&mut self, _event: WindowEvent) -> Result<()> {
@@ -225,7 +225,7 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
         .unwrap_or_else(|_| "<None>".to_string());
     tracing::info!(target: "gl", version=%gl_version, vendor=%gl_vendor, render=%gl_renderer, shading_language=%gl_shading_language_version);
 
-    let app = App::new(inner_size.cast()).context("Cannot run app")?;
+    let app = App::new(inner_size.cast(), window.scale_factor()).context("Cannot run app")?;
     let app = Arc::new(Mutex::new(app));
 
     #[cfg(feature = "ui")]
@@ -340,7 +340,7 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
                         new_size.width.try_into().unwrap(),
                         new_size.height.try_into().unwrap(),
                     );
-                    app.lock().unwrap().resize(new_size).unwrap();
+                    app.lock().unwrap().resize(new_size, window.scale_factor()).unwrap();
                     window.request_redraw();
                 }
                 event => {
@@ -354,6 +354,8 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
                             window.request_redraw();
                         }
                     }
+                    #[cfg(not(feature = "ui"))]
+                    app.lock().unwrap().interact(event).unwrap();
                 }
             },
             Event::NewEvents(StartCause::ResumeTimeReached { .. }) => window.request_redraw(),

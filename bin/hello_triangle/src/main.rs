@@ -29,7 +29,7 @@ struct TriangleApp {
 }
 
 impl Application for TriangleApp {
-    fn new(size: PhysicalSize<f32>) -> Result<Self> {
+    fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
         let vert_shader = VertexShader::load("assets/shaders_old/triangle.vert.glsl")?;
         let frag_shader = FragmentShader::load("assets/shaders_old/triangle.frag.glsl")?;
         let mat_program = Program::new()
@@ -63,8 +63,8 @@ impl Application for TriangleApp {
         })
     }
 
-    fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
-        let size = size.cast();
+    fn resize(&mut self, _size: PhysicalSize<u32>, scale_factor: f64) -> Result<()> {
+        let size = _size.cast();
         self.size = size;
         Framebuffer::viewport(0, 0, size.width, size.height);
         Ok(())
