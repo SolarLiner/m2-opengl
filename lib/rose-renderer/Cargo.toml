@@ -6,6 +6,7 @@ authors.workspace = true
 homepage.workspace = true
 
 [dependencies]
+either = "1.8.1"
 violette = { path = "../violette" }
 violette-derive = { path = "../violette-derive" }
 rose-core = { path = "../rose-core" }

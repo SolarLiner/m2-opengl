@@ -81,6 +81,14 @@ impl<'stats, 'flow> RenderContext<'stats, 'flow> {
     }
 }
 
+#[cfg(not(feature = "ui"))]
+pub struct UiContext<'stats> {
+    pub elapsed: Duration,
+    pub dt: Duration,
+    pub stats: &'stats RenderStats,
+}
+
+#[cfg(feature = "ui")]
 pub struct UiContext<'stats, 'ui> {
     pub elapsed: Duration,
     pub dt: Duration,
@@ -205,23 +213,7 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
         let sym = CString::new(sym).unwrap();
         gl_display.get_proc_address(sym.as_c_str()).cast()
     });
-    violette::debug::set_message_callback(|data| {
-        use violette::debug::CallbackSeverity::*;
-        match data.severity {
-            Notification => {
-                tracing::debug!(target: "gl", source=?data.source, message=%data.message, r#type=?data.r#type)
-            }
-            Low => {
-                tracing::info!(target: "gl", source=?data.source, message=%data.message, r#type=?data.r#type)
-            }
-            Medium => {
-                tracing::warn!(target: "gl", source=?data.source, message=%data.message, r#type=?data.r#type)
-            }
-            High => {
-                tracing::error!(target: "gl", source=?data.source, message=%data.message, r#type=?data.r#type)
-            }
-        };
-    });
+    violette::debug::hook_gl_to_tracing();
 
     let gl_version =
         violette::get_string(violette::gl::VERSION).unwrap_or_else(|_| "<None>".to_string());

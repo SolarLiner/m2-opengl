@@ -1,12 +1,11 @@
-use std::{f32::consts::TAU, sync::Arc, time::Instant};
+use std::{f32::consts::TAU, time::Instant};
 use std::rc::Rc;
 
 use camera_controller::OrbitCameraController;
-use glam::{vec2, vec3, UVec2, Vec2, Vec3};
-use rand::{seq::SliceRandom, Rng};
+use glam::{UVec2, vec2, Vec2, vec3, Vec3};
+use rand::{Rng, seq::SliceRandom};
 use rose_core::{
     light::Light,
-    material::{Material, Vertex},
     mesh::MeshBuilder,
     transform::{Transform, TransformExt},
 };
@@ -14,6 +13,7 @@ use rose_core::camera::Camera;
 use rose_core::utils::thread_guard::ThreadGuard;
 use rose_platform::{Application, RenderContext, TickContext, UiContext};
 use rose_renderer::{Mesh, Renderer};
+use rose_renderer::material::{Material, Vertex};
 use violette::framebuffer::Framebuffer;
 
 mod camera_controller;
@@ -69,7 +69,7 @@ impl Application for ManySpheres {
             [0.8, 0.4, 0.1],
             [0.6, 0.6, 0.6],
         ]
-        .map(|color| Material::create(color, None, [0.2, 0.]).unwrap())
+        .map(|color| Material::create().unwrap())
         .map(Rc::new);
 
         let mut rng = rand::thread_rng();

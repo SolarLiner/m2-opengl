@@ -1,0 +1,27 @@
+[package]
+name = "sandbox"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+assets_manager = { version = "0.9.7", features = ["embedded", "image", "jpeg", "png", "toml", "hot-reloading"] }
+color-eyre = "0.6.2"
+egui_dock = "0.4.0"
+hecs = { version = "0.9.1", features = ["serde", "row-serialize", "macros"] }
+image = "0.24.5"
+obj-rs = "0.7.0"
+serde = { version = "1.0.152", features = ["derive"] }
+serde_yaml = "0.9.17"
+toml = "0.7.2"
+
+rose-core = { path = "../../lib/rose-core" }
+rose-platform = { path = "../../lib/rose-platform" }
+rose-renderer = { path = "../../lib/rose-renderer" }
+violette = { path = "../../lib/violette" }
+
+egui.workspace = true
+eyre.workspace = true
+glam = { workspace = true, features = ["serde"] }
+tracing.workspace = true

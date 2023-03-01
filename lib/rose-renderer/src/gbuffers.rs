@@ -11,7 +11,7 @@ use violette::{
 };
 
 use rose_core::camera::Camera;
-use rose_core::material::{Material, Vertex};
+use crate::material::{Material, MaterialInstance, Vertex};
 use rose_core::mesh::Mesh;
 use rose_core::transform::Transformed;
 use rose_core::{light::LightBuffer, screen_draw::ScreenDraw};
@@ -130,12 +130,13 @@ impl GeometryBuffers {
         &self,
         camera: &Camera,
         material: &Material,
+        instance: &MaterialInstance,
         meshes: &mut [Transformed<MC>],
     ) -> Result<()> {
         Framebuffer::disable_blending();
         Framebuffer::disable_scissor();
         Framebuffer::enable_depth_test(DepthTestFunction::Less);
-        material.draw_meshes(&self.deferred_fbo, camera, meshes)?;
+        material.draw_meshes(&self.deferred_fbo, camera, instance, meshes)?;
 
         Ok(())
     }

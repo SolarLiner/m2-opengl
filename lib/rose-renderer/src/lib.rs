@@ -1,32 +1,33 @@
-use std::cell::RefCell;
 use std::{
+    cell::RefCell,
     collections::HashMap,
-    rc::{Weak},
+    rc::{Rc, Weak},
+    sync::Arc,
     time::{Duration, Instant},
 };
-use std::rc::Rc;
-use std::sync::Arc;
 
-use egui::vec2;
 use eyre::Result;
-use glam::{UVec2, Vec4};
+use glam::{UVec2, vec2, Vec4};
 use tracing::span::EnteredSpan;
 
 use gbuffers::GeometryBuffers;
+use material::Material;
 use postprocess::Postprocess;
 use rose_core::{
     camera::Camera,
     light::{GpuLight, Light, LightBuffer},
-    material::Material,
     transform::{TransformExt, Transformed},
     utils::thread_guard::ThreadGuard,
 };
 use violette::framebuffer::{ClearBuffer, Framebuffer};
 
+use crate::material::MaterialInstance;
+
 pub mod gbuffers;
+pub mod material;
 pub mod postprocess;
 
-pub type Mesh = rose_core::mesh::Mesh<rose_core::material::Vertex>;
+pub type Mesh = rose_core::mesh::Mesh<material::Vertex>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct PostprocessInterface {
@@ -44,9 +45,10 @@ pub struct BloomInterface {
 pub struct Renderer {
     lights: LightBuffer,
     geom_pass: Rc<RefCell<GeometryBuffers>>,
+    material: Material,
     post_process: Postprocess,
     post_process_iface: PostprocessInterface,
-    queued_materials: Vec<Weak<Material>>,
+    queued_materials: Vec<Weak<MaterialInstance>>,
     queued_meshes: HashMap<usize, Vec<Transformed<Weak<Mesh>>>>,
     render_span: ThreadGuard<Option<EnteredSpan>>,
     debug_window_open: bool,
@@ -67,6 +69,7 @@ impl Renderer {
         Ok(Self {
             lights,
             geom_pass: Rc::new(RefCell::new(geom_pass)),
+            material: Material::create()?,
             post_process,
             post_process_iface: PostprocessInterface {
                 exposure: 1.,
@@ -143,7 +146,7 @@ impl Renderer {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn submit_mesh(&mut self, material: Weak<Material>, mesh: Transformed<Weak<Mesh>>) {
+    pub fn submit_mesh(&mut self, material: Weak<MaterialInstance>, mesh: Transformed<Weak<Mesh>>) {
         let mesh_ptr = Weak::as_ptr(&mesh) as usize;
         let material_ptr = Weak::as_ptr(&material) as usize;
         self.last_render_submitted += 1;
@@ -171,8 +174,8 @@ impl Renderer {
         let render_start = Instant::now();
         let geom_pass = self.geom_pass.borrow();
         for (mat_ix, meshes) in self.queued_meshes.drain() {
-            let Some(material) = self.queued_materials[mat_ix].upgrade() else {
-                tracing::warn!("Dropped material value, cannot recover from weakref");
+            let Some(instance) = self.queued_materials[mat_ix].upgrade() else {
+                tracing::warn!("Dropped materials value, cannot recover from weakref");
                 continue;
             };
             let Some(mut meshes) = meshes.into_iter().map(|w| w.upgrade().map(|v| v.transformed(w.transform))).collect::<Option<Vec<_>>>() else {
@@ -181,7 +184,7 @@ impl Renderer {
             };
 
             self.last_render_rendered += meshes.len();
-            geom_pass.draw_meshes(camera, &material, &mut meshes)?;
+            geom_pass.draw_meshes(camera, &self.material, instance.as_ref(), &mut meshes)?;
         }
 
         let shaded_tex = geom_pass.process(camera, &self.lights)?;

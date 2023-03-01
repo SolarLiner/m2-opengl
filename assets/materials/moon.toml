@@ -1,0 +1,3 @@
+color = "textures.moon_color"
+normal = "textures.moon_normal"
+rough_metal = [0.4, 0, 0]

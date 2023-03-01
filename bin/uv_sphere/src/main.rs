@@ -1,23 +1,23 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use std::rc::Rc;
 
 use eyre::Result;
-use glam::{vec3, UVec2, Vec2, Vec3};
+use glam::{UVec2, Vec2, vec3, Vec3};
 
 use camera_controller::OrbitCameraController;
 use rose_core::{
     light::Light,
-    material::{Material, Vertex},
     mesh::MeshBuilder,
     transform::{Transform, TransformExt},
 };
 use rose_core::camera::Camera;
 use rose_core::utils::thread_guard::ThreadGuard;
 use rose_platform::{
-    events::{ElementState, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent},
-    Application, PhysicalSize, RenderContext, TickContext, UiContext, WindowBuilder,
+    Application,
+    events::{ElementState, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent}, PhysicalSize, RenderContext, TickContext, UiContext, WindowBuilder,
 };
 use rose_renderer::{Mesh, Renderer};
+use rose_renderer::material::{Material, Vertex};
 use violette::texture::Texture;
 
 mod camera_controller;
@@ -44,11 +44,7 @@ impl Application for App {
         let _sizef = Vec2::from_array(size.into());
         let size = UVec2::from_array(size.cast::<u32>().into());
         let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 64)?;
-        let material = Material::create(
-            Texture::load_rgb32f("assets/textures/moon_color.png")?,
-            Texture::load_rgb32f("assets/textures/moon_normal.png")?,
-            [0.8, 0.0],
-        )?
+        let material = Material::create()?
         .with_normal_amount(0.1)?;
         let lights = [
             Light::Directional {
