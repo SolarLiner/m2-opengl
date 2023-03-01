@@ -48,7 +48,6 @@ impl PanOrbitSystem {
         let aspect_ratio = self.logical_window_size.x / self.logical_window_size.y;
         let delta = vec2(aspect_ratio, 1.) * input.mouse.delta().truncate() / self.logical_window_size * self.sensitivity;
         let scroll = input.mouse.delta().z;
-        tracing::debug!(system="PanOrbitSystem", %delta, %scroll);
         for (_, (transform, pan_orbit)) in world
             .query::<(&mut Transform, &mut PanOrbitCamera)>()
             .iter()

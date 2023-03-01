@@ -1,2 +1,2 @@
-mesh = "models.suzanne"
+mesh = "prim:sphere"
 material = "materials.moon"

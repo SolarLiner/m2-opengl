@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use std::ops::Mul;
 
 use float_ord::FloatOrd;
@@ -49,6 +50,21 @@ impl Default for Transform {
             position: Vec3::ZERO,
             rotation: Quat::IDENTITY,
             scale: Vec3::ONE,
+        }
+    }
+}
+
+impl Hash for Transform {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for u in self
+            .position
+            .to_array()
+            .into_iter()
+            .chain(self.rotation.to_array())
+            .chain(self.scale.to_array())
+            .map(|f| f.to_bits())
+        {
+            u.hash(state);
         }
     }
 }

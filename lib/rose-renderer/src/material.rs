@@ -143,6 +143,7 @@ impl Material {
         if let Some(normal) = &instance.normal_map {
             self.program
                 .set_uniform(self.uniform_normal, normal.as_uniform(1)?)?;
+            self.program.set_uniform(self.uniform_normal_amt, instance.normal_map_amount)?;
             self.program.set_uniform(self.uniform_normal_enabled, 1)?;
         } else {
             self.program.set_uniform(self.uniform_normal_enabled, 0)?;

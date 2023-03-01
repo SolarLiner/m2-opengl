@@ -1,16 +1,16 @@
 use eyre::Result;
-use glam::Vec2;
+use glam::{Vec2, Vec3};
 use hecs::{EntityBuilder, World};
 
 use assets::object::ObjectBundle;
 use rose_core::transform::{Transform, TransformExt};
-use rose_platform::events::WindowEvent;
-use rose_platform::{Application, PhysicalSize, RenderContext};
+use rose_platform::{events::WindowEvent, Application, PhysicalSize, RenderContext};
 
-use crate::assets::mesh::MeshAsset;
-use crate::components::{Active, PanOrbitCameraBundle};
-use crate::systems::{assets::AssetSystem, render::RenderSystem};
-use crate::systems::{InputSystem, PanOrbitSystem};
+use crate::{
+    assets::mesh::MeshAsset,
+    components::{Active, Light, LightBundle, LightKind, PanOrbitCameraBundle},
+    systems::{assets::AssetSystem, render::RenderSystem, InputSystem, PanOrbitSystem},
+};
 
 mod assets;
 pub mod components;
@@ -37,12 +37,31 @@ impl Application for Sandbox {
             .assets
             .get_or_insert("prim:sphere", MeshAsset::uv_sphere(1., 24, 48));
 
+        world.spawn(
+            EntityBuilder::new()
+                .add_bundle(LightBundle {
+                    light: Light {
+                        color: Vec3::ONE,
+                        kind: LightKind::Directional,
+                        power: 10.,
+                    },
+                    transform: Transform::translation(Vec3::ONE).looking_at(Vec3::ZERO),
+                })
+                .add(Active)
+                .build(),
+        );
+
         world.spawn(ObjectBundle::from_asset_cache(
             assets_system.assets.as_any_cache(),
             Transform::default(),
-            "objects.moon",
+            "objects.suzanne",
         )?);
-        world.spawn(EntityBuilder::new().add_bundle(PanOrbitCameraBundle::default()).add(Active).build());
+        world.spawn(
+            EntityBuilder::new()
+                .add_bundle(PanOrbitCameraBundle::default())
+                .add(Active)
+                .build(),
+        );
 
         Ok(Self {
             world,
@@ -55,7 +74,8 @@ impl Application for Sandbox {
 
     fn resize(&mut self, size: PhysicalSize<u32>, scale_factor: f64) -> Result<()> {
         self.render_system.resize(size)?;
-        self.pan_orbit_system.set_window_size(size.to_logical(scale_factor));
+        self.pan_orbit_system
+            .set_window_size(size.to_logical(scale_factor));
         Ok(())
     }
 
@@ -76,7 +96,8 @@ impl Application for Sandbox {
         // {
         //     transform.rotation *= rot_quat;
         // }
-        self.pan_orbit_system.on_frame(&self.input_system.input, &mut self.world);
+        self.pan_orbit_system
+            .on_frame(&self.input_system.input, &mut self.world);
 
         self.render_system.on_frame(&mut self.world)?;
         self.input_system.on_frame();

@@ -61,10 +61,14 @@ impl Compound for TextureSlot {
     }
 }
 
+const fn default_normal_amount() -> f32 {1.}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MaterialDesc {
     pub color: TextureSlotDesc,
     pub normal: Option<SharedString>,
+    #[serde(default = "default_normal_amount")]
+    pub normal_amount: f32,
     pub rough_metal: TextureSlotDesc,
 }
 
@@ -78,6 +82,7 @@ impl Asset for MaterialDesc {
 pub struct Material {
     pub color: TextureSlot,
     pub normal: Option<Image>,
+    pub normal_amount: f32,
     pub rough_metal: TextureSlot,
 }
 
@@ -103,6 +108,7 @@ impl Compound for Material {
             } else {
                 None
             },
+            normal_amount: desc.normal_amount,
             rough_metal: slot_from_cache(cache, desc.rough_metal)?,
         })
     }

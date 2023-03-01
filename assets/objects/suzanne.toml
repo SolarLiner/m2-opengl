@@ -1,0 +1,2 @@
+mesh = "models.suzanne"
+material = "materials.square_floor"

@@ -1,4 +1,5 @@
 use std::{f32::consts::FRAC_PI_4, ops::Range};
+use std::hash::{Hash, Hasher};
 
 use glam::{vec3, Mat4, Quat, Vec3};
 use hecs::Bundle;
@@ -52,4 +53,44 @@ pub struct PanOrbitCameraBundle {
     pub transform: Transform,
     pub params: CameraParams,
     pub pan_orbit: PanOrbitCamera,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum LightKind {
+    Ambient,
+    Point,
+    Directional,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Light {
+    pub kind: LightKind,
+    pub color: Vec3,
+    pub power: f32,
+}
+
+impl Hash for Light {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.kind.hash(state);
+        for f in self.color.to_array() {
+            f.to_bits().hash(state);
+        }
+        self.power.to_bits().hash(state);
+    }
+}
+
+impl Default for Light {
+    fn default() -> Self {
+        Self {
+            kind: LightKind::Point,
+            color: Vec3::ONE,
+            power: 100.,
+        }
+    }
+}
+
+#[derive(Debug, Default, Bundle)]
+pub struct LightBundle {
+    pub light: Light,
+    pub transform: Transform,
 }
