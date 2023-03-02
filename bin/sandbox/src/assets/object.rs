@@ -2,7 +2,7 @@ use assets_manager::{
     loader::TomlLoader, AnyCache, Asset, BoxedError, Compound, Handle, SharedString,
 };
 use eyre::WrapErr;
-use glam::{EulerRot, Quat, Vec3, Vec3Swizzles};
+use glam::{vec3, EulerRot, Quat, Vec3, Vec3Swizzles};
 use hecs::Bundle;
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +16,17 @@ pub struct TransformDesc {
     pub translation: Vec3,
     pub rotation: Vec3,
     pub scale: Vec3,
+}
+
+impl From<Transform> for TransformDesc {
+    fn from(value: Transform) -> Self {
+        let (c, b, a) = value.rotation.to_euler(EulerRot::ZYX);
+        Self {
+            translation: value.position,
+            rotation: vec3(c, b, a),
+            scale: value.scale,
+        }
+    }
 }
 
 impl Into<Transform> for TransformDesc {
@@ -51,8 +62,8 @@ impl TransformDesc {
     }
 
     pub fn down(&self) -> Vec3 {
-        let [a,b,c] = self.rotation.zyx().to_array();
-        let quat = Quat::from_euler(EulerRot::ZYX, a,b,c);
+        let [a, b, c] = self.rotation.zyx().to_array();
+        let quat = Quat::from_euler(EulerRot::ZYX, a, b, c);
         quat * Vec3::NEG_Y
     }
 }

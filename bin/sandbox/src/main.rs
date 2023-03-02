@@ -1,15 +1,21 @@
-use eyre::Result;
+use eyre::{ContextCompat, Result};
 use glam::{Vec2, Vec3};
 use hecs::{EntityBuilder, World};
 
 use assets::object::ObjectBundle;
 use rose_core::transform::{Transform, TransformExt};
-use rose_platform::{events::WindowEvent, Application, PhysicalSize, RenderContext};
+use rose_platform::{
+    events::WindowEvent, Application, LogicalSize, PhysicalSize, RenderContext, WindowBuilder,
+};
+use systems::camera::PanOrbitSystem;
+use systems::input::InputSystem;
 
+use crate::assets::scene::{NamedObject, Scene};
+use crate::systems::scene::SceneSystem;
 use crate::{
     assets::mesh::MeshAsset,
     components::{Active, Light, LightBundle, LightKind, PanOrbitCameraBundle},
-    systems::{assets::AssetSystem, render::RenderSystem, InputSystem, PanOrbitSystem},
+    systems::{assets::AssetSystem, render::RenderSystem},
 };
 
 mod assets;
@@ -20,12 +26,17 @@ struct Sandbox {
     world: World,
     input_system: InputSystem,
     assets_system: AssetSystem,
+    scene_system: SceneSystem,
     render_system: RenderSystem,
     pan_orbit_system: PanOrbitSystem,
     // ui_system: UiSystem,
 }
 
 impl Application for Sandbox {
+    fn window_features(wb: WindowBuilder) -> WindowBuilder {
+        wb.with_inner_size(LogicalSize::new(1600, 900))
+    }
+
     fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
         let logical_size = size.to_logical(scale_factor);
         let size = Vec2::from_array(size.into()).as_uvec2();
@@ -37,36 +48,22 @@ impl Application for Sandbox {
             .assets
             .get_or_insert("prim:sphere", MeshAsset::uv_sphere(1., 24, 48));
 
-        world.spawn(
-            EntityBuilder::new()
-                .add_bundle(LightBundle {
-                    light: Light {
-                        color: Vec3::ONE,
-                        kind: LightKind::Directional,
-                        power: 10.,
-                    },
-                    transform: Transform::translation(Vec3::ONE).looking_at(Vec3::ZERO),
-                })
-                .add(Active)
-                .build(),
-        );
+        if let Some(arg) = std::env::args().skip(1).next() {
+            world.spawn((assets_system.assets.load::<Scene>(&arg)?,));
+        }
 
-        world.spawn(ObjectBundle::from_asset_cache(
-            assets_system.assets.as_any_cache(),
-            Transform::default(),
-            "objects.suzanne",
-        )?);
-        world.spawn(
-            EntityBuilder::new()
-                .add_bundle(PanOrbitCameraBundle::default())
-                .add(Active)
-                .build(),
-        );
+        let scene_system = SceneSystem::default();
+        //
+        // scene_system.on_frame(assets_system.assets.as_any_cache(), &mut world);
+        // let scene = SceneSystem::save_world_as_scene(&world).context("Could not find the required data for a scene to be saved")?;
+        // let scene_data = toml_edit::ser::to_string(&scene)?;
+        // std::fs::write("suzanne.toml", scene_data)?;
 
         Ok(Self {
             world,
             input_system: InputSystem::default(),
             assets_system,
+            scene_system,
             render_system,
             pan_orbit_system: PanOrbitSystem::new(logical_size),
         })
@@ -96,6 +93,8 @@ impl Application for Sandbox {
         // {
         //     transform.rotation *= rot_quat;
         // }
+        self.scene_system
+            .on_frame(self.assets_system.assets.as_any_cache(), &mut self.world);
         self.pan_orbit_system
             .on_frame(&self.input_system.input, &mut self.world);
 

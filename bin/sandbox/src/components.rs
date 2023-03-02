@@ -1,12 +1,14 @@
 use std::{f32::consts::FRAC_PI_4, ops::Range};
 use std::hash::{Hash, Hasher};
+use assets_manager::SharedString;
 
 use glam::{vec3, Mat4, Quat, Vec3};
 use hecs::Bundle;
+use serde::{Deserialize, Serialize};
 
 use rose_core::transform::Transform;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CameraParams {
     pub fovy: f32,
     pub zrange: Range<f32>,
@@ -55,14 +57,14 @@ pub struct PanOrbitCameraBundle {
     pub pan_orbit: PanOrbitCamera,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum LightKind {
     Ambient,
     Point,
     Directional,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize)]
 pub struct Light {
     pub kind: LightKind,
     pub color: Vec3,
@@ -94,3 +96,6 @@ pub struct LightBundle {
     pub light: Light,
     pub transform: Transform,
 }
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SceneId(pub SharedString);

@@ -132,7 +132,7 @@ impl Transform {
 }
 
 /// Wrapper for values with transforms
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Transformed<T> {
     pub value: T,
     pub transform: Transform,
