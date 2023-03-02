@@ -134,7 +134,7 @@ impl RenderSystem {
             .without::<&Inactive>();
         let has_camera = if let Some((_, (transform, cam_params))) = q.iter().next() {
             self.camera.transform.clone_from(transform);
-            self.camera.projection.fovy = cam_params.fovy;
+            self.camera.projection.fovy = cam_params.fovy.to_radians();
             self.camera.projection.zrange = cam_params.zrange.clone();
             true
         } else {

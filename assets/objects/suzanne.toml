@@ -1,2 +1,2 @@
 mesh = "models.suzanne"
-material = "materials.square_floor"
+material = "materials.white_shiny"

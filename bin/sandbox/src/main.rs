@@ -17,6 +17,7 @@ use crate::{
     components::{Active, Light, LightBundle, LightKind, PanOrbitCameraBundle},
     systems::{assets::AssetSystem, render::RenderSystem},
 };
+use crate::components::SceneId;
 
 mod assets;
 pub mod components;
@@ -49,7 +50,7 @@ impl Application for Sandbox {
             .get_or_insert("prim:sphere", MeshAsset::uv_sphere(1., 24, 48));
 
         if let Some(arg) = std::env::args().skip(1).next() {
-            world.spawn((assets_system.assets.load::<Scene>(&arg)?,));
+            world.spawn((SceneId(arg.into()),));
         }
 
         let scene_system = SceneSystem::default();

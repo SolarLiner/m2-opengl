@@ -53,7 +53,7 @@ pub enum TextureSlot {
 impl Compound for TextureSlot {
     fn load(cache: AnyCache, id: &SharedString) -> eyre::Result<Self, BoxedError> {
         let desc = cache.load::<TextureSlotDesc>(id)?.cloned();
-        tracing::debug!("Loading texture slot {:?}", desc);
+        tracing::debug!(message = "Loading texture slot", ?desc);
         Ok(match desc {
             TextureSlotDesc::Color(col) => Self::Color(col),
             TextureSlotDesc::Texture(path) => Self::Texture(cache.load(&path)?.cloned()),
@@ -89,7 +89,6 @@ pub struct Material {
 impl Compound for Material {
     fn load(cache: AnyCache, id: &SharedString) -> eyre::Result<Self, BoxedError> {
         fn slot_from_cache(cache: AnyCache, desc: TextureSlotDesc) -> Result<TextureSlot> {
-            tracing::debug!("{:?}", desc);
             Ok(match desc {
                 TextureSlotDesc::Color(col) => TextureSlot::Color(col),
                 TextureSlotDesc::Texture(id) => TextureSlot::Texture(
@@ -100,6 +99,7 @@ impl Compound for Material {
                 ),
             })
         }
+        tracing::debug!(message="Loading material", %id);
         let desc = cache.load::<MaterialDesc>(id)?.cloned();
         Ok(Self {
             color: slot_from_cache(cache, desc.color)?,
