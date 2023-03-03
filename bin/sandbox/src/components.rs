@@ -8,6 +8,12 @@ use serde::{Deserialize, Serialize};
 
 use rose_core::transform::Transform;
 
+#[derive(Debug)]
+pub struct Active;
+
+#[derive(Debug)]
+pub struct Inactive;
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CameraParams {
     pub fovy: f32,
@@ -23,11 +29,11 @@ impl Default for CameraParams {
     }
 }
 
-#[derive(Debug)]
-pub struct Active;
-
-#[derive(Debug)]
-pub struct Inactive;
+#[derive(Debug, Clone, Default, Bundle)]
+pub struct CameraBundle {
+    pub transform: Transform,
+    pub params: CameraParams,
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct PanOrbitCamera {

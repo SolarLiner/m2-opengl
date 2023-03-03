@@ -1,8 +1,12 @@
-use std::{collections::HashMap, rc::Rc, time::Instant};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    rc::Rc,
+    time::Instant,
+};
 
 use assets_manager::{Handle, SharedString};
+use dashmap::DashMap;
 use eyre::Result;
 use glam::{UVec2, Vec3};
 use hecs::World;
@@ -10,32 +14,23 @@ use hecs::World;
 use rose_core::{
     camera::Camera,
     light::GpuLight,
+    light::Light,
     transform::{Transform, TransformExt},
     utils::thread_guard::ThreadGuard,
 };
-use rose_core::light::Light;
 use rose_platform::PhysicalSize;
 use rose_renderer::{
     material::{MaterialInstance, TextureSlot as MaterialSlot},
     Mesh, Renderer,
 };
-use violette::{
-    framebuffer::{ClearBuffer, Framebuffer},
-    texture::Texture,
-};
+use violette::texture::Texture;
 
 use crate::{
     assets::{
+        material::{Material, TextureSlot},
         mesh::MeshAsset,
-        material::{Material, TextureSlot}
     },
-    components::{
-        Active,
-        CameraParams,
-        Inactive,
-        Light as LightComponent,
-        LightKind
-    },
+    components::{Active, Inactive, Light as LightComponent, LightKind},
 };
 
 pub struct RenderSystem {
@@ -43,9 +38,8 @@ pub struct RenderSystem {
     pub camera: Camera,
     last_frame: Instant,
     renderer: ThreadGuard<Renderer>,
-    meshes_map: HashMap<SharedString, ThreadGuard<Rc<Mesh>>>,
-    materials_map:
-        HashMap<SharedString, ThreadGuard<Rc<rose_renderer::material::MaterialInstance>>>,
+    meshes_map: DashMap<SharedString, ThreadGuard<Rc<Mesh>>>,
+    materials_map: DashMap<SharedString, ThreadGuard<Rc<MaterialInstance>>>,
     default_material_instance: ThreadGuard<Rc<MaterialInstance>>,
     lights_hash: u64,
 }
@@ -68,36 +62,43 @@ impl RenderSystem {
             camera: Camera::default(),
             renderer: ThreadGuard::new(Renderer::new(size)?),
             last_frame: Instant::now(),
-            meshes_map: HashMap::new(),
-            materials_map: HashMap::new(),
+            meshes_map: DashMap::new(),
+            materials_map: DashMap::new(),
             default_material_instance: ThreadGuard::new(Rc::new(default_material_instance)),
             lights_hash: DefaultHasher::new().finish(),
         })
     }
 
-    pub fn on_frame(&mut self, world: &mut World) -> Result<()> {
-        self.handle_mesh_assets(world)?;
-        self.handle_material_assets(world)?;
-        let has_camera = self.update_camera(world);
-        if !has_camera {
-            tracing::warn!("No camera found to render with. Add an entity with the `Transform` and `CameraProps`, and make it active by also adding the `Active` component.");
-            Framebuffer::backbuffer().do_clear(ClearBuffer::COLOR);
-            return Ok(());
-        }
-
+    pub fn on_frame(&mut self, world: &World) -> Result<()> {
+        let (ra, rb) = rayon::join(
+            || self.handle_mesh_assets(world),
+            || self.handle_material_assets(world),
+        );
+        ra?;
+        rb?;
         let light_hash = self.hash_lights(world);
         if light_hash != self.lights_hash {
             tracing::info!(message="Rebuilding lights", hash=%light_hash);
             self.lights_hash = light_hash;
-            let new_lights = self.iter_active_lights(world).into_iter().map(|(transform, light)| {
-                let color = light.power * light.color;
-                match light.kind {
-                    LightKind::Directional => Light::Directional { color, dir: transform.rotation.mul_vec3(Vec3::NEG_Z) },
-                    LightKind::Point => Light::Point { color, position: transform.position },
-                    LightKind::Ambient => Light::Ambient { color }
-                }
-            });
-            self.renderer.set_light_buffer(GpuLight::create_buffer(new_lights)?)
+            let new_lights =
+                self.iter_active_lights(world)
+                    .into_iter()
+                    .map(|(transform, light)| {
+                        let color = light.power * light.color;
+                        match light.kind {
+                            LightKind::Directional => Light::Directional {
+                                color,
+                                dir: transform.rotation.mul_vec3(Vec3::NEG_Z),
+                            },
+                            LightKind::Point => Light::Point {
+                                color,
+                                position: transform.position,
+                            },
+                            LightKind::Ambient => Light::Ambient { color },
+                        }
+                    });
+            self.renderer
+                .set_light_buffer(GpuLight::create_buffer(new_lights)?)
         }
 
         self.renderer.begin_render(self.clear_color.extend(1.))?;
@@ -108,15 +109,15 @@ impl RenderSystem {
         Ok(())
     }
 
-    fn submit_meshes(&mut self, world: &mut World) {
+    fn submit_meshes(&mut self, world: &World) {
         for (_, (mesh_handle, material_handle, transform)) in world
             .query::<(&Handle<MeshAsset>, Option<&Handle<Material>>, &Transform)>()
             .iter()
         {
             tracing::trace!(message="Submitting mesh", mesh=%mesh_handle.id(), material=%material_handle.map(|h| h.id().clone()).unwrap_or("<none>".into()));
-            let mesh = &self.meshes_map[mesh_handle.id()];
+            let mesh = self.meshes_map.get(mesh_handle.id()).unwrap();
             let material = if let Some(handle) = material_handle {
-                self.materials_map[handle.id()].clone()
+                self.materials_map.get(handle.id()).unwrap().clone()
             } else {
                 self.default_material_instance.clone()
             };
@@ -127,23 +128,7 @@ impl RenderSystem {
         }
     }
 
-    fn update_camera(&mut self, world: &mut World) -> bool {
-        let mut q = world
-            .query::<(&Transform, &CameraParams)>()
-            .with::<&Active>()
-            .without::<&Inactive>();
-        let has_camera = if let Some((_, (transform, cam_params))) = q.iter().next() {
-            self.camera.transform.clone_from(transform);
-            self.camera.projection.fovy = cam_params.fovy;
-            self.camera.projection.zrange = cam_params.zrange.clone();
-            true
-        } else {
-            false
-        };
-        has_camera
-    }
-
-    fn handle_mesh_assets(&mut self, world: &mut World) -> Result<()> {
+    fn handle_mesh_assets(&self, world: &World) -> Result<()> {
         for (_, handle) in world.query::<&Handle<MeshAsset>>().iter() {
             if handle.reloaded_global() || !self.meshes_map.contains_key(handle.id()) {
                 let mesh = handle.read();
@@ -160,7 +145,7 @@ impl RenderSystem {
         Ok(())
     }
 
-    fn handle_material_assets(&mut self, world: &mut World) -> Result<()> {
+    fn handle_material_assets(&self, world: &World) -> Result<()> {
         for (_, handle) in world.query::<&Handle<Material>>().iter() {
             if handle.reloaded_global() || !self.materials_map.contains_key(handle.id()) {
                 tracing::info!(message="Loading material", handle=%handle.id());
@@ -173,7 +158,8 @@ impl RenderSystem {
                         None
                     },
                     into_material_slot2(&mat.rough_metal)?,
-                )?.with_normal_amount(mat.normal_amount);
+                )?
+                .with_normal_amount(mat.normal_amount);
                 self.materials_map
                     .insert(handle.id().clone(), ThreadGuard::new(Rc::new(inst)));
             }
@@ -181,7 +167,7 @@ impl RenderSystem {
         Ok(())
     }
 
-    fn hash_lights(&self, world: &mut World) -> u64 {
+    fn hash_lights(&self, world: &World) -> u64 {
         let mut hasher = DefaultHasher::new();
         for (transform, light) in self.iter_active_lights(world) {
             transform.hash(&mut hasher);
@@ -190,8 +176,11 @@ impl RenderSystem {
         return hasher.finish();
     }
 
-    fn iter_active_lights(&self, world: &mut World) ->Vec<(Transform, LightComponent)> {
-        let mut query = world.query::<(&Transform, &LightComponent)>().with::<&Active>().without::<&Inactive>();
+    fn iter_active_lights(&self, world: &World) -> Vec<(Transform, LightComponent)> {
+        let mut query = world
+            .query::<(&Transform, &LightComponent)>()
+            .with::<&Active>()
+            .without::<&Inactive>();
         query.iter().map(|(_, (t, l))| (*t, *l)).collect()
     }
 }
