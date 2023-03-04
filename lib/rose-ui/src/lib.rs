@@ -1,8 +1,7 @@
 use std::env;
 use std::time::Duration;
 
-use egui::epaint;
-use egui::os::OperatingSystem;
+use egui::{epaint, os::OperatingSystem, Style, Visuals};
 use egui_winit::winit::event_loop::EventLoopWindowTarget;
 use eyre::Result;
 use violette::framebuffer::Framebuffer;
@@ -36,6 +35,14 @@ impl Ui {
         tracing::info!("OS: {:?}", os);
         ctx.set_pixels_per_point(scale_factor);
         ctx.set_os(os);
+        let visuals = match dark_light::detect() {
+            dark_light::Mode::Light => Visuals::light(),
+            _ => Visuals::dark(),
+        };
+        ctx.set_style(Style {
+            visuals,
+            ..Default::default()
+        });
 
         Ok(Self {
             ctx,
@@ -50,11 +57,7 @@ impl Ui {
         self.winit.on_event(&self.ctx, event)
     }
 
-    pub fn run(
-        &mut self,
-        window: &winit::window::Window,
-        runner: impl FnMut(&egui::Context),
-    ) -> Duration {
+    pub fn run(&mut self, window: &Window, runner: impl FnMut(&egui::Context)) -> Duration {
         let raw_input = self.winit.take_egui_input(window);
         let output = self.ctx.run(raw_input, runner);
 
@@ -65,7 +68,7 @@ impl Ui {
         output.repaint_after
     }
 
-    pub fn draw(&mut self, window: &winit::window::Window) -> Result<()> {
+    pub fn draw(&mut self, window: &Window) -> Result<()> {
         for (id, delta) in &self.tex_deltas.set {
             self.painter.set_texture(*id, delta)?;
         }

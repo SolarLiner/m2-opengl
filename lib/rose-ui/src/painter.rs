@@ -6,8 +6,10 @@ use eyre::Result;
 use glam::{vec2, IVec2, Vec2};
 use winit::dpi::PhysicalSize;
 
-use rose_core::mesh::Mesh;
-use rose_core::utils::thread_guard::ThreadGuard;
+use rose_core::{
+    mesh::Mesh,
+    utils::thread_guard::ThreadGuard
+};
 use violette::{
     framebuffer::{Blend, Framebuffer},
     gl,
@@ -15,6 +17,7 @@ use violette::{
     texture::Texture,
     vertex::{VertexAttributes, VertexDesc},
 };
+use violette::framebuffer::BlendFunction;
 
 pub type UiTexture = Texture<f32>;
 
@@ -23,7 +26,7 @@ pub type UiTexture = Texture<f32>;
 struct Vertex(epaint::Vertex);
 
 impl VertexAttributes for Vertex {
-    fn attributes() -> &'static [violette::vertex::VertexDesc] {
+    fn attributes() -> &'static [VertexDesc] {
         vec![
             VertexDesc::from_gl_type::<Vec2>(offset_of!(epaint::Vertex, pos)),
             VertexDesc::from_gl_type::<Vec2>(offset_of!(epaint::Vertex, uv)),
@@ -112,7 +115,8 @@ impl UiImpl {
                                 tracing::error!("Ui painter callback not created within the render thread -- this cannot work as OpenGL is not multithreaded")
                             }
                         }
-                        Framebuffer::viewport(0, 0, size.width as _, size.height as _);
+                        // Framebuffer::viewport(0, 0, size.width as _, size.height as _);
+                        let _ = self.prepare_painting(size, ppp)?;
                     }
                 }
             }
@@ -227,6 +231,7 @@ impl UiImpl {
         unsafe {
             gl::ColorMask(gl::TRUE, gl::TRUE, gl::TRUE, gl::TRUE);
         }
+        Framebuffer::blend_equation(BlendFunction::Add);
         Framebuffer::enable_blending(Blend::One, Blend::OneMinusSrcAlpha);
         let logical_size = size.to_logical::<f32>(ppp as _);
         Framebuffer::viewport(0, 0, size.width as _, size.height as _);

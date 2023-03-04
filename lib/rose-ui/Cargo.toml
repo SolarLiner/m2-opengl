@@ -8,6 +8,7 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+dark-light = "1.0.0"
 egui-winit = "0.20.1"
 eyre = "0.6.8"
 glam = { version = "0.22.0", features = ["bytemuck", "rand", "num-traits"] }
