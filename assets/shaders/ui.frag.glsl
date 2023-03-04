@@ -25,5 +25,5 @@ void main() {
     float texture_in_gamma = gamma_from_linear(texture(u_sampler, v_tc).r);
 
     // We multiply the colors in gamma space, because that's the only way to get text to look right.
-    f_color = v_rgba_in_gamma * vec4(vec3(texture_in_gamma), 1);
+    f_color = v_rgba_in_gamma * vec4(texture_in_gamma);
 }
