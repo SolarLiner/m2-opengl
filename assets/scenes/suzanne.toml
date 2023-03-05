@@ -1,6 +1,0 @@
-[camera]
-transform = { translation = [0.0, 0.0, 0.0], rotation = [0.0, -0.0, 0.0], scale = [1.0, 1.0, 1.0] }
-fovy = 0.7853981852531433
-zrange = { start = 0.0010000000474974513, end = 1000.0 }
-lights = [{ transform = { translation = [0.0, 0.0, -1.7320507764816284], rotation = [-0.5235987901687622, -0.6154797673225403, 0.7853981852531433], scale = [0.9999999403953552, 0.9999999403953552, 0.9999999403953552] }, kind = "Directional", color = [1.0, 1.0, 1.0], power = 10.0 }]
-objects = [{ transform = { translation = [0.0, 0.0, 0.0], rotation = [0.0, -0.0, 0.0], scale = [1.0, 1.0, 1.0] }, object = "objects.suzanne" }]

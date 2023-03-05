@@ -6,8 +6,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(feature = "debug-ui")]
+use egui::Ui;
 use eyre::Result;
-use glam::{UVec2, vec2, Vec4};
+use glam::{UVec2, vec2, Vec3};
 use tracing::span::EnteredSpan;
 
 use gbuffers::GeometryBuffers;
@@ -16,10 +18,13 @@ use postprocess::Postprocess;
 use rose_core::{
     camera::Camera,
     light::{GpuLight, Light, LightBuffer},
-    transform::{TransformExt, Transformed},
+    transform::{Transformed, TransformExt},
     utils::thread_guard::ThreadGuard,
 };
-use violette::framebuffer::{ClearBuffer, Framebuffer};
+use violette::{
+    Cull,
+    framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer}, FrontFace,
+};
 
 use crate::material::MaterialInstance;
 
@@ -33,6 +38,51 @@ pub type Mesh = rose_core::mesh::Mesh<material::Vertex>;
 pub struct PostprocessInterface {
     pub exposure: f32,
     pub bloom: BloomInterface,
+}
+
+impl PostprocessInterface {
+    pub fn ui(&mut self, ui: &mut Ui) {
+        egui::Grid::new("pp-iface")
+            .striped(true)
+            .num_columns(2)
+            .show(ui, |ui| {
+                let exposure_label = ui.label("Exposure:");
+                ui.add(
+                    egui::Slider::new(&mut self.exposure, 1e-6..=1e4)
+                        .logarithmic(true)
+                        .show_value(true)
+                        .suffix(" EV")
+                        .custom_formatter(|v, _| format!("{:+1.1}", v.log2()))
+                        .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev)))
+                        .text("Exposure"),
+                )
+                    .labelled_by(exposure_label.id);
+                ui.end_row();
+
+                let bloom_size_label = ui.label("Bloom size:");
+                ui.add(
+                    egui::Slider::new(&mut self.bloom.size, 0f32..=0.5)
+                        .logarithmic(true)
+                        .clamp_to_range(false)
+                        .show_value(true),
+                )
+                    .labelled_by(bloom_size_label.id);
+                ui.end_row();
+
+                let bloom_strength_label = ui.label("Bloom strength:");
+                ui.add(
+                    egui::Slider::new(&mut self.bloom.strength, 1e-4..=1e2)
+                        .logarithmic(true)
+                        .show_value(true)
+                        .suffix(" %")
+                        .custom_formatter(|x, _| format!("{:2.1}", x * 100.))
+                        .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.))
+                        .text("Bloom strength"),
+                )
+                    .labelled_by(bloom_strength_label.id);
+                ui.end_row();
+            });
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -118,7 +168,7 @@ impl Renderer {
         self.lights = light_buffer;
     }
 
-    pub fn begin_render(&mut self, clear_color: Vec4) -> Result<()> {
+    pub fn begin_render(&mut self) -> Result<()> {
         self.render_span
             .replace(tracing::debug_span!("render").entered());
         let now = Instant::now();
@@ -127,11 +177,6 @@ impl Renderer {
 
         self.last_render_rendered = 0;
         self.last_render_submitted = 0;
-
-        let backbuffer = Framebuffer::backbuffer();
-        Framebuffer::clear_color(clear_color.to_array());
-        Framebuffer::clear_depth(1.);
-        backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
 
         self.post_process.luminance_bias = self.post_process_iface.exposure;
         self.post_process.bloom_radius = self.post_process_iface.bloom.size;
@@ -170,8 +215,26 @@ impl Renderer {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn flush(&mut self, camera: &Camera, dt: Duration) -> Result<()> {
+    pub fn flush(&mut self, camera: &Camera, dt: Duration, clear_color: Vec3) -> Result<()> {
         let render_start = Instant::now();
+        violette::set_front_face(FrontFace::CounterClockwise);
+        violette::culling(Some(Cull::Back));
+        Framebuffer::viewport(
+            0,
+            0,
+            camera.projection.width as _,
+            camera.projection.height as _,
+        );
+        Framebuffer::enable_depth_test(DepthTestFunction::Less);
+        Framebuffer::disable_scissor();
+        Framebuffer::disable_blending();
+        Framebuffer::clear_color([0., 0., 0., 1.]);
+
+        let backbuffer = Framebuffer::backbuffer();
+        Framebuffer::clear_color([0., 0., 0., 1.]);
+        Framebuffer::clear_depth(1.);
+        backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
+
         let geom_pass = self.geom_pass.borrow();
         for (mat_ix, meshes) in self.queued_meshes.drain() {
             let Some(instance) = self.queued_materials[mat_ix].upgrade() else {
@@ -187,6 +250,7 @@ impl Renderer {
             geom_pass.draw_meshes(camera, &self.material, instance.as_ref(), &mut meshes)?;
         }
 
+        Framebuffer::clear_color(clear_color.extend(1.).to_array());
         let shaded_tex = geom_pass.process(camera, &self.lights)?;
         self.post_process
             .draw(&Framebuffer::backbuffer(), shaded_tex, dt)?;
@@ -202,163 +266,107 @@ impl Renderer {
         ui.toggle_value(&mut self.debug_window_open, "Debug menu");
         ui.menu_button("Post processing", |ui| {
             let pp_iface = self.post_process_interface();
-            egui::Grid::new("pp-iface")
-                .striped(true)
-                .num_columns(2)
-                .show(ui, |ui| {
-                    let exposure_label = ui.label("Exposure:");
-                    ui.add(
-                        egui::Slider::new(&mut pp_iface.exposure, 1e-6..=1e4)
-                            .logarithmic(true)
-                            .show_value(true)
-                            .suffix(" EV")
-                            .custom_formatter(|v, _| format!("{:+1.1}", v.log2()))
-                            .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev)))
-                            .text("Exposure"),
-                    )
-                    .labelled_by(exposure_label.id);
-                    ui.end_row();
-
-                    let bloom_size_label = ui.label("Bloom size:");
-                    ui.add(
-                        egui::Slider::new(&mut pp_iface.bloom.size, 0f32..=0.5)
-                            .logarithmic(true)
-                            .clamp_to_range(false)
-                            .show_value(true),
-                    )
-                    .labelled_by(bloom_size_label.id);
-                    ui.end_row();
-
-                    let bloom_strength_label = ui.label("Bloom strength:");
-                    ui.add(
-                        egui::Slider::new(&mut pp_iface.bloom.strength, 1e-4..=1e2)
-                            .logarithmic(true)
-                            .show_value(true)
-                            .suffix(" %")
-                            .custom_formatter(|x, _| format!("{:2.1}", x * 100.))
-                            .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.))
-                            .text("Bloom strength"),
-                    )
-                    .labelled_by(bloom_strength_label.id);
-                    ui.end_row();
-                });
+            pp_iface.ui(ui);
         });
     }
 
     #[cfg(feature = "debug-ui")]
     pub fn ui(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("renderer-stats")
-            // .frame(
-            //     egui::Frame::none()
-            //         .inner_margin(egui::style::Margin::same(5.))
-            //         .stroke(egui::Stroke::NONE),
-            // )
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(format!(
-                        "{:3} Objects submitted | {:3} objects rendered",
-                        self.last_render_submitted, self.last_render_rendered
-                    ));
-                    ui.separator();
-                    ui.label(format!(
-                        "Scene processing: {:5?}",
-                        self.last_scene_duration.unwrap_or_default()
-                    ));
-                    ui.separator();
-                    ui.label(format!(
-                        "Render time: {:5?}",
-                        self.last_render_duration.unwrap_or_default()
-                    ));
-                    ui.separator();
-                    ui.label(format!(
-                        "Average luminance: {:>2.2} EV",
-                        self.post_process.average_luminance().log2()
-                    ));
-                });
+        egui::TopBottomPanel::bottom("renderer-stats").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                self.ui_render_stats(ui);
             });
-        egui::Window::new("Renderer debug")
-            .resizable(true)
-            .open(&mut self.debug_window_open)
-            .show(ctx, |ui| {
-                const GET_NAME: fn(usize) -> &'static str = |ix| match ix {
-                    0 => "Position",
-                    1 => "Albedo",
-                    2 => "Normal",
-                    3 => "Roughness/Metal",
-                    _ => "<None>",
-                };
-                thread_local! {
-                    static SELECTED_TEXTURE: RefCell<usize> = RefCell::new(usize::MAX);
-                }
-                SELECTED_TEXTURE.with(|key| {
-                    let ix = ui
-                        .horizontal(|ui| {
-                            let label = ui.label("Select debug texture");
-                            let ix = &mut *key.borrow_mut();
-                            egui::ComboBox::new("renderer-debug-texture", "Debug texture")
-                                .selected_text(GET_NAME(*ix))
-                                .show_index(ui, ix, 5, |ix| GET_NAME(ix).to_string())
-                                .labelled_by(label.id);
-                            *ix
-                        })
-                        .inner;
-                    const SIDE: f32 = 256.;
-                    let size = self.geom_pass.borrow().size().as_vec2();
-                    let size = if size.x > size.y {
-                        vec2(SIDE, size.y / size.x * SIDE)
-                    } else {
-                        vec2(SIDE * size.x / size.y, SIDE)
-                    };
-                    let (rect, _) =
-                        ui.allocate_at_least(size, egui::Sense::focusable_noninteractive());
-                    let painter = ui.painter();
-                    painter.rect_filled(rect, 0., egui::Rgba::from_gray(0.));
-                    let geom_pass = self.geom_pass.clone();
-                    painter.add(egui::PaintCallback {
-                        rect,
-                        callback: Arc::new(rose_ui::painter::UiCallback::new(move |_info, ui| {
-                            let geom_pass = geom_pass.borrow();
-                            let _ = match ix {
-                                0 => geom_pass.debug_position(ui.framebuffer()),
-                                1 => geom_pass.debug_albedo(ui.framebuffer()),
-                                2 => geom_pass.debug_normal(ui.framebuffer()),
-                                3 => geom_pass.debug_rough_metal(ui.framebuffer()),
-                                _ => Ok(()),
-                            }
-                            .is_ok();
-                        })),
-                    });
-                });
-                // egui::Grid::new("debug_textures")
-                //     .num_columns(2)
-                //     .show(ui, |ui| {
-                //         make_texture_frame(ui, "Position", {
-                //             let geom_pass = self.geom_pass.clone();
-                //             move |frame| geom_pass.read().unwrap().debug_position(frame).unwrap()
-                //         });
-                //         make_texture_frame(ui, "Albedo", {
-                //             let geom_pass = self.geom_pass.clone();
-                //             move |frame| geom_pass.read().unwrap().debug_albedo(frame).unwrap()
-                //         });
-                //         ui.end_row();
-                //
-                //         make_texture_frame(ui, "Normal", {
-                //             let geom_pass = self.geom_pass.clone();
-                //             move |frame| geom_pass.read().unwrap().debug_normal(frame).unwrap()
-                //         });
-                //         make_texture_frame(ui, "Roughness / Metal", {
-                //             let geom_pass = self.geom_pass.clone();
-                //             move |frame| geom_pass.read().unwrap().debug_rough_metal(frame).unwrap()
-                //         });
-                //         ui.end_row();
-                //     })
+        });
+        // egui::Window::new("Renderer debug")
+        //     .resizable(true)
+        //     .open(&mut self.debug_window_open)
+        // .show(ctx, |ui| {
+        //     self.ui_debug_panel(ui);
+        // });
+    }
+
+    #[cfg(feature = "debug-ui")]
+    pub fn ui_render_stats(&mut self, ui: &mut Ui) {
+        ui.label(format!(
+            "{:3} Objects submitted | {:3} objects rendered",
+            self.last_render_submitted, self.last_render_rendered
+        ));
+        ui.separator();
+        ui.label(format!(
+            "Scene processing: {:5?}",
+            self.last_scene_duration.unwrap_or_default()
+        ));
+        ui.separator();
+        ui.label(format!(
+            "Render time: {:5?}",
+            self.last_render_duration.unwrap_or_default()
+        ));
+        ui.separator();
+        ui.label(format!(
+            "Average luminance: {:>2.2} EV",
+            self.post_process.average_luminance().log2()
+        ));
+    }
+
+    #[cfg(feature = "debug-ui")]
+    pub fn ui_debug_panel(&self, ui: &mut Ui) {
+        const GET_NAME: fn(usize) -> &'static str = |ix| match ix {
+            0 => "Position",
+            1 => "Albedo",
+            2 => "Normal",
+            3 => "Roughness/Metal",
+            _ => "<None>",
+        };
+        thread_local! {
+            static SELECTED_TEXTURE: RefCell<usize> = RefCell::new(usize::MAX);
+        }
+        SELECTED_TEXTURE.with(|key| {
+            let ix = ui
+                .horizontal(|ui| {
+                    let label = ui.label("Select debug texture");
+                    let ix = &mut *key.borrow_mut();
+                    egui::ComboBox::new("renderer-debug-texture", "Debug texture")
+                        .selected_text(GET_NAME(*ix))
+                        .show_index(ui, ix, 5, |ix| GET_NAME(ix).to_string())
+                        .labelled_by(label.id);
+                    *ix
+                })
+                .inner;
+            const SIDE: f32 = 256.;
+            let size = self.geom_pass.borrow().size().as_vec2();
+            let size = if size.x > size.y {
+                vec2(SIDE, size.y / size.x * SIDE)
+            } else {
+                vec2(SIDE * size.x / size.y, SIDE)
+            };
+            let (rect, _) = ui.allocate_at_least(
+                egui::vec2(size.x, size.y),
+                egui::Sense::focusable_noninteractive(),
+            );
+            let painter = ui.painter();
+            painter.rect_filled(rect, 0., egui::Rgba::from_gray(0.));
+            let geom_pass = self.geom_pass.clone();
+            painter.add(egui::PaintCallback {
+                rect,
+                callback: Arc::new(rose_ui::painter::UiCallback::new(move |_info, ui| {
+                    let geom_pass = geom_pass.borrow();
+                    let _ = match ix {
+                        0 => geom_pass.debug_position(ui.framebuffer()),
+                        1 => geom_pass.debug_albedo(ui.framebuffer()),
+                        2 => geom_pass.debug_normal(ui.framebuffer()),
+                        3 => geom_pass.debug_rough_metal(ui.framebuffer()),
+                        _ => Ok(()),
+                    }
+                        .is_ok();
+                })),
             });
+        });
     }
 }
 
 #[cfg(feature = "debug-ui")]
 fn make_texture_frame(
-    ui: &mut egui::Ui,
+    ui: &mut Ui,
     name: &str,
     draw: impl 'static + Fn(&Framebuffer) + Send + Sync,
 ) -> egui::Response {

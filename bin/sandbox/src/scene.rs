@@ -1,60 +1,81 @@
-use crate::components::Light;
+use std::{
+    fmt::{self, Formatter},
+    path::{Path, PathBuf},
+};
+
+use assets_manager::{AnyCache, AssetCache};
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use eyre::Result;
+use hecs::{CommandBuffer, EntityBuilder, World};
+
+use rose_core::transform::Transform;
+
 use crate::{
     assets::{
         object::{ObjectBundle, TransformDesc},
-        scene as assets,
-        scene::{NamedObject, SceneDesc, Transformed},
+        scene::{self as assets, NamedObject, SceneDesc, Transformed},
     },
-    components::{Active, CameraBundle, CameraParams, LightBundle},
+    components::{Active, CameraBundle, CameraParams, Light, LightBundle},
 };
-use assets_manager::{AnyCache, AssetCache, SharedString};
-use crossbeam_channel::{Receiver, Sender, TryRecvError, TrySendError};
-use eyre::Result;
-use hecs::{CommandBuffer, EntityBuilder, Query, QueryBorrow, World};
-use rose_core::transform::Transform;
-use std::time::Duration;
-use std::{
-    fmt::{self, Formatter},
-    path::PathBuf,
-};
+use crate::assets::scene::Named;
 
 pub struct Scene {
     assets: &'static AssetCache,
     world: World,
-    scene_id: SharedString,
-    asset_base_dir: PathBuf,
+    scene_path: PathBuf,
     command_queue: (Sender<CommandBuffer>, Receiver<CommandBuffer>),
 }
 
 impl Clone for Scene {
     fn clone(&self) -> Self {
-        Self::load(&self.asset_base_dir, &self.scene_id).unwrap()
+        Self::load(&self.scene_path).unwrap()
     }
 }
 
 impl fmt::Debug for Scene {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Scene")
-            .field("base_dir", &self.asset_base_dir.display())
-            .field("scene_id", &self.scene_id)
+            .field("path", &self.scene_path.display())
             .finish()
     }
 }
 
 impl Scene {
-    pub fn load(base_path: impl Into<PathBuf>, id: &str) -> Result<Self> {
-        let base_path = base_path.into();
+    pub fn new(base_dir: impl AsRef<Path>) -> Result<Self> {
+        let base_dir = base_dir.as_ref();
+        let assets = Box::leak(Box::new(AssetCache::new(base_dir)?));
+        assets.enhance_hot_reloading();
+
+        Ok(Self {
+            assets,
+            scene_path: base_dir.join("unknown.scene"),
+            world: World::new(),
+            command_queue: crossbeam_channel::bounded(16),
+        })
+    }
+
+    pub fn load(scene_path: impl AsRef<Path>) -> Result<Self> {
+        let scene_path = scene_path.as_ref();
+        let base_path = scene_path.parent().unwrap();
+        let id = scene_path.file_stem().unwrap().to_str().unwrap();
         let assets = Box::leak(Box::new(AssetCache::new(&base_path)?));
         assets.enhance_hot_reloading();
         let mut world = World::new();
         Self::load_scene(&mut world, assets.as_any_cache(), id)?;
         Ok(Self {
             assets,
-            asset_base_dir: base_path,
-            scene_id: id.into(),
+            scene_path: scene_path.into(),
             world,
             command_queue: crossbeam_channel::bounded(16),
         })
+    }
+
+    pub fn asset_cache(&self) -> AnyCache<'static> {
+        self.assets.as_any_cache()
+    }
+
+    pub fn path(&self) -> &Path {
+        self.scene_path.as_path()
     }
 
     pub fn on_frame(&self) {
@@ -96,33 +117,33 @@ impl Scene {
         }
     }
 
-    pub fn save(&self) -> Result<Option<String>> {
-        match Self::save_world_as_scene(&self.world) {
+    pub fn save(&self, editor_camera: Transformed<CameraParams>) -> Result<Option<String>> {
+        match Self::save_world_as_scene(&self.world, editor_camera) {
             Some(desc) => Ok(Some(toml::ser::to_string_pretty(&desc)?)),
             None => Ok(None),
         }
     }
 
-    fn load_scene(world: &mut World, cache: AnyCache<'static>, id: &str) -> Result<()> {
+    fn load_scene(world: &mut World, cache: AnyCache<'static>, id: &str) -> Result<CameraBundle> {
         let mut commands = CommandBuffer::new();
         let handle = cache.load::<assets::Scene>(id)?;
         let scene = handle.read();
-        commands.spawn(
-            EntityBuilder::new()
-                .add_bundle(CameraBundle {
-                    transform: scene.camera.transform,
-                    params: scene.camera.value.clone(),
-                })
-                .add(Active)
-                .build(),
-        );
+        let editor_camera = CameraBundle {
+            transform: scene.camera.transform,
+            params: scene.camera.value.clone(),
+            ..Default::default()
+        };
         for light in &scene.lights {
             commands.spawn(
                 EntityBuilder::new()
-                    .add_bundle(LightBundle {
-                        transform: light.transform,
-                        light: light.value,
-                    })
+                    .add_bundle((
+                        light.name.to_string(),
+                        LightBundle {
+                            transform: light.transform,
+                            light: light.value.value,
+                            ..Default::default()
+                        },
+                    ))
                     .add(Active)
                     .build(),
             );
@@ -132,6 +153,7 @@ impl Scene {
             let mut loader = || {
                 commands.spawn(
                     EntityBuilder::new()
+                        .add(object.name.to_string())
                         .add(NamedObject {
                             object: object.name.clone(),
                         })
@@ -139,6 +161,7 @@ impl Scene {
                             transform: object.transform,
                             mesh: cache.load(object.mesh.as_str())?,
                             material: cache.load(object.material.as_str())?,
+                            active: Active,
                         })
                         .build(),
                 );
@@ -156,32 +179,36 @@ impl Scene {
         }
 
         commands.run_on(world);
-        Ok(())
+        Ok(editor_camera)
     }
 
-    fn save_world_as_scene(world: &World) -> Option<SceneDesc> {
-        let camera = world
-            .query::<(&Transform, &CameraParams)>()
-            .iter()
-            .next()
-            .map(|(_, (transform, cam))| Transformed {
-                transform: (*transform).into(),
-                value: cam.clone(),
-            })?;
+    fn save_world_as_scene(world: &World, camera: Transformed<CameraParams>) -> Option<SceneDesc> {
         let lights = world
-            .query::<(&Transform, &Light)>()
+            .query::<(Option<&String>, &Transform, &Light)>()
             .iter()
-            .map(|(_, (transform, light))| Transformed {
-                transform: (*transform).into(),
-                value: *light,
+            .map(|(_, (opt_name, transform, light))| Named {
+                name: opt_name
+                    .cloned()
+                    .unwrap_or_else(|| String::from("<Unnamed>"))
+                    .into(),
+                value: Transformed {
+                    transform: (*transform).into(),
+                    value: *light,
+                },
             })
             .collect();
         let objects = world
-            .query::<(&Transform, &NamedObject)>()
+            .query::<(Option<&String>, &Transform, &NamedObject)>()
             .iter()
-            .map(|(_, (transform, named_obj))| Transformed {
-                transform: TransformDesc::from(*transform),
-                value: named_obj.clone(),
+            .map(|(_, (opt_name, transform, named_obj))| Named {
+                name: opt_name
+                    .cloned()
+                    .unwrap_or_else(|| String::from("<Unnamed>"))
+                    .into(),
+                value: Transformed {
+                    transform: TransformDesc::from(*transform),
+                    value: named_obj.clone(),
+                },
             })
             .collect();
         Some(SceneDesc {

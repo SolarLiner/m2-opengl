@@ -1,10 +1,10 @@
 use std::ops;
 
-use assets_manager::loader::TomlLoader;
 use assets_manager::{AnyCache, Asset, BoxedError, Compound, SharedString};
+use assets_manager::loader::TomlLoader;
 use serde::{Deserialize, Serialize};
 
-use rose_core::transform::{TransformExt, Transformed as TransformedCore};
+use rose_core::transform::{Transformed as TransformedCore, TransformExt};
 
 use crate::assets::object::{ObjectDesc, TransformDesc};
 use crate::components::{CameraParams, Light};
@@ -48,20 +48,20 @@ pub struct NamedObject {
 #[serde(default)]
 pub struct SceneDesc {
     pub camera: Transformed<CameraParams>,
-    pub lights: Vec<Transformed<Light>>,
-    pub objects: Vec<Transformed<NamedObject>>,
+    pub lights: Vec<Named<Transformed<Light>>>,
+    pub objects: Vec<Named<Transformed<NamedObject>>>,
 }
 
 impl Asset for SceneDesc {
-    const EXTENSION: &'static str = "toml";
+    const EXTENSIONS: &'static [&'static str] = &["scene", "toml"];
     type Loader = TomlLoader;
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct Scene {
     pub camera: TransformedCore<CameraParams>,
-    pub lights: Vec<TransformedCore<Light>>,
-    pub objects: Vec<TransformedCore<Named<ObjectDesc>>>,
+    pub lights: Vec<Named<TransformedCore<Light>>>,
+    pub objects: Vec<Named<TransformedCore<ObjectDesc>>>,
 }
 
 impl Compound for Scene {
@@ -72,7 +72,10 @@ impl Compound for Scene {
         let lights = desc
             .lights
             .into_iter()
-            .map(|light| light.value.transformed(light.transform.into()))
+            .map(|light| Named {
+                name: light.name,
+                value: light.value.value.transformed(light.value.transform.into()),
+            })
             .collect();
         let objects = desc
             .objects
@@ -80,12 +83,9 @@ impl Compound for Scene {
             .map(|obj| {
                 cache
                     .load_owned(&obj.value.object)
-                    .map(|asset: ObjectDesc| {
-                        Named {
-                            name: obj.value.object.into(),
-                            value: asset,
-                        }
-                        .transformed(obj.transform.into())
+                    .map(|asset: ObjectDesc| Named {
+                        name: obj.value.value.object.into(),
+                        value: asset.transformed(obj.value.transform.into()),
                     })
             })
             .collect::<Result<_, _>>()?;

@@ -1,5 +1,5 @@
-use std::time::Duration;
 use std::rc::Rc;
+use std::time::Duration;
 
 use eyre::Result;
 use glam::{UVec2, Vec2, vec3, Vec3};
@@ -17,7 +17,7 @@ use rose_platform::{
     events::{ElementState, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent}, PhysicalSize, RenderContext, TickContext, UiContext, WindowBuilder,
 };
 use rose_renderer::{Mesh, Renderer};
-use rose_renderer::material::{Material, Vertex};
+use rose_renderer::material::{MaterialInstance, Vertex};
 use violette::texture::Texture;
 
 mod camera_controller;
@@ -26,7 +26,7 @@ struct App {
     camera: Camera,
     renderer: ThreadGuard<Renderer>,
     mesh: ThreadGuard<Rc<Mesh>>,
-    material: ThreadGuard<Rc<Material>>,
+    material: ThreadGuard<Rc<MaterialInstance>>,
     transform: Transform,
     ctrl_pressed: bool,
     dragging: Option<MouseButton>,
@@ -44,8 +44,12 @@ impl Application for App {
         let _sizef = Vec2::from_array(size.into());
         let size = UVec2::from_array(size.cast::<u32>().into());
         let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 64)?;
-        let material = Material::create()?
-        .with_normal_amount(0.1)?;
+        let material = MaterialInstance::create(
+            Texture::load_rgb32f("assets/textures/moon_color.png")?,
+            Some(Texture::load_rgb32f("assets/textures/moon_normal.png")?),
+            [0.5, 0.],
+        )?
+            .with_normal_amount(0.1);
         let lights = [
             Light::Directional {
                 dir: Vec3::X,
@@ -128,19 +132,18 @@ impl Application for App {
     }
     #[tracing::instrument(target = "App::tick", skip(self))]
     fn tick(&mut self, ctx: TickContext) -> Result<()> {
-        self.camera_controller
-            .update(ctx.dt, &mut self.camera);
+        self.camera_controller.update(ctx.dt, &mut self.camera);
         Ok(())
     }
 
     #[tracing::instrument(target = "App::render", skip_all)]
     fn render(&mut self, ctx: RenderContext) -> Result<()> {
-        self.renderer.begin_render(Vec3::ZERO.extend(1.))?;
+        self.renderer.begin_render()?;
         self.renderer.submit_mesh(
             Rc::downgrade(&self.material),
             Rc::downgrade(&self.mesh).transformed(self.transform),
         );
-        self.renderer.flush(&self.camera, ctx.dt)?;
+        self.renderer.flush(&self.camera, ctx.dt, Vec3::ZERO)?;
         Ok(())
     }
 

@@ -1,16 +1,9 @@
-use std::{
-    borrow::Cow,
-    error::Error,
-    fmt,
-    fmt::Formatter
-};
+use std::{borrow::Cow, error::Error, fmt, fmt::Formatter};
 
-use assets_manager::{
-    Asset, BoxedError, Compound, loader::Loader,
-};
+use assets_manager::{Asset, BoxedError, Compound, loader::Loader};
 use color_eyre::Help;
 use eyre::{Context, Result};
-use glam::{vec2, vec3, Vec3};
+use glam::{Quat, vec2, Vec2, vec3, Vec3};
 use hecs::Bundle;
 use serde::{Deserialize, Serialize};
 
@@ -51,12 +44,46 @@ pub struct MeshAsset {
     pub indices: Vec<u32>,
 }
 
+fn quad(center: Vec3, normal: Vec3) -> [Vertex; 4] {
+    let rot = Quat::from_rotation_arc(Vec3::NEG_Z, normal);
+    #[rustfmt::skip]
+    const QUADS: [Vec2; 4] = [
+        vec2(-1., -1.),
+        vec2(-1., 1.),
+        vec2(1., 1.),
+        vec2(1., -1.),
+    ];
+    QUADS.map(|v| Vertex::new(rot.mul_vec3(v.extend(0.)), normal, v / 2. + 0.5))
+}
+
 impl Asset for MeshAsset {
     const EXTENSIONS: &'static [&'static str] = &["obj"];
     type Loader = DynamicMeshLoader;
 }
 
 impl MeshAsset {
+    pub fn cube() -> Self {
+        const FACE_NORMALS: [Vec3; 6] = [
+            Vec3::Z,
+            Vec3::NEG_Z,
+            Vec3::Y,
+            Vec3::NEG_Y,
+            Vec3::X,
+            Vec3::NEG_X,
+        ];
+        let mut vertices = Vec::with_capacity(24);
+        let mut indices = Vec::with_capacity(36);
+
+        let mut i = 0;
+        for face in FACE_NORMALS {
+            vertices.extend_from_slice(&quad(face, face));
+            indices.extend_from_slice(&[i, i + 1, i + 2, i, i + 2, i + 3]);
+            i += 4;
+        }
+
+        Self { vertices, indices }
+    }
+
     pub fn uv_sphere(radius: f32, nlon: usize, nlat: usize) -> Self {
         use std::f32::consts::*;
         let mut vertices = Vec::with_capacity(nlon * nlat + 2);

@@ -1,14 +1,15 @@
 use assets_manager::{
-    loader::TomlLoader, AnyCache, Asset, BoxedError, Compound, Handle, SharedString,
+    AnyCache, Asset, BoxedError, Compound, Handle, loader::TomlLoader, SharedString,
 };
 use eyre::WrapErr;
-use glam::{vec3, EulerRot, Quat, Vec3, Vec3Swizzles};
+use glam::{EulerRot, Quat, vec3, Vec3, Vec3Swizzles};
 use hecs::Bundle;
 use serde::{Deserialize, Serialize};
 
 use rose_core::transform::Transform;
 
 use crate::{assets::material::Material, assets::mesh::MeshAsset};
+use crate::components::Active;
 
 #[derive(Debug, Copy, Clone, Deserialize, Serialize)]
 #[serde(default)]
@@ -99,6 +100,7 @@ pub struct ObjectBundle {
     pub transform: Transform,
     pub mesh: Handle<'static, MeshAsset>,
     pub material: Handle<'static, Material>,
+    pub active: Active,
 }
 
 impl ObjectBundle {
@@ -115,6 +117,7 @@ impl ObjectBundle {
             transform,
             mesh: cache.load(&desc.mesh)?,
             material: cache.load(&desc.material)?,
+            active: Active,
         })
     }
 }

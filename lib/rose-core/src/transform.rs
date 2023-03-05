@@ -127,7 +127,10 @@ impl Transform {
     }
 
     pub fn matrix(&self) -> Mat4 {
-        Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
+        // Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
+        Mat4::from_translation(self.position)
+            * Mat4::from_quat(self.rotation)
+            * Mat4::from_scale(self.scale)
     }
 }
 

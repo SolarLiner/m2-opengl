@@ -1,0 +1,52 @@
+objects = []
+
+[camera]
+fovy = 0.7853981852531433
+
+[camera.transform]
+translation = [
+    0.0,
+    0.0,
+    -4.690415859222412,
+]
+rotation = [
+    0.0,
+    -0.0,
+    0.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[camera.zrange]
+start = 0.0010000000474974513
+end = 1000.0
+
+[[lights]]
+name = "Point light"
+kind = "Point"
+color = [
+    1.0,
+    1.0,
+    1.0,
+]
+power = 100.0
+
+[lights.transform]
+translation = [
+    1.0,
+    1.0,
+    1.0,
+]
+rotation = [
+    0.0,
+    -0.0,
+    0.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
