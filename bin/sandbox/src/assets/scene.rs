@@ -84,7 +84,7 @@ impl Compound for Scene {
                 cache
                     .load_owned(&obj.value.object)
                     .map(|asset: ObjectDesc| Named {
-                        name: obj.value.value.object.into(),
+                        name: obj.value.value.object,
                         value: asset.transformed(obj.value.transform.into()),
                     })
             })

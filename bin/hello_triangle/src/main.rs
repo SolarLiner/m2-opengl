@@ -1,7 +1,6 @@
-use std::thread::Thread;
 use bytemuck::{Pod, Zeroable};
 use eyre::Result;
-use glam::{vec2, vec3, Vec2, Vec3};
+use glam::{vec2, Vec2, vec3, Vec3};
 
 use rose_core::mesh::Mesh;
 use rose_core::utils::thread_guard::ThreadGuard;
@@ -29,7 +28,7 @@ struct TriangleApp {
 }
 
 impl Application for TriangleApp {
-    fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
+    fn new(size: PhysicalSize<f32>, _scale_factor: f64) -> Result<Self> {
         let vert_shader = VertexShader::load("assets/shaders_old/triangle.vert.glsl")?;
         let frag_shader = FragmentShader::load("assets/shaders_old/triangle.frag.glsl")?;
         let mat_program = Program::new()
@@ -63,7 +62,7 @@ impl Application for TriangleApp {
         })
     }
 
-    fn resize(&mut self, _size: PhysicalSize<u32>, scale_factor: f64) -> Result<()> {
+    fn resize(&mut self, _size: PhysicalSize<u32>, _scale_factor: f64) -> Result<()> {
         let size = _size.cast();
         self.size = size;
         Framebuffer::viewport(0, 0, size.width, size.height);

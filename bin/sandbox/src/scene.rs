@@ -58,7 +58,7 @@ impl Scene {
         let scene_path = scene_path.as_ref();
         let base_path = scene_path.parent().unwrap();
         let id = scene_path.file_stem().unwrap().to_str().unwrap();
-        let assets = Box::leak(Box::new(AssetCache::new(&base_path)?));
+        let assets = Box::leak(Box::new(AssetCache::new(base_path)?));
         assets.enhance_hot_reloading();
         let mut world = World::new();
         Self::load_scene(&mut world, assets.as_any_cache(), id)?;

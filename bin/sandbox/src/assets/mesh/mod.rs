@@ -1,11 +1,8 @@
 use std::{borrow::Cow, error::Error, fmt, fmt::Formatter};
 
 use assets_manager::{Asset, BoxedError, Compound, loader::Loader};
-use color_eyre::Help;
-use eyre::{Context, Result};
+use eyre::Result;
 use glam::{Quat, vec2, Vec2, vec3, Vec3};
-use hecs::Bundle;
-use serde::{Deserialize, Serialize};
 
 use rose_renderer::material::Vertex;
 
@@ -44,7 +41,7 @@ pub struct MeshAsset {
     pub indices: Vec<u32>,
 }
 
-fn quad(center: Vec3, normal: Vec3) -> [Vertex; 4] {
+fn quad(_center: Vec3, normal: Vec3) -> [Vertex; 4] {
     let rot = Quat::from_rotation_arc(Vec3::NEG_Z, normal);
     #[rustfmt::skip]
     const QUADS: [Vec2; 4] = [

@@ -85,7 +85,7 @@ impl RenderSystem {
 }
 
 impl RenderSystem {
-    pub fn resize(&mut self, size: PhysicalSize<u32>) -> eyre::Result<()> {
+    pub fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         let sizef = size.cast();
         self.camera.projection.width = sizef.width;
         self.camera.projection.height = sizef.height;
@@ -209,7 +209,7 @@ impl RenderSystem {
             transform.hash(&mut hasher);
             light.hash(&mut hasher);
         }
-        return hasher.finish();
+        hasher.finish()
     }
 
     fn iter_active_lights(&self, world: &World) -> Vec<(Transform, LightComponent)> {

@@ -51,7 +51,7 @@ impl From<Projection> for CameraParams {
     fn from(value: Projection) -> Self {
         Self {
             fovy: value.fovy,
-            zrange: value.zrange.clone(),
+            zrange: value.zrange,
         }
     }
 }

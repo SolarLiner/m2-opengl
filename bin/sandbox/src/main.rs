@@ -44,7 +44,7 @@ impl Sandbox {
     fn new_scene(&mut self) {
         self.active_scene.take();
         self.editor_scene.take();
-        if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+        if let Some(folder) = FileDialog::new().pick_folder() {
             match Scene::new(folder) {
                 Ok(scene) => {
                     self.editor_scene.replace(scene);
@@ -124,9 +124,7 @@ impl Application for Sandbox {
         render_system.clear_color = Vec3::splat(0.1);
 
         let editor_scene =
-            std::env::args()
-                .skip(1)
-                .next()
+            std::env::args().nth(1)
                 .and_then(|file| match Scene::load(file) {
                     Ok(scene) => Some(scene),
                     Err(err) => {
@@ -252,7 +250,7 @@ impl Application for Sandbox {
                         }
                         ui.menu_button("Templates", |ui| {
                             if ui.small_button("Mesh").clicked() {
-                                scene.with_world(|world, cmd| {
+                                scene.with_world(|_world, cmd| {
                                     let mesh =
                                         self.render_system.primitive_cube(scene.asset_cache());
                                     let material = self

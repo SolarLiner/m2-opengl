@@ -332,10 +332,8 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                     let name_label = ui.label("Name").id;
                                     if let Some(mut name) = eref.get::<&mut String>() {
                                         ui.text_edit_singleline(&mut *name).labelled_by(name_label);
-                                    } else {
-                                        if ui.button("Add name").labelled_by(name_label).clicked() {
-                                            cmd.insert_one(eref.entity(), String::from(""));
-                                        }
+                                    } else if ui.button("Add name").labelled_by(name_label).clicked() {
+                                        cmd.insert_one(eref.entity(), String::from(""));
                                     }
                                     ui.end_row();
                                 });

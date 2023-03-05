@@ -5,14 +5,14 @@ use glam::{Vec2, Vec3, vec3};
 use obj::raw::material::MtlColor;
 
 use rose_renderer::material::Vertex;
-use crate::assets::material::TextureSlotDesc;
 
+use crate::assets::material::TextureSlotDesc;
 use crate::assets::mesh::MeshAsset;
 
 pub struct WavefrontLoader {}
 
 impl Loader<MeshAsset> for WavefrontLoader {
-    fn load(content: Cow<[u8]>, ext: &str) -> Result<MeshAsset, BoxedError> {
+    fn load(content: Cow<[u8]>, _ext: &str) -> Result<MeshAsset, BoxedError> {
         let obj = obj::load_obj::<obj::TexturedVertex, _, u32>(Cursor::new(content))?;
         Ok(MeshAsset {
             vertices: obj
@@ -32,7 +32,7 @@ impl Loader<MeshAsset> for WavefrontLoader {
 }
 
 impl Loader<MtlAsset> for WavefrontLoader {
-    fn load(content: Cow<[u8]>, ext: &str) -> Result<MtlAsset, BoxedError> {
+    fn load(content: Cow<[u8]>, _ext: &str) -> Result<MtlAsset, BoxedError> {
         let mtl = obj::raw::parse_mtl(Cursor::new(content))?;
         Ok(MtlAsset {
             materials: mtl
@@ -45,7 +45,7 @@ impl Loader<MtlAsset> for WavefrontLoader {
 }
 
 impl Loader<ObjMesh> for WavefrontLoader {
-    fn load(content: Cow<[u8]>, ext: &str) -> Result<ObjMesh, BoxedError> {
+    fn load(content: Cow<[u8]>, _ext: &str) -> Result<ObjMesh, BoxedError> {
         let obj = obj::raw::parse_obj(Cursor::new(content))?;
         let material_libraries = obj
             .material_libraries

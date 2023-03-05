@@ -30,17 +30,17 @@ impl From<Transform> for TransformDesc {
     }
 }
 
-impl Into<Transform> for TransformDesc {
-    fn into(self) -> Transform {
+impl From<TransformDesc> for Transform {
+    fn from(val: TransformDesc) -> Self {
         Transform {
-            position: self.translation,
+            position: val.translation,
             rotation: Quat::from_euler(
                 EulerRot::YXZ,
-                self.rotation.y,
-                self.rotation.x,
-                self.rotation.z,
+                val.rotation.y,
+                val.rotation.x,
+                val.rotation.z,
             ),
-            scale: self.scale,
+            scale: val.scale,
         }
     }
 }
