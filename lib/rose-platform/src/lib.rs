@@ -1,12 +1,11 @@
-use std::sync::RwLock;
 use std::{
     ffi::CString,
-    fs::File,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
+use std::sync::RwLock;
 
-use eyre::{eyre, Context, Result};
+use eyre::{Context, eyre, Result};
 use glutin::{
     config::{Api, ConfigTemplateBuilder},
     context::{ContextApi, ContextAttributesBuilder, Version},
@@ -17,20 +16,24 @@ use glutin::{
 use glutin_winit::DisplayBuilder;
 use histo::Histogram;
 use raw_window_handle::HasRawWindowHandle;
-use tracing_subscriber::{fmt::format::FmtSpan, prelude::*, EnvFilter};
-pub use winit::dpi::{LogicalSize, PhysicalSize};
-pub use winit::event as events;
-use winit::event_loop::ControlFlow;
-pub use winit::window::WindowBuilder;
+use tracing_subscriber::{prelude::*};
 use winit::{
     event::{ElementState, Event, KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
-    event_loop::EventLoopBuilder,
+    event_loop::{
+        ControlFlow,
+        EventLoopBuilder,
+    },
     window::Fullscreen,
 };
+pub use winit::dpi::{LogicalSize, PhysicalSize};
+pub use winit::event as events;
+use winit::window::Window;
+pub use winit::window::WindowBuilder;
 
 use crate::circbuffer::CircBuffer;
 
 pub mod circbuffer;
+mod tracing_hook;
 
 #[derive(Debug, Copy, Clone)]
 pub struct TickContext {
@@ -68,14 +71,15 @@ impl RenderStats {
 }
 
 #[derive(Debug)]
-pub struct RenderContext<'stats, 'flow> {
+pub struct RenderContext<'a> {
     pub elapsed: Duration,
-    pub stats: &'stats RenderStats,
+    pub stats: &'a RenderStats,
     pub dt: Duration,
-    control_flow: &'flow mut ControlFlow,
+    pub window: &'a Window,
+    control_flow: &'a mut ControlFlow,
 }
 
-impl<'stats, 'flow> RenderContext<'stats, 'flow> {
+impl<'a> RenderContext<'a> {
     pub fn quit(&mut self) {
         self.control_flow.set_exit();
     }
@@ -118,27 +122,7 @@ pub trait Application: Sized + Send + Sync {
 }
 
 pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
-    color_eyre::install()?;
-    let fmt_layer =
-        tracing_subscriber::fmt::Layer::default().with_filter(EnvFilter::from_default_env());
-    let json_layer = tracing_subscriber::fmt::Layer::default()
-        .json()
-        .with_file(true)
-        .with_level(true)
-        .with_line_number(true)
-        .with_thread_names(true)
-        .with_thread_ids(true)
-        .with_span_events(FmtSpan::ENTER | FmtSpan::EXIT)
-        .with_writer(File::create("log.jsonl").unwrap());
-    let registry = tracing_subscriber::registry()
-        .with(fmt_layer)
-        .with(json_layer);
-    #[cfg(feature = "tracy")]
-    let registry = {
-        let tracy_layer = tracing_tracy::TracyLayer::new();
-        registry.with(tracy_layer)
-    };
-    registry.init();
+    tracing_hook::enable()?;
 
     let event_loop = EventLoopBuilder::new().build();
     // The template will match only the configurations supporting rendering to
@@ -292,6 +276,7 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
                     elapsed: start.elapsed(),
                     dt: last_frame_time.elapsed(),
                     stats: &render_stats.read().unwrap(),
+                    window: &window,
                     control_flow,
                 })
                 .unwrap();
