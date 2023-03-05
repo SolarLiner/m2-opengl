@@ -195,7 +195,8 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                     .show(ui, |ui| {
                         if let Some(scene) = self.scene {
                             let size = ui.available_size_before_wrap();
-                            let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
+                            let (rect, response) =
+                                ui.allocate_exact_size(size, Sense::click_and_drag());
                             let gizmo_interaction = if let Some(entity) = *self.selected_entity {
                                 scene.with_world(|world, _| {
                                     let eref = match world.entity(entity) {
@@ -246,11 +247,12 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                             if !gizmo_interaction {
                                 let input = ui.input();
                                 let drag = input.pointer.delta();
-                                self.state.mouse_buttons =
-                                    (response.dragged_by(PointerButton::Primary), response.dragged_by(PointerButton::Secondary));
+                                self.state.mouse_buttons = (
+                                    response.dragged_by(PointerButton::Primary),
+                                    response.dragged_by(PointerButton::Secondary),
+                                );
                                 self.state.mouse_delta = glam::vec2(drag.x, drag.y);
                                 self.state.mouse_scroll = input.scroll_delta.y;
-                                tracing::debug!(state=?self.state);
                             }
                         }
                     });
@@ -332,7 +334,11 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                     let name_label = ui.label("Name").id;
                                     if let Some(mut name) = eref.get::<&mut String>() {
                                         ui.text_edit_singleline(&mut *name).labelled_by(name_label);
-                                    } else if ui.button("Add name").labelled_by(name_label).clicked() {
+                                    } else if ui
+                                        .button("Add name")
+                                        .labelled_by(name_label)
+                                        .clicked()
+                                    {
                                         cmd.insert_one(eref.entity(), String::from(""));
                                     }
                                     ui.end_row();

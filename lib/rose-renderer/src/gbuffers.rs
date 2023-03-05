@@ -1,8 +1,12 @@
-use glam::UVec2;
 use std::num::NonZeroU32;
 
 use eyre::{Context, Result};
+use glam::UVec2;
 
+use rose_core::{light::LightBuffer, screen_draw::ScreenDraw};
+use rose_core::camera::Camera;
+use rose_core::mesh::Mesh;
+use rose_core::transform::Transformed;
 use violette::{
     base::resource::Resource,
     framebuffer::{Blend, ClearBuffer, DepthTestFunction, Framebuffer},
@@ -10,11 +14,8 @@ use violette::{
     texture::{DepthStencil, Dimension, SampleMode, Texture},
 };
 
-use rose_core::camera::Camera;
+use crate::env::Environment;
 use crate::material::{Material, MaterialInstance, Vertex};
-use rose_core::mesh::Mesh;
-use rose_core::transform::Transformed;
-use rose_core::{light::LightBuffer, screen_draw::ScreenDraw};
 
 #[derive(Debug)]
 pub struct GeometryBuffers {
@@ -178,7 +179,11 @@ impl GeometryBuffers {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn process(&self, camera: &Camera, lights: &LightBuffer) -> Result<&Texture<[f32; 3]>> {
+    pub fn process(&self, camera: &Camera, lights: &LightBuffer, mut env: Option<&mut dyn Environment>) -> Result<&Texture<[f32; 3]>> {
+        Framebuffer::disable_blending();
+        if let Some(env) = &mut env {
+            env.process_background(&self.output_fbo, camera)?;
+        }
         self.screen_pass
             .set_uniform(self.uniform_camera_pos, camera.transform.position)?;
         Framebuffer::enable_blending(Blend::One, Blend::One);
@@ -200,6 +205,10 @@ impl GeometryBuffers {
             .set_uniform(self.uniform_frame_normal, unit_normal)?;
         self.screen_pass
             .set_uniform(self.uniform_frame_rough_metal, unit_rough_metal)?;
+
+        if let Some(env) = env {
+            env.illuminate_scene(&self.output_fbo, camera, &self.normal)?;
+        }
 
         for light_ix in 0..lights.len() {
             self.screen_pass

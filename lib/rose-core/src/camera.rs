@@ -2,6 +2,8 @@ use std::ops::Range;
 
 use glam::{Mat4, Vec2};
 
+use violette::program::Uniform;
+
 use crate::transform::Transform;
 
 #[derive(Debug, Clone)]
@@ -43,4 +45,16 @@ impl Projection {
 pub struct Camera {
     pub transform: Transform,
     pub projection: Projection,
+}
+
+impl Camera {
+    pub fn matrix(&self) -> Mat4 {
+        self.projection.matrix() * self.transform.matrix()
+    }
+}
+
+impl Camera {
+    pub fn as_uniform(&self) -> impl Uniform {
+        self.matrix()
+    }
 }

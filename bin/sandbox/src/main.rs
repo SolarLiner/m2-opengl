@@ -183,7 +183,7 @@ impl Application for Sandbox {
             });
             scene.with_world(|world, _| {
                 self.render_system.update_from_active_camera(world);
-                self.render_system.on_frame(world)
+                self.render_system.on_frame(ctx.dt, world)
             })?;
             scene.flush_commands();
         } else if let Some(scene) = &mut self.editor_scene {
@@ -200,7 +200,7 @@ impl Application for Sandbox {
                 &mut self.editor_cam_controller,
                 &mut self.render_system.camera.transform,
             );
-            scene.with_world(|world, _| self.render_system.on_frame(world))?;
+            scene.with_world(|world, _| self.render_system.on_frame(ctx.dt, world))?;
             scene.flush_commands();
         } else {
             Framebuffer::clear_color(Vec3::splat(0.1).extend(1.).to_array());
@@ -304,6 +304,11 @@ impl Application for Sandbox {
                 ui.radio_value(&mut self.ui_system.gizmo_mode, GizmoMode::Scale, "Scale");
             });
         });
+        egui::Window::new("Environment")
+            .show(ctx.egui, |ui| {
+                let env = self.render_system.environment_mut();
+                env.params.ui(ui);
+            });
         self.ui_system.on_ui(
             ctx.egui,
             self.editor_scene.as_ref(),

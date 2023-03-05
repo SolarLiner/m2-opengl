@@ -2,8 +2,8 @@ use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     rc::Rc,
-    time::Instant,
 };
+use std::time::Duration;
 
 use assets_manager::{AnyCache, Handle, SharedString};
 use dashmap::DashMap;
@@ -23,6 +23,7 @@ use rose_renderer::{
     material::{MaterialInstance, TextureSlot as MaterialSlot},
     Mesh, Renderer,
 };
+use rose_renderer::env::{SimpleSky, SimpleSkyParams};
 use violette::texture::Texture;
 
 use crate::{
@@ -38,7 +39,6 @@ pub struct RenderSystem {
     pub clear_color: Vec3,
     pub camera: Camera,
     pub(crate) renderer: ThreadGuard<Renderer>,
-    last_frame: Instant,
     meshes_map: DashMap<SharedString, ThreadGuard<Rc<Mesh>>>,
     materials_map: DashMap<SharedString, ThreadGuard<Rc<MaterialInstance>>>,
     lights_hash: u64,
@@ -96,18 +96,23 @@ impl RenderSystem {
 
 impl RenderSystem {
     pub fn new(size: UVec2) -> Result<Self> {
+        let mut renderer = Renderer::new(size)?;
+        renderer.set_environment(SimpleSky::new(SimpleSkyParams::default())?);
         Ok(Self {
             clear_color: Vec3::ZERO,
             camera: Camera::default(),
-            renderer: ThreadGuard::new(Renderer::new(size)?),
-            last_frame: Instant::now(),
+            renderer: ThreadGuard::new(renderer),
             meshes_map: DashMap::new(),
             materials_map: DashMap::new(),
             lights_hash: DefaultHasher::new().finish(),
         })
     }
 
-    pub fn on_frame(&mut self, world: &World) -> Result<()> {
+    pub fn environment_mut(&mut self) -> &mut SimpleSky {
+        self.renderer.environment_mut().unwrap()
+    }
+
+    pub fn on_frame(&mut self, dt: Duration, world: &World) -> Result<()> {
         self.handle_mesh_assets(world)?;
         self.handle_material_assets(world)?;
         self.handle_lights(world)?;
@@ -115,8 +120,7 @@ impl RenderSystem {
         self.renderer.begin_render()?;
         self.submit_meshes(world);
         self.renderer
-            .flush(&self.camera, self.last_frame.elapsed(), self.clear_color)?;
-        self.last_frame = Instant::now();
+            .flush(&self.camera, dt, self.clear_color)?;
         Ok(())
     }
 

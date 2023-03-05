@@ -3,12 +3,13 @@ use std::{ops, path::Path};
 use eyre::{Context, Result};
 use once_cell::sync::Lazy;
 
-use violette::framebuffer::Framebuffer;
 use violette::{
     buffer::{Buffer, ElementBuffer},
     program::Program,
     vertex::{DrawMode, VertexArray},
 };
+use violette::framebuffer::Framebuffer;
+
 use crate::utils::thread_guard::ThreadGuard;
 
 const INDICES: [u32; 6] = [/* Face 1: */ 0, 2, 1, /* Face 2: */ 0, 3, 2];
@@ -57,6 +58,7 @@ impl ScreenDraw {
                 .context(format!("Cannot read shader from file {}", filename))?
                 .as_str(),
         )
+            .with_context(|| format!("Loading shader {}", filename))
     }
 
     #[tracing::instrument(skip_all)]

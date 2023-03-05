@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     cell::RefCell,
     collections::HashMap,
     rc::{Rc, Weak},
@@ -26,8 +27,10 @@ use violette::{
     framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer}, FrontFace,
 };
 
+use crate::env::Environment;
 use crate::material::MaterialInstance;
 
+pub mod env;
 pub mod gbuffers;
 pub mod material;
 pub mod postprocess;
@@ -98,6 +101,7 @@ pub struct Renderer {
     material: Material,
     post_process: Postprocess,
     post_process_iface: PostprocessInterface,
+    environment: Option<Box<dyn Environment>>,
     queued_materials: Vec<Weak<MaterialInstance>>,
     queued_meshes: HashMap<usize, Vec<Transformed<Weak<Mesh>>>>,
     render_span: ThreadGuard<Option<EnteredSpan>>,
@@ -128,6 +132,7 @@ impl Renderer {
                     strength: 5e-2,
                 },
             },
+            environment: None,
             queued_materials: vec![],
             queued_meshes: HashMap::default(),
             render_span: ThreadGuard::new(None),
@@ -164,6 +169,22 @@ impl Renderer {
         Ok(())
     }
 
+    pub fn set_environment<E: Environment>(&mut self, env: E) {
+        self.environment.replace(Box::new(env));
+    }
+
+    pub fn environment<E: Environment>(&self) -> Option<&E> {
+        self.environment
+            .as_deref()
+            .and_then(|b| b.as_any().downcast_ref())
+    }
+
+    pub fn environment_mut<E: Environment>(&mut self) -> Option<&mut E> {
+        self.environment
+            .as_deref_mut()
+            .and_then(|b| b.as_any_mut().downcast_mut())
+    }
+
     pub fn set_light_buffer(&mut self, light_buffer: LightBuffer) {
         self.lights = light_buffer;
     }
@@ -182,11 +203,6 @@ impl Renderer {
         self.post_process.bloom_radius = self.post_process_iface.bloom.size;
         self.post_process
             .set_bloom_strength(self.post_process_iface.bloom.strength)?;
-
-        self.geom_pass
-            .borrow()
-            .framebuffer()
-            .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
         Ok(())
     }
 
@@ -230,10 +246,10 @@ impl Renderer {
         Framebuffer::disable_blending();
         Framebuffer::clear_color([0., 0., 0., 1.]);
 
-        let backbuffer = Framebuffer::backbuffer();
-        Framebuffer::clear_color([0., 0., 0., 1.]);
-        Framebuffer::clear_depth(1.);
-        backbuffer.do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
+        self.geom_pass
+            .borrow()
+            .framebuffer()
+            .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
 
         let geom_pass = self.geom_pass.borrow();
         for (mat_ix, meshes) in self.queued_meshes.drain() {
@@ -250,10 +266,14 @@ impl Renderer {
             geom_pass.draw_meshes(camera, &self.material, instance.as_ref(), &mut meshes)?;
         }
 
+        Framebuffer::disable_depth_test();
         Framebuffer::clear_color(clear_color.extend(1.).to_array());
-        let shaded_tex = geom_pass.process(camera, &self.lights)?;
-        self.post_process
-            .draw(&Framebuffer::backbuffer(), shaded_tex, dt)?;
+        let backbuffer = Framebuffer::backbuffer();
+        backbuffer.do_clear(ClearBuffer::COLOR);
+        let shaded_tex =
+            geom_pass.process(camera, &self.lights, self.environment.as_deref_mut())?;
+        Framebuffer::disable_blending();
+        self.post_process.draw(&backbuffer, shaded_tex, dt)?;
         self.last_render_duration.replace(render_start.elapsed());
         self.last_scene_duration
             .replace(self.begin_scene_at.take().unwrap().elapsed());
@@ -262,7 +282,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "debug-ui")]
-    pub fn ui_toolbar(&mut self, ui: &mut egui::Ui) {
+    pub fn ui_toolbar(&mut self, ui: &mut Ui) {
         ui.toggle_value(&mut self.debug_window_open, "Debug menu");
         ui.menu_button("Post processing", |ui| {
             let pp_iface = self.post_process_interface();
