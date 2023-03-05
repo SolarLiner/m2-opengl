@@ -96,6 +96,9 @@ vec3 get_lighting(vec3 V, vec3 L, vec3 N, float distance, float roughness, float
 // }
 
 void main() {
+    vec4 nc = texture(frame_normal, v_uv);
+    if (nc.a <= 0.5) discard;
+
     vec3 position = texture(frame_position, v_uv).rgb;
     vec3 albedo = texture(frame_albedo, v_uv).rgb;
     vec3 normal = texture(frame_normal, v_uv).rgb;

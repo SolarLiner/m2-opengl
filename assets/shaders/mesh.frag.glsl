@@ -6,7 +6,7 @@ in vec3 vs_normal;
 
 layout(location=0) out vec3 frame_position;
 layout(location=1) out vec3 frame_albedo;
-layout(location=2) out vec3 frame_normal;
+layout(location=2) out vec4 frame_normal;
 layout(location=3) out vec2 frame_rough_metal;
 
 uniform sampler2D color;
@@ -33,13 +33,15 @@ void main() {
 
     frame_albedo = texture(color, vs_uv).rgb;
 
+    vec3 out_normal;
     if (normal_enabled) {
         mat3 tbn = cotangent_frame(vs_position, vs_normal, vs_uv);
         vec3 tangent_map = -(texture(normal_map, vs_uv).xyz * 2. - 1.) * vec3(normal_amount, normal_amount, 1.);
-        frame_normal = normalize(tbn * tangent_map);// <- world space
+        out_normal = normalize(tbn * tangent_map);// <- world space
     } else {
-        frame_normal = vs_normal;
+        out_normal = vs_normal;
     }
 
+    frame_normal = vec4(out_normal, 1);
     frame_rough_metal = texture(rough_metal, vs_uv).rg;
 }

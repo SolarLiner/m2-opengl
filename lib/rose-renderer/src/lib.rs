@@ -244,7 +244,7 @@ impl Renderer {
         Framebuffer::enable_depth_test(DepthTestFunction::Less);
         Framebuffer::disable_scissor();
         Framebuffer::disable_blending();
-        Framebuffer::clear_color([0., 0., 0., 1.]);
+        Framebuffer::clear_color([0., 0., 0., 0.]);
 
         self.geom_pass
             .borrow()

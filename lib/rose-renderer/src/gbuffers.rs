@@ -26,7 +26,7 @@ pub struct GeometryBuffers {
     size: UVec2,
     pos: Texture<[f32; 3]>,
     albedo: Texture<[f32; 3]>,
-    normal: Texture<[f32; 3]>,
+    normal_coverage: Texture<[f32; 4]>,
     rough_metal: Texture<[f32; 2]>,
     out_color: Texture<[f32; 3]>,
     out_depth: Texture<DepthStencil<f32, ()>>,
@@ -106,7 +106,7 @@ impl GeometryBuffers {
             size,
             pos,
             albedo,
-            normal,
+            normal_coverage: normal,
             rough_metal,
             out_color,
             out_depth,
@@ -159,7 +159,7 @@ impl GeometryBuffers {
     }
 
     pub fn debug_normal(&self, frame: &Framebuffer) -> Result<()> {
-        let unit = self.normal.as_uniform(0)?;
+        let unit = self.normal_coverage.as_uniform(0)?;
         self.debug_texture
             .set_uniform(self.debug_uniform_in_texture, unit)?;
         self.debug_texture.draw(frame)?;
@@ -195,7 +195,7 @@ impl GeometryBuffers {
 
         let unit_pos = self.pos.as_uniform(0)?;
         let unit_albedo = self.albedo.as_uniform(1)?;
-        let unit_normal = self.normal.as_uniform(2)?;
+        let unit_normal = self.normal_coverage.as_uniform(2)?;
         let unit_rough_metal = self.rough_metal.as_uniform(3)?;
         self.screen_pass
             .set_uniform(self.uniform_frame_pos, unit_pos)?;
@@ -207,7 +207,7 @@ impl GeometryBuffers {
             .set_uniform(self.uniform_frame_rough_metal, unit_rough_metal)?;
 
         if let Some(env) = env {
-            env.illuminate_scene(&self.output_fbo, camera, &self.normal)?;
+            env.illuminate_scene(&self.output_fbo, camera, &self.normal_coverage)?;
         }
 
         for light_ix in 0..lights.len() {
@@ -226,7 +226,7 @@ impl GeometryBuffers {
         let nonzero_one = NonZeroU32::new(1).unwrap();
         self.pos.clear_resize(width, height, nonzero_one)?;
         self.albedo.clear_resize(width, height, nonzero_one)?;
-        self.normal.clear_resize(width, height, nonzero_one)?;
+        self.normal_coverage.clear_resize(width, height, nonzero_one)?;
         self.rough_metal.clear_resize(width, height, nonzero_one)?;
         self.out_color.clear_resize(width, height, nonzero_one)?;
         self.out_depth.clear_resize(width, height, nonzero_one)?;

@@ -13,7 +13,7 @@ pub trait Environment: fmt::Debug + Any {
         &mut self,
         frame: &Framebuffer,
         camera: &Camera,
-        normal_map: &Texture<[f32; 3]>,
+        normal_coverage: &Texture<[f32; 4]>,
     ) -> Result<()>;
 
     fn as_any(&self) -> &dyn Any;
@@ -94,10 +94,10 @@ impl Environment for SimpleSky {
         &mut self,
         frame: &Framebuffer,
         camera: &Camera,
-        normal_map: &Texture<[f32; 3]>,
+        normal_coverage: &Texture<[f32; 4]>,
     ) -> Result<()> {
         self.illuminate_paint
-            .set_uniform(self.u_ill_normal, normal_map.as_uniform(0)?)?;
+            .set_uniform(self.u_ill_normal, normal_coverage.as_uniform(0)?)?;
         self.illuminate_paint
             .set_uniform(self.u_ill_view_proj_inv, camera.matrix())?;
         self.illuminate_paint

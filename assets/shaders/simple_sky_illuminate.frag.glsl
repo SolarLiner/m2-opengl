@@ -11,7 +11,9 @@ uniform vec3 zenith_color;
 out vec3 out_color;
 
 void main() {
-    vec3 world_normal = texture(normal, v_uv).xyz;
+    vec4 nc = texture(normal, v_uv);
+    if (nc.a <= 0.5) discard;
+    vec3 world_normal = nc.xyz;
 
     vec4 screen_dir = normalize(vec4(v_uv * vec2(1, -1) * 2 - 1, 1, 0));
     vec4 world_posw = view_proj_inv * screen_dir;
