@@ -2,6 +2,7 @@ use std::ops;
 
 use assets_manager::{AnyCache, Asset, BoxedError, Compound, SharedString};
 use assets_manager::loader::TomlLoader;
+use color_eyre::Help;
 use serde::{Deserialize, Serialize};
 
 use rose_core::transform::{Transformed as TransformedCore, TransformExt};
@@ -11,6 +12,7 @@ use crate::components::{CameraParams, Light};
 
 #[derive(Debug, Copy, Clone, Default, Deserialize, Serialize)]
 pub struct Transformed<T> {
+    #[serde(default)]
     pub(crate) transform: TransformDesc,
     #[serde(flatten)]
     pub(crate) value: T,
@@ -44,12 +46,22 @@ pub struct NamedObject {
     pub(crate) object: SharedString,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct SceneDesc {
     pub camera: Transformed<CameraParams>,
     pub lights: Vec<Named<Transformed<Light>>>,
     pub objects: Vec<Named<Transformed<NamedObject>>>,
+}
+
+impl Default for SceneDesc {
+    fn default() -> Self {
+        Self {
+            camera: Transformed::default(),
+            lights: vec![],
+            objects: vec![],
+        }
+    }
 }
 
 impl Asset for SceneDesc {
@@ -66,8 +78,16 @@ pub struct Scene {
 
 impl Compound for Scene {
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        tracing::debug!("Loading scene '{}'", id);
-        let desc = cache.load_owned::<SceneDesc>(id)?;
+        tracing::debug!(message="Loading scene", %id);
+        let desc = cache.load_owned::<SceneDesc>(id);
+        let desc = match desc {
+            Ok(desc) => desc,
+            Err(err) => {
+                tracing::error!(message="Cannot load scene", %id, %err);
+                return Err(Box::new(err));
+            }
+        };
+        tracing::debug!(message = "Scene description", ?desc);
         let camera = desc.camera.value.transformed(desc.camera.transform.into());
         let lights = desc
             .lights
@@ -94,5 +114,46 @@ impl Compound for Scene {
             lights,
             objects,
         })
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::SceneDesc;
+
+    #[test]
+    fn test_scene_desc_parse_empty() {
+        let input = "";
+        let desc: SceneDesc = toml::de::from_str(input).unwrap();
+        println!("{:#?}", desc);
+    }
+
+    #[test]
+    fn test_scene_desc_parse_object() {
+        let input = r#"
+        [[objects]]
+        object = "objects.suzanne"
+        [objects.transform]
+        translation = [2, 0, 0]
+        "#;
+        let desc: SceneDesc = toml::de::from_str(input).unwrap();
+        println!("{:#?}", desc);
+    }
+
+    #[test]
+    fn test_scene_desc_parse_light() {
+        let input = r#"
+        [[lights]]
+        kind = "Ambient"
+        color = [0.1, 0.1, 0.1]
+        "#;
+        let desc: SceneDesc = toml::de::from_str(input).unwrap();
+        println!("{:#?}", desc);
+    }
+
+    #[test]
+    fn test_load_scene_desc_file() {
+        let input = include_str!("./fixtures/scene_example.toml");
+        let desc: SceneDesc = toml::de::from_str(input).unwrap();
+        println!("{:#?}", desc);
     }
 }

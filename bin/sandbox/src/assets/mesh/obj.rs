@@ -153,6 +153,7 @@ pub struct LoadedMesh {
 
 impl Compound for LoadedMesh {
     fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
+        tracing::debug!(message="Load obj", %id);
         let obj_mesh = cache.load::<ObjMesh>(id)?.cloned();
         let material_libraries = obj_mesh
             .material_libraries

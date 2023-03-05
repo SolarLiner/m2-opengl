@@ -1,0 +1,28 @@
+[camera]
+fovy = 45
+
+[camera.transform]
+eye = [3, 2, -3]
+target = [0, 0, 0]
+
+[[lights]]
+kind = "Directional"
+color = [1, 1, 1]
+power = 10
+[lights.transform]
+eye = [1, 1, 1]
+target = [0, 0, 0]
+
+[[lights]]
+kind = "Ambient"
+color = [0.1, 0.1, 0.1]
+
+[[objects]]
+object = "objects.suzanne"
+[objects.transform]
+position = [2, 0, 0]
+
+[[objects]]
+object = "objects.suzanne"
+[objects.transform]
+position = [-2, 0, 0]

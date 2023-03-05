@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use assets_manager::{
     AnyCache, Asset, BoxedError, Compound, Handle, loader::TomlLoader, SharedString,
 };
@@ -12,17 +13,26 @@ use crate::{assets::material::Material, assets::mesh::MeshAsset};
 use crate::components::Active;
 
 #[derive(Debug, Copy, Clone, Deserialize, Serialize)]
-#[serde(default)]
-pub struct TransformDesc {
-    pub translation: Vec3,
-    pub rotation: Vec3,
-    pub scale: Vec3,
+#[serde(untagged)]
+pub enum TransformDesc {
+    Direct {
+        #[serde(default)]
+        translation: Vec3,
+        #[serde(default)]
+        rotation: Vec3,
+        #[serde(default)]
+        scale: Vec3,
+    },
+    LookAt {
+        eye: Vec3,
+        target: Vec3,
+    }
 }
 
 impl From<Transform> for TransformDesc {
     fn from(value: Transform) -> Self {
         let (c, b, a) = value.rotation.to_euler(EulerRot::ZYX);
-        Self {
+        Self::Direct {
             translation: value.position,
             rotation: vec3(c, b, a),
             scale: value.scale,
@@ -47,25 +57,11 @@ impl From<TransformDesc> for Transform {
 
 impl Default for TransformDesc {
     fn default() -> Self {
-        Self {
+        Self::Direct {
             translation: Vec3::ZERO,
             rotation: Vec3::ZERO,
             scale: Vec3::ONE,
         }
-    }
-}
-
-impl TransformDesc {
-    pub fn right(&self) -> Vec3 {
-        let [a, b, c] = self.rotation.zyx().to_array();
-        let quat = Quat::from_euler(EulerRot::ZYX, a, b, c);
-        quat * Vec3::X
-    }
-
-    pub fn down(&self) -> Vec3 {
-        let [a, b, c] = self.rotation.zyx().to_array();
-        let quat = Quat::from_euler(EulerRot::ZYX, a, b, c);
-        quat * Vec3::NEG_Y
     }
 }
 
@@ -88,6 +84,7 @@ pub struct Object {
 
 impl Compound for Object {
     fn load(cache: AnyCache, id: &SharedString) -> eyre::Result<Self, BoxedError> {
+        tracing::debug!(message="Loading object", %id);
         let obj = cache.load::<ObjectDesc>(id)?.cloned();
         let mesh = cache.load(&obj.mesh)?.cloned();
         let material = cache.load(&obj.material)?.cloned();

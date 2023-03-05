@@ -42,6 +42,7 @@ impl NamedComponent for Inactive {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default)]
 pub struct CameraParams {
     pub fovy: f32,
     pub zrange: Range<f32>,
@@ -94,7 +95,7 @@ impl NamedComponent for CameraParams {
 impl Default for CameraParams {
     fn default() -> Self {
         Self {
-            fovy: FRAC_PI_4,
+            fovy: 45f32,
             zrange: 1e-3..1e3,
         }
     }
@@ -175,6 +176,7 @@ pub enum LightKind {
 }
 
 #[derive(Debug, Copy, Clone, Deserialize, Serialize)]
+#[serde(default)]
 pub struct Light {
     pub kind: LightKind,
     pub color: Vec3,
@@ -226,7 +228,7 @@ impl Default for Light {
         Self {
             kind: LightKind::Point,
             color: Vec3::ONE,
-            power: 100.,
+            power: 1.,
         }
     }
 }
