@@ -397,38 +397,39 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                 Grid::new("asset-list").num_columns(2).show(ui, |ui| {
                                     SEARCH.with(|key| {
                                         for id in dir_handle.ids().filter(|id| id.contains(&*key.borrow())) {
-                                            ui.monospace(&id[1..]).context_menu(|ui| {
+                                            let id = &id[2..];
+                                            ui.monospace(id).context_menu(|ui| {
                                                 ui.set_max_width(250.);
                                                 if let Some(entity) = *self.selected_entity {
                                                     if ui.small_button("Add mesh component").clicked() {
-                                                        match cache.load::<MeshAsset>(id.as_str()) {
+                                                        match cache.load::<MeshAsset>(id) {
                                                             Ok(mat) => cmd.insert_one(entity, mat),
-                                                            Err(err) => tracing::error!("Could not load {:?} as mesh: {}", id.as_str(), err),
+                                                            Err(err) => tracing::error!("Could not load {:?} as mesh: {}", id, err),
                                                         }
                                                     }
                                                     if ui.small_button("Add material component").clicked() {
-                                                        match cache.load::<Material>(id.as_str()) {
+                                                        match cache.load::<Material>(id) {
                                                             Ok(mat) => cmd.insert_one(entity, mat),
-                                                            Err(err) => tracing::error!("Could not load {:?} as material: {}", id.as_str(), err),
+                                                            Err(err) => tracing::error!("Could not load {:?} as material: {}", id, err),
                                                         }
                                                     }
                                                     ui.separator();
                                                 }
                                                 if ui.small_button("New entity with this mesh").clicked() {
-                                                    match cache.load::<MeshAsset>(id.as_str()) {
+                                                    match cache.load::<MeshAsset>(id) {
                                                         Ok(handle) => cmd.spawn((Transform::default(), handle)),
-                                                        Err(err) => tracing::error!("Could not load {:?} as mesh: {}", id.as_str(), err),
+                                                        Err(err) => tracing::error!("Could not load {:?} as mesh: {}", id, err),
                                                     }
                                                 }
                                                 if ui.small_button("New entity with this material").clicked() {
-                                                    match cache.load::<Material>(id.as_str()) {
+                                                    match cache.load::<Material>(id) {
                                                         Ok(handle) => cmd.spawn((Transform::default(), handle)),
-                                                        Err(err) => tracing::error!("Could not load {:?} as material: {}", id.as_str(), err),
+                                                        Err(err) => tracing::error!("Could not load {:?} as material: {}", id, err),
                                                     }
                                                 }
                                             });
                                             ui.add_enabled_ui(false, |ui| {
-                                                ui.checkbox(&mut used.contains(id.as_str()), "Used")
+                                                ui.checkbox(&mut used.contains(id), "Used")
                                             });
                                             ui.end_row();
                                         }
