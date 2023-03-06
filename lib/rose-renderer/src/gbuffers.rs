@@ -179,17 +179,25 @@ impl GeometryBuffers {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn process(&self, camera: &Camera, lights: &LightBuffer, mut env: Option<&mut dyn Environment>) -> Result<&Texture<[f32; 3]>> {
-        Framebuffer::disable_blending();
-        if let Some(env) = &mut env {
-            env.process_background(&self.output_fbo, camera)?;
-        }
+    pub fn process(
+        &self,
+        camera: &Camera,
+        lights: &LightBuffer,
+        mut env: Option<&mut dyn Environment>,
+    ) -> Result<&Texture<[f32; 3]>> {
         self.screen_pass
             .set_uniform(self.uniform_camera_pos, camera.transform.position)?;
         Framebuffer::enable_blending(Blend::One, Blend::One);
         Framebuffer::clear_color([0., 0., 0., 1.]);
+        Framebuffer::disable_blending();
         self.output_fbo.do_clear(ClearBuffer::COLOR);
+        if let Some(env) = &mut env {
+            env.process_background(&self.output_fbo, camera)?;
+        }
         if lights.is_empty() {
+            if let Some(env) = env {
+                env.illuminate_scene(&self.output_fbo, camera, &self.normal_coverage)?;
+            }
             return Ok(&self.out_color);
         }
 
@@ -226,7 +234,8 @@ impl GeometryBuffers {
         let nonzero_one = NonZeroU32::new(1).unwrap();
         self.pos.clear_resize(width, height, nonzero_one)?;
         self.albedo.clear_resize(width, height, nonzero_one)?;
-        self.normal_coverage.clear_resize(width, height, nonzero_one)?;
+        self.normal_coverage
+            .clear_resize(width, height, nonzero_one)?;
         self.rough_metal.clear_resize(width, height, nonzero_one)?;
         self.out_color.clear_resize(width, height, nonzero_one)?;
         self.out_depth.clear_resize(width, height, nonzero_one)?;
