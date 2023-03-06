@@ -8,6 +8,7 @@ use hecs::EntityBuilder;
 use rfd::FileDialog;
 
 use rose_core::transform::Transform;
+use rose_core::utils::thread_guard::ThreadGuard;
 use rose_platform::{
     Application, events::WindowEvent, LogicalSize, PhysicalSize, RenderContext, UiContext,
     WindowBuilder,
@@ -15,15 +16,29 @@ use rose_platform::{
 use violette::framebuffer::{ClearBuffer, Framebuffer};
 
 use crate::{
-    assets::object::ObjectBundle,
-    components::PanOrbitCamera,
+    assets::{
+        material::Material,
+        mesh::MeshAsset,
+        object::ObjectBundle,
+    },
+    components::{
+        Active,
+        CameraParams,
+        Inactive,
+        Light,
+        LightBundle,
+        PanOrbitCamera,
+        SceneId,
+    },
     scene::Scene,
-    systems::{camera::PanOrbitSystem, input::InputSystem, render::RenderSystem, ui::UiSystem},
+    systems::{
+        camera::PanOrbitSystem,
+        input::InputSystem,
+        persistence::PersistenceSystem,
+        render::RenderSystem,
+        ui::UiSystem,
+    },
 };
-use crate::assets::material::Material;
-use crate::assets::mesh::MeshAsset;
-use crate::assets::scene::Transformed;
-use crate::components::{Active, CameraParams, Inactive, Light, LightBundle, SceneId};
 
 mod assets;
 pub mod components;
@@ -38,6 +53,7 @@ struct Sandbox {
     render_system: RenderSystem,
     pan_orbit_system: PanOrbitSystem,
     ui_system: UiSystem,
+    persistence_system: ThreadGuard<PersistenceSystem>,
 }
 
 impl Sandbox {
@@ -78,17 +94,9 @@ impl Sandbox {
     }
 
     fn save_scene_as(&mut self, path: impl AsRef<Path>) -> Result<()> {
-        let path = path.as_ref();
-        if let Some(scene) = &self.editor_scene {
-            let str = scene.save(Transformed {
-                transform: self.render_system.camera.transform.into(),
-                value: self.render_system.camera.projection.clone().into(),
-            })?;
-            if let Some(str) = str {
-                std::fs::write(path, str)?;
-            } else {
-                tracing::warn!("Scene is empty");
-            }
+        if let Some(scene) = &mut self.editor_scene {
+            scene.set_path(path);
+            scene.save(&mut self.persistence_system)?;
         }
         Ok(())
     }
@@ -98,7 +106,7 @@ impl Sandbox {
     }
 
     fn do_open_scene(&mut self, path: impl AsRef<Path>) -> Result<()> {
-        let scene = Scene::load(path)?;
+        let scene = Scene::load(&mut self.persistence_system, path)?;
         self.editor_scene.replace(scene);
         self.active_scene.take();
         Ok(())
@@ -107,7 +115,14 @@ impl Sandbox {
     fn start_active_scene(&mut self) {
         self.stop_active_scene();
         if let Some(scene) = &self.editor_scene {
-            self.active_scene.replace(scene.clone());
+            match scene.reload(&mut self.persistence_system) {
+                Ok(scene) => {
+                    self.active_scene.replace(scene);
+                }
+                Err(err) => {
+                    tracing::error!("Cannot activate scene: {}", err);
+                }
+            }
         }
     }
 }
@@ -123,9 +138,21 @@ impl Application for Sandbox {
         let mut render_system = RenderSystem::new(size)?;
         render_system.clear_color = Vec3::splat(0.1);
 
+        let mut persistence = PersistenceSystem::new();
+        persistence
+            .register_component::<String>()
+            .register_component::<Active>()
+            .register_component::<Inactive>()
+            .register_component::<Transform>()
+            .register_component::<CameraParams>()
+            .register_component::<PanOrbitCamera>()
+            .register_component::<Light>()
+            .register_asset::<MeshAsset>()
+            .register_asset::<Material>();
+
         let editor_scene =
             std::env::args().nth(1)
-                .and_then(|file| match Scene::load(file) {
+                .and_then(|file| match Scene::load(&mut persistence, file) {
                     Ok(scene) => Some(scene),
                     Err(err) => {
                         tracing::error!("Cannot load scene: {}", err);
@@ -158,6 +185,7 @@ impl Application for Sandbox {
             render_system,
             pan_orbit_system: PanOrbitSystem::new(logical_size),
             ui_system,
+            persistence_system: ThreadGuard::new(persistence),
         })
     }
 

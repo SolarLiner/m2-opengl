@@ -18,12 +18,14 @@ obj-rs = "0.7.0"
 rayon = "1.6.1"
 rfd = "0.11.1"
 serde = { version = "1.0.152", features = ["derive"] }
+serde_json = "1.0.93"
 serde_yaml = "0.9.17"
 toml = "0.7.2"
 toml_edit = "0.19.4"
+typetag = "0.2.5"
 
 input = { path = "../../lib/input" }
-rose-core = { path = "../../lib/rose-core" }
+rose-core = { path = "../../lib/rose-core", features = ["serialize"] }
 rose-platform = { path = "../../lib/rose-platform", features = ["ui"] }
 rose-renderer = { path = "../../lib/rose-renderer", features = ["debug-ui"] }
 violette = { path = "../../lib/violette" }

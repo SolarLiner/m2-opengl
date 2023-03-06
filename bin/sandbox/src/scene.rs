@@ -2,22 +2,15 @@ use std::{
     fmt::{self, Formatter},
     path::{Path, PathBuf},
 };
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 
 use assets_manager::{AnyCache, AssetCache};
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use eyre::Result;
-use hecs::{CommandBuffer, EntityBuilder, World};
+use hecs::{CommandBuffer, World};
 
-use rose_core::transform::Transform;
-
-use crate::{
-    assets::{
-        object::{ObjectBundle, TransformDesc},
-        scene::{self as assets, NamedObject, SceneDesc, Transformed},
-    },
-    components::{Active, CameraBundle, CameraParams, Light, LightBundle},
-};
-use crate::assets::scene::Named;
+use crate::systems::persistence::PersistenceSystem;
 
 pub struct Scene {
     assets: &'static AssetCache,
@@ -26,9 +19,9 @@ pub struct Scene {
     command_queue: (Sender<CommandBuffer>, Receiver<CommandBuffer>),
 }
 
-impl Clone for Scene {
-    fn clone(&self) -> Self {
-        Self::load(&self.scene_path).unwrap()
+impl Scene {
+    pub fn set_path(&mut self, path: impl AsRef<Path> + Sized) {
+        self.scene_path = path.as_ref().to_path_buf();
     }
 }
 
@@ -54,20 +47,23 @@ impl Scene {
         })
     }
 
-    pub fn load(scene_path: impl AsRef<Path>) -> Result<Self> {
+    pub fn load(persistence: &mut PersistenceSystem, scene_path: impl AsRef<Path>) -> Result<Self> {
         let scene_path = scene_path.as_ref();
         let base_path = scene_path.parent().unwrap();
-        let id = scene_path.file_stem().unwrap().to_str().unwrap();
         let assets = Box::leak(Box::new(AssetCache::new(base_path)?));
         assets.enhance_hot_reloading();
-        let mut world = World::new();
-        Self::load_scene(&mut world, assets.as_any_cache(), id)?;
+        let de = serde_yaml::Deserializer::from_reader(BufReader::new(File::open(scene_path)?));
+        let world = persistence.deserialize_world(assets.as_any_cache(), de)?;
         Ok(Self {
             assets,
             scene_path: scene_path.into(),
             world,
             command_queue: crossbeam_channel::bounded(16),
         })
+    }
+
+    pub fn reload(&self, persistence: &mut PersistenceSystem) -> Result<Self> {
+        Self::load(persistence, self.scene_path.as_path())
     }
 
     pub fn asset_cache(&self) -> AnyCache<'static> {
@@ -117,13 +113,21 @@ impl Scene {
         }
     }
 
-    pub fn save(&self, editor_camera: Transformed<CameraParams>) -> Result<Option<String>> {
-        match Self::save_world_as_scene(&self.world, editor_camera) {
-            Some(desc) => Ok(Some(toml::ser::to_string_pretty(&desc)?)),
-            None => Ok(None),
-        }
+    pub fn save(&self, persistence: &mut PersistenceSystem) -> Result<()> {
+        let writer = BufWriter::new(File::create(&self.scene_path)?);
+        // let mut ser =
+        //     serde_json::Serializer::with_formatter(writer, serde_json::ser::PrettyFormatter::new());
+        let mut ser = serde_yaml::Serializer::new(writer);
+        // let mut data = String::with_capacity(1024 * 1024);
+        // let ser = toml::Serializer::new(&mut data);
+        persistence.serialize_world(self.asset_cache(), &mut ser, &self.world)?;
+        // let mut data = String::with_capacity(512);
+        // let ser = serde_yaml::Serializer::new(&mut data);
+        // persistence.serialize_world(ser, &self.world)?;
+        Ok(())
     }
 
+    #[cfg(never)]
     fn load_scene(world: &mut World, cache: AnyCache<'static>, id: &str) -> Result<CameraBundle> {
         let mut commands = CommandBuffer::new();
         let handle = cache.load::<assets::Scene>(id)?;
@@ -182,6 +186,7 @@ impl Scene {
         Ok(editor_camera)
     }
 
+    #[cfg(never)]
     fn save_world_as_scene(world: &World, camera: Transformed<CameraParams>) -> Option<SceneDesc> {
         let lights = world
             .query::<(Option<&String>, &Transform, &Light)>()

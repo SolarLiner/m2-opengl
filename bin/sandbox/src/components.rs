@@ -1,5 +1,5 @@
 use std::{
-    f32::consts::{FRAC_PI_4, PI},
+    f32::consts::PI,
     hash::{Hash, Hasher},
     ops::Range,
 };
@@ -10,12 +10,14 @@ use glam::{Vec2, Vec3};
 use hecs::Bundle;
 use serde::{Deserialize, Serialize};
 
-use rose_core::camera::Projection;
-use rose_core::transform::Transform;
+use rose_core::{
+    camera::Projection,
+    transform::Transform,
+};
 
 use crate::systems::ui::{ComponentUi, NamedComponent};
 
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Active;
 
 impl ComponentUi for Active {
@@ -28,7 +30,7 @@ impl NamedComponent for Active {
     const NAME: &'static str = "Active";
 }
 
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Inactive;
 
 impl ComponentUi for Inactive {
@@ -108,7 +110,7 @@ pub struct CameraBundle {
     pub active: Active,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize)]
 pub struct PanOrbitCamera {
     pub target_rotation: Vec2,
     pub radius: f32,

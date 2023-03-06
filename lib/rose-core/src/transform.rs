@@ -7,6 +7,7 @@ use glam::{Mat4, Quat, Vec3};
 use crate::camera::Camera;
 
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct Transform {
     pub position: Vec3,
     pub rotation: Quat,

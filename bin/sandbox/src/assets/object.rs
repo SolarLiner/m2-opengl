@@ -1,9 +1,10 @@
 use std::borrow::Borrow;
+
 use assets_manager::{
     AnyCache, Asset, BoxedError, Compound, Handle, loader::TomlLoader, SharedString,
 };
 use eyre::WrapErr;
-use glam::{EulerRot, Quat, vec3, Vec3, Vec3Swizzles};
+use glam::{EulerRot, Quat, vec3, Vec3};
 use hecs::Bundle;
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +27,7 @@ pub enum TransformDesc {
     LookAt {
         eye: Vec3,
         target: Vec3,
-    }
+    },
 }
 
 impl From<Transform> for TransformDesc {
@@ -42,15 +43,17 @@ impl From<Transform> for TransformDesc {
 
 impl From<TransformDesc> for Transform {
     fn from(val: TransformDesc) -> Self {
-        Transform {
-            position: val.translation,
-            rotation: Quat::from_euler(
-                EulerRot::YXZ,
-                val.rotation.y,
-                val.rotation.x,
-                val.rotation.z,
-            ),
-            scale: val.scale,
+        match val {
+            TransformDesc::Direct {
+                translation,
+                rotation,
+                scale,
+            } => Transform {
+                position: translation,
+                rotation: Quat::from_euler(EulerRot::YXZ, rotation.y, rotation.x, rotation.z),
+                scale,
+            },
+            TransformDesc::LookAt { eye, target } => Transform::translation(eye).looking_at(target),
         }
     }
 }
