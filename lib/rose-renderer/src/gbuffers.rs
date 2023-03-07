@@ -196,15 +196,6 @@ impl GeometryBuffers {
                 roughness_metal: &self.rough_metal,
             };
             env.process_background(&self.output_fbo, cam_uniform, mat_info)?;
-        }
-
-        if let Some(env) = env {
-            let mat_info = MaterialInfo {
-                position: &self.pos,
-                albedo: &self.albedo,
-                normal_coverage: &self.normal_coverage,
-                roughness_metal: &self.rough_metal,
-            };
             env.illuminate_scene(&self.output_fbo, cam_uniform, mat_info)?;
         }
 

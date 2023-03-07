@@ -38,32 +38,35 @@ vec2 spherical_to_polar(vec3 sph) {
     return uv;
 }
 
-void main() {
-    float a = texture(frame_normal, v_uv).a;
-    if (a <= 0.5 && is_illuminate) {
-        discard;
-        //        out_color = vec4(vec3(0), 1);
-        //        return;
-    }
-
+vec3 get_ray_dir() {
     vec4 ray_clip = vec4(v_uv * 2 - 1, -1, 1);
     vec4 ray_eye = view.inv_proj * ray_clip;
     ray_eye.zw = vec2(-1, 0);
     vec3 ray_world = (view.inv_view * ray_eye).xyz;
-    ray_world = normalize(ray_world);
+    return normalize(ray_world);
+}
 
-    vec3 color;
-    if(is_illuminate) {
-        vec3 albedo = texture(frame_albedo, v_uv).rgb;
-        vec3 normal = texture(frame_normal, v_uv).rgb;
-        vec2 rough_metal = texture(frame_rough_metal, v_uv).rg;
+vec3 background() {
+    vec3 ray = get_ray_dir();
+    vec2 uv = spherical_to_polar(ray);
+    return texture(env_map, uv).rgb;
+}
 
-        vec3 reflected_ray = reflect(ray_world, normal);
-        vec2 uv = spherical_to_polar(reflected_ray);
-        color = albedo * textureLod(env_map, uv, rough_metal.r * 10).rgb;
-    } else {
-        vec2 uv = spherical_to_polar(ray_world);
-        color = texture(env_map, uv).rgb;
-    }
+vec3 illuminate() {
+    vec4 nc = texture(frame_normal, v_uv);
+    if (nc.a <= 0.5) discard;
+
+    vec3 normal = nc.rgb;
+    vec3 albedo = texture(frame_albedo, v_uv).rgb;
+    vec2 rough_metal = texture(frame_rough_metal, v_uv).rg;
+
+    vec3 reflected_ray = reflect(get_ray_dir(), normal);
+    vec2 uv = spherical_to_polar(reflected_ray);
+    return albedo * textureLod(env_map, uv, rough_metal.r * 10).rgb;
+}
+
+void main() {
+    vec3 color = is_illuminate ? illuminate() : background();
     out_color = vec4(color, 1);
 }
+

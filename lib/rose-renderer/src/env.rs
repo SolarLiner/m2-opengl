@@ -12,7 +12,6 @@ use rose_core::{
     screen_draw::ScreenDraw,
 };
 use violette::{
-    base::resource::Resource,
     framebuffer::Framebuffer,
     program::{
         UniformBlockIndex,
@@ -25,6 +24,7 @@ use violette::{
     },
 };
 
+#[derive(Debug, Copy, Clone)]
 pub struct MaterialInfo<'a> {
     pub position: &'a Texture<[f32; 3]>,
     pub albedo: &'a Texture<[f32; 3]>,
@@ -235,8 +235,8 @@ impl EnvironmentMap {
     fn draw(&self, frame: &Framebuffer, camera: &ViewUniformBuffer, mat_info: MaterialInfo, is_illuminate: bool) -> Result<()> {
         self.draw.bind_block(self.u_view, &camera.slice(0..=0))?;
         self.draw.set_uniform(self.u_albedo, mat_info.albedo.as_uniform(0)?)?;
-        self.draw.set_uniform(self.u_normal, mat_info.albedo.as_uniform(1)?)?;
-        self.draw.set_uniform(self.u_rough_metal, mat_info.albedo.as_uniform(2)?)?;
+        self.draw.set_uniform(self.u_normal, mat_info.normal_coverage.as_uniform(1)?)?;
+        self.draw.set_uniform(self.u_rough_metal, mat_info.roughness_metal.as_uniform(2)?)?;
         self.draw.set_uniform(self.u_sampler, self.map.as_uniform(3)?)?;
         self.draw.set_uniform(self.u_illuminate, is_illuminate)?;
         self.draw.draw(frame)?;
