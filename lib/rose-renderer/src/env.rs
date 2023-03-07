@@ -165,14 +165,14 @@ impl SimpleSky {
 
 #[derive(Debug)]
 pub struct EnvironmentMap {
-    bg_draw: ScreenDraw,
-    illum_draw: ScreenDraw,
+    draw: ScreenDraw,
     map: Texture<[f32; 3]>,
-    u_bg_view: UniformBlockIndex,
-    u_bg_sampler: UniformLocation,
-    u_ill_view: UniformBlockIndex,
-    u_ill_sampler: UniformLocation,
-    u_ill_normal: UniformLocation,
+    u_view: UniformBlockIndex,
+    u_sampler: UniformLocation,
+    u_albedo: UniformLocation,
+    u_normal: UniformLocation,
+    u_rough_metal: UniformLocation,
+    u_illuminate: UniformLocation,
 }
 
 impl Environment for EnvironmentMap {
@@ -182,13 +182,7 @@ impl Environment for EnvironmentMap {
         camera: &ViewUniformBuffer,
         mat_info: MaterialInfo,
     ) -> Result<()> {
-        self.bg_draw
-            .bind_block(self.u_bg_view, &camera.slice(0..=0))?;
-        self.bg_draw
-            .set_uniform(self.u_bg_sampler, self.map.as_uniform(0)?)?;
-        self.bg_draw.draw(frame)?;
-        self.map.unbind();
-        Ok(())
+        self.draw(frame, camera, mat_info, false)
     }
 
     fn illuminate_scene(
@@ -197,13 +191,7 @@ impl Environment for EnvironmentMap {
         camera: &ViewUniformBuffer,
         mat_info: MaterialInfo,
     ) -> Result<()> {
-        self.illum_draw.bind_block(self.u_ill_view, &camera.slice(0..=0))?;
-        self.illum_draw.set_uniform(self.u_ill_sampler, self.map.as_uniform(0)?)?;
-        self.illum_draw.set_uniform(self.u_ill_normal, mat_info.normal_coverage.as_uniform(1)?)?;
-        self.illum_draw.draw(frame)?;
-        self.map.unbind();
-        mat_info.normal_coverage.unbind();
-        Ok(())
+        self.draw(frame, camera, mat_info, true)
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -217,13 +205,14 @@ impl Environment for EnvironmentMap {
 
 impl EnvironmentMap {
     pub fn new(texture: impl AsRef<Path>) -> Result<Self> {
-        let bg_draw = ScreenDraw::load("assets/shaders/env/equirectangular.bg.glsl")?;
-        let u_bg_view = bg_draw.uniform_block("View", 0).unwrap();
-        let u_bg_sampler = bg_draw.uniform("env_map").unwrap();
-        let illum_draw = ScreenDraw::load("../../../assets/shaders/env/equirectangular.glsl")?;
-        let u_ill_view = illum_draw.uniform_block("View", 0).unwrap();
-        let u_ill_sampler = illum_draw.uniform("env_map").unwrap();
-        let u_ill_normal = illum_draw.uniform("normal_map").unwrap();
+        let draw = ScreenDraw::load("assets/shaders/env/equirectangular.glsl")?;
+        let u_view = draw.uniform_block("View", 0)?;
+        let u_sampler = draw.uniform("env_map").unwrap();
+        let u_albedo = draw.uniform("frame_albedo").unwrap();
+        let u_normal = draw.uniform("frame_normal").unwrap();
+        let u_rough_metal = draw.uniform("frame_rough_metal").unwrap();
+        let u_illuminate = draw.uniform("is_illuminate").unwrap();
+
         let map = Texture::load_rgb32f(texture)?;
         map.wrap_s(TextureWrap::Repeat)?;
         map.wrap_t(TextureWrap::Repeat)?;
@@ -232,14 +221,25 @@ impl EnvironmentMap {
         map.filter_min_mipmap(SampleMode::Linear, SampleMode::Linear)?;
         map.generate_mipmaps()?;
         Ok(Self {
-            bg_draw,
-            illum_draw,
+            draw,
             map,
-            u_bg_view,
-            u_bg_sampler,
-            u_ill_view,
-            u_ill_sampler,
-            u_ill_normal,
+            u_view,
+            u_sampler,
+            u_albedo,
+            u_normal,
+            u_rough_metal,
+            u_illuminate
         })
+    }
+
+    fn draw(&self, frame: &Framebuffer, camera: &ViewUniformBuffer, mat_info: MaterialInfo, is_illuminate: bool) -> Result<()> {
+        self.draw.bind_block(self.u_view, &camera.slice(0..=0))?;
+        self.draw.set_uniform(self.u_albedo, mat_info.albedo.as_uniform(0)?)?;
+        self.draw.set_uniform(self.u_normal, mat_info.albedo.as_uniform(1)?)?;
+        self.draw.set_uniform(self.u_rough_metal, mat_info.albedo.as_uniform(2)?)?;
+        self.draw.set_uniform(self.u_sampler, self.map.as_uniform(3)?)?;
+        self.draw.set_uniform(self.u_illuminate, is_illuminate)?;
+        self.draw.draw(frame)?;
+        Ok(())
     }
 }
