@@ -5,8 +5,8 @@ use eyre::Result;
 use glam::UVec2;
 
 use rose_core::screen_draw::ScreenDraw;
-use violette::texture::{SampleMode, TextureWrap};
 use violette::{framebuffer::Framebuffer, program::UniformLocation, texture::Texture};
+use violette::texture::{SampleMode, TextureWrap};
 
 use crate::postprocess::autoexposure::AutoExposure;
 use crate::postprocess::blur::Blur;
@@ -47,7 +47,7 @@ impl Postprocess {
         let uniform_bloom_tex = draw.uniform("bloom_tex").unwrap();
         Ok(Self {
             draw,
-            bloom: Blur::new(size, 10)?,
+            bloom: Blur::new(size, 5)?,
             auto_exposure: AutoExposure::new(size)?,
             uniform_texture: draw_texture,
             uniform_avg_luminance: avg_luminance,
@@ -55,7 +55,7 @@ impl Postprocess {
             uniform_bloom_strength,
             texture,
             luminance_bias: 1.,
-            bloom_radius: 10.,
+            bloom_radius: 1e-3,
         })
     }
 

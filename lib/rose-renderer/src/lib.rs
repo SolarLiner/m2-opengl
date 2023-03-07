@@ -137,8 +137,8 @@ impl Renderer {
             post_process_iface: PostprocessInterface {
                 exposure: 1.,
                 bloom: BloomInterface {
-                    size: 1e-2,
-                    strength: 5e-2,
+                    size: 1e-3,
+                    strength: 8e-2,
                 },
             },
             environment: None,
