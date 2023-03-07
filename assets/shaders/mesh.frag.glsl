@@ -36,7 +36,7 @@ void main() {
     vec3 out_normal;
     if (normal_enabled) {
         mat3 tbn = cotangent_frame(vs_position, vs_normal, vs_uv);
-        vec3 tangent_map = -(texture(normal_map, vs_uv).xyz * 2. - 1.) * vec3(normal_amount, normal_amount, 1.);
+        vec3 tangent_map = (texture(normal_map, vs_uv).xyz * 2. - 1.) * vec3(normal_amount, normal_amount, 1.);
         out_normal = normalize(tbn * tangent_map);// <- world space
     } else {
         out_normal = vs_normal;

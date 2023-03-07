@@ -445,7 +445,18 @@ impl<'a> TabViewer for UiStateLocal<'a> {
             }
             Tabs::CameraDebug => {
                 ui.collapsing("Camera", |ui| {
-                    let camera = &self.renderer.camera;
+                    let camera = &mut self.renderer.camera;
+                    Grid::new("camera-debug-params")
+                        .num_columns(2)
+                        .show(ui, |ui| {
+                            let fov_label = ui.label("FOV").id;
+                            ui.add(
+                                DragValue::new(&mut camera.projection.fovy)
+                                    .suffix(" rad")
+                                    .speed(0.1),
+                            )
+                                .labelled_by(fov_label);
+                        });
                     ui.monospace(format!("{:#?}", camera.transform));
                     ui.monospace(format!("{:#?}", camera.projection));
                 });

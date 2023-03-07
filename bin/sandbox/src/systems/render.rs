@@ -23,7 +23,7 @@ use rose_renderer::{
     material::{MaterialInstance, TextureSlot as MaterialSlot},
     Mesh, Renderer,
 };
-use rose_renderer::env::{SimpleSky, SimpleSkyParams};
+use rose_renderer::env::EnvironmentMap;
 use violette::texture::Texture;
 
 use crate::{
@@ -97,7 +97,7 @@ impl RenderSystem {
 impl RenderSystem {
     pub fn new(size: UVec2) -> Result<Self> {
         let mut renderer = Renderer::new(size)?;
-        renderer.set_environment(SimpleSky::new(SimpleSkyParams::default())?);
+        renderer.set_environment(EnvironmentMap::new("assets/textures/table_mountain_2_puresky_4k.exr")?);
         Ok(Self {
             clear_color: Vec3::ZERO,
             camera: Camera::default(),
@@ -108,19 +108,15 @@ impl RenderSystem {
         })
     }
 
-    pub fn environment_mut(&mut self) -> &mut SimpleSky {
-        self.renderer.environment_mut().unwrap()
-    }
-
     pub fn on_frame(&mut self, dt: Duration, world: &World) -> Result<()> {
         self.handle_mesh_assets(world)?;
         self.handle_material_assets(world)?;
         self.handle_lights(world)?;
 
-        self.renderer.begin_render()?;
+        self.renderer.begin_render(&self.camera)?;
         self.submit_meshes(world);
         self.renderer
-            .flush(&self.camera, dt, self.clear_color)?;
+            .flush(dt, self.clear_color)?;
         Ok(())
     }
 

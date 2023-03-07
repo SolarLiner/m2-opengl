@@ -10,7 +10,8 @@ use std::{
 #[cfg(feature = "debug-ui")]
 use egui::Ui;
 use eyre::Result;
-use glam::{UVec2, vec2, Vec3};
+use float_ord::FloatOrd;
+use glam::{UVec2, vec2, Vec3, Vec4Swizzles};
 use tracing::span::EnteredSpan;
 
 use gbuffers::GeometryBuffers;
@@ -22,10 +23,12 @@ use rose_core::{
     transform::{Transformed, TransformExt},
     utils::thread_guard::ThreadGuard,
 };
+use rose_core::camera::{ViewUniform, ViewUniformBuffer};
 use violette::{
     Cull,
     framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer}, FrontFace,
 };
+use violette::base::resource::ResourceExt;
 
 use crate::env::Environment;
 use crate::material::MaterialInstance;
@@ -102,6 +105,8 @@ pub struct Renderer {
     post_process: Postprocess,
     post_process_iface: PostprocessInterface,
     environment: Option<Box<dyn Environment>>,
+    view_uniform: ViewUniform,
+    camera_uniform: ThreadGuard<ViewUniformBuffer>,
     queued_materials: Vec<Weak<MaterialInstance>>,
     queued_meshes: HashMap<usize, Vec<Transformed<Weak<Mesh>>>>,
     render_span: ThreadGuard<Option<EnteredSpan>>,
@@ -120,10 +125,13 @@ impl Renderer {
         let lights = LightBuffer::new();
         let geom_pass = GeometryBuffers::new(size)?;
         let post_process = Postprocess::new(size)?;
+        let view_uniform = ViewUniform::default();
+        let camera_uniform = view_uniform.create_buffer()?;
+
         Ok(Self {
             lights,
             geom_pass: Rc::new(RefCell::new(geom_pass)),
-            material: Material::create()?,
+            material: Material::create(Some(&camera_uniform))?,
             post_process,
             post_process_iface: PostprocessInterface {
                 exposure: 1.,
@@ -133,6 +141,8 @@ impl Renderer {
                 },
             },
             environment: None,
+            view_uniform,
+            camera_uniform: ThreadGuard::new(camera_uniform),
             queued_materials: vec![],
             queued_meshes: HashMap::default(),
             render_span: ThreadGuard::new(None),
@@ -189,7 +199,7 @@ impl Renderer {
         self.lights = light_buffer;
     }
 
-    pub fn begin_render(&mut self) -> Result<()> {
+    pub fn begin_render(&mut self, camera: &Camera) -> Result<()> {
         self.render_span
             .replace(tracing::debug_span!("render").entered());
         let now = Instant::now();
@@ -203,6 +213,10 @@ impl Renderer {
         self.post_process.bloom_radius = self.post_process_iface.bloom.size;
         self.post_process
             .set_bloom_strength(self.post_process_iface.bloom.strength)?;
+
+        self.view_uniform.update_from_camera(camera);
+        self.view_uniform
+            .update_uniform_buffer(&mut self.camera_uniform)?;
         Ok(())
     }
 
@@ -231,16 +245,12 @@ impl Renderer {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn flush(&mut self, camera: &Camera, dt: Duration, clear_color: Vec3) -> Result<()> {
+    pub fn flush(&mut self, dt: Duration, clear_color: Vec3) -> Result<()> {
         let render_start = Instant::now();
         violette::set_front_face(FrontFace::CounterClockwise);
         violette::culling(Some(Cull::Back));
-        Framebuffer::viewport(
-            0,
-            0,
-            camera.projection.width as _,
-            camera.projection.height as _,
-        );
+        let [w, h] = self.view_uniform.viewport.zw().as_ivec2().to_array();
+        Framebuffer::viewport(0, 0, w, h);
         Framebuffer::enable_depth_test(DepthTestFunction::Less);
         Framebuffer::disable_scissor();
         Framebuffer::disable_blending();
@@ -252,6 +262,7 @@ impl Renderer {
             .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
 
         let geom_pass = self.geom_pass.borrow();
+        self.material.set_camera_uniform(&self.camera_uniform)?;
         for (mat_ix, meshes) in self.queued_meshes.drain() {
             let Some(instance) = self.queued_materials[mat_ix].upgrade() else {
                 tracing::warn!("Dropped materials value, cannot recover from weakref");
@@ -262,16 +273,27 @@ impl Renderer {
                 continue;
             };
 
+            meshes.sort_by_cached_key(|m| {
+                FloatOrd(
+                    m.transform
+                        .position
+                        .distance_squared(self.view_uniform.camera_pos),
+                )
+            });
+
             self.last_render_rendered += meshes.len();
-            geom_pass.draw_meshes(camera, &self.material, instance.as_ref(), &mut meshes)?;
+            geom_pass.draw_meshes(&self.material, instance.as_ref(), &meshes)?;
         }
 
         Framebuffer::disable_depth_test();
         Framebuffer::clear_color(clear_color.extend(1.).to_array());
         let backbuffer = Framebuffer::backbuffer();
         backbuffer.do_clear(ClearBuffer::COLOR);
-        let shaded_tex =
-            geom_pass.process(camera, &self.lights, self.environment.as_deref_mut())?;
+        let shaded_tex = geom_pass.process(
+            &self.camera_uniform,
+            &self.lights,
+            self.environment.as_deref_mut(),
+        )?;
         Framebuffer::disable_blending();
         self.post_process.draw(&backbuffer, shaded_tex, dt)?;
         self.last_render_duration.replace(render_start.elapsed());

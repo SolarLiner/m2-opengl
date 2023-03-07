@@ -332,11 +332,11 @@ impl Application for Sandbox {
                 ui.radio_value(&mut self.ui_system.gizmo_mode, GizmoMode::Scale, "Scale");
             });
         });
-        egui::Window::new("Environment")
-            .show(ctx.egui, |ui| {
-                let env = self.render_system.environment_mut();
-                env.params.ui(ui);
-            });
+        // egui::Window::new("Environment")
+        //     .show(ctx.egui, |ui| {
+        //         let env = self.render_system.environment_mut();
+        //         env.params.ui(ui);
+        //     });
         self.ui_system.on_ui(
             ctx.egui,
             self.editor_scene.as_ref(),

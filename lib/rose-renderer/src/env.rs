@@ -1,18 +1,22 @@
 use std::{any::Any, fmt};
+use std::path::Path;
 
 use eyre::{Context, Result};
 use glam::{vec3, Vec3};
 
-use rose_core::{camera::Camera, screen_draw::ScreenDraw};
+use rose_core::camera::ViewUniformBuffer;
+use rose_core::screen_draw::ScreenDraw;
 use violette::{framebuffer::Framebuffer, program::UniformLocation, texture::Texture};
+use violette::program::UniformBlockIndex;
 
 pub trait Environment: fmt::Debug + Any {
-    fn process_background(&mut self, frame: &Framebuffer, camera: &Camera) -> Result<()>;
+    fn process_background(&mut self, frame: &Framebuffer, camera: &ViewUniformBuffer)
+                          -> Result<()>;
 
     fn illuminate_scene(
         &mut self,
         frame: &Framebuffer,
-        camera: &Camera,
+        camera: &ViewUniformBuffer,
         normal_coverage: &Texture<[f32; 4]>,
     ) -> Result<()>;
 
@@ -65,7 +69,7 @@ pub struct SimpleSky {
     pub params: SimpleSkyParams,
     background_paint: ScreenDraw,
     illuminate_paint: ScreenDraw,
-    u_bg_view_proj_inv: UniformLocation,
+    u_bg_view: UniformBlockIndex,
     u_bg_horizon_color: UniformLocation,
     u_bg_zenith_color: UniformLocation,
     u_bg_ground_color: UniformLocation,
@@ -73,13 +77,17 @@ pub struct SimpleSky {
     u_ill_horizon_color: UniformLocation,
     u_ill_zenith_color: UniformLocation,
     u_ill_ground_color: UniformLocation,
-    u_ill_view_proj_inv: UniformLocation,
+    u_ill_view: UniformBlockIndex,
 }
 
 impl Environment for SimpleSky {
-    fn process_background(&mut self, frame: &Framebuffer, camera: &Camera) -> Result<()> {
+    fn process_background(
+        &mut self,
+        frame: &Framebuffer,
+        view_uniform: &ViewUniformBuffer,
+    ) -> Result<()> {
         self.background_paint
-            .set_uniform(self.u_bg_view_proj_inv, camera.matrix())?;
+            .bind_block(self.u_bg_view, &view_uniform.slice(0..=0))?;
         self.background_paint
             .set_uniform(self.u_bg_horizon_color, self.params.horizon_color)?;
         self.background_paint
@@ -93,13 +101,13 @@ impl Environment for SimpleSky {
     fn illuminate_scene(
         &mut self,
         frame: &Framebuffer,
-        camera: &Camera,
+        view_uniform: &ViewUniformBuffer,
         normal_coverage: &Texture<[f32; 4]>,
     ) -> Result<()> {
         self.illuminate_paint
-            .set_uniform(self.u_ill_normal, normal_coverage.as_uniform(0)?)?;
+            .bind_block(self.u_ill_view, &view_uniform.slice(0..=0))?;
         self.illuminate_paint
-            .set_uniform(self.u_ill_view_proj_inv, camera.matrix())?;
+            .set_uniform(self.u_ill_normal, normal_coverage.as_uniform(0)?)?;
         self.illuminate_paint
             .set_uniform(self.u_ill_horizon_color, self.params.horizon_color)?;
         self.illuminate_paint
@@ -123,14 +131,15 @@ impl SimpleSky {
     pub fn new(params: SimpleSkyParams) -> Result<Self> {
         let background_paint = ScreenDraw::load("assets/shaders/simple_sky_bg.frag.glsl")
             .with_context(|| "Loading simple sky background shader")?;
-        let u_bg_view_proj_inv = background_paint.uniform("view_proj_inv").unwrap();
+        // let u_bg_view_proj = background_paint.uniform("view_proj").unwrap();
+        let u_bg_view = background_paint.uniform_block("view", 0).unwrap();
         let u_bg_horizon_color = background_paint.uniform("horizon_color").unwrap();
         let u_bg_zenith_color = background_paint.uniform("zenith_color").unwrap();
         let u_bg_ground_color = background_paint.uniform("ground_color").unwrap();
 
         let illuminate_paint = ScreenDraw::load("assets/shaders/simple_sky_illuminate.frag.glsl")
             .with_context(|| "Loading simple sky illuminate shader")?;
-        let u_ill_view_proj_inv = illuminate_paint.uniform("view_proj_inv").unwrap();
+        let u_ill_view = illuminate_paint.uniform_block("view", 0).unwrap();
         let u_ill_normal = illuminate_paint.uniform("normal").unwrap();
         let u_ill_horizon_color = illuminate_paint.uniform("horizon_color").unwrap();
         let u_ill_zenith_color = illuminate_paint.uniform("zenith_color").unwrap();
@@ -140,15 +149,70 @@ impl SimpleSky {
             params,
             background_paint,
             illuminate_paint,
-            u_bg_view_proj_inv,
+            u_bg_view,
             u_bg_horizon_color,
             u_bg_zenith_color,
             u_bg_ground_color,
-            u_ill_view_proj_inv,
+            u_ill_view,
             u_ill_normal,
             u_ill_horizon_color,
             u_ill_ground_color,
             u_ill_zenith_color,
+        })
+    }
+}
+
+#[derive(Debug)]
+pub struct EnvironmentMap {
+    bg_draw: ScreenDraw,
+    map: Texture<[f32; 3]>,
+    u_bg_view: UniformBlockIndex,
+    u_bg_sampler: UniformLocation,
+}
+
+impl Environment for EnvironmentMap {
+    fn process_background(
+        &mut self,
+        frame: &Framebuffer,
+        view_uniform: &ViewUniformBuffer,
+    ) -> Result<()> {
+        self.bg_draw
+            .bind_block(self.u_bg_view, &view_uniform.slice(0..=0))?;
+        self.bg_draw
+            .set_uniform(self.u_bg_sampler, self.map.as_uniform(0)?)?;
+        self.bg_draw.draw(frame)?;
+        Ok(())
+    }
+
+    fn illuminate_scene(
+        &mut self,
+        frame: &Framebuffer,
+        camera: &ViewUniformBuffer,
+        normal_coverage: &Texture<[f32; 4]>,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl EnvironmentMap {
+    pub fn new(texture: impl AsRef<Path>) -> Result<Self> {
+        let bg_draw = ScreenDraw::load("assets/shaders/env/equirectangular.bg.glsl")?;
+        let map = Texture::load_rgb32f(texture)?;
+        let u_bg_view = bg_draw.uniform_block("View", 0).unwrap();
+        let u_bg_sampler = bg_draw.uniform("env_map").unwrap();
+        Ok(Self {
+            bg_draw,
+            map,
+            u_bg_view,
+            u_bg_sampler,
         })
     }
 }

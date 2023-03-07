@@ -2601,7 +2601,6 @@ dependencies = [
  "crevice",
  "either",
  "eyre",
- "float-ord",
  "glam",
  "image",
  "num-derive",
@@ -2645,7 +2644,9 @@ dependencies = [
  "egui",
  "either",
  "eyre",
+ "float-ord",
  "glam",
+ "image",
  "rose-core",
  "rose-ui",
  "tracing",
@@ -3043,6 +3044,21 @@ dependencies = [
  "redox_syscall",
  "rustix",
  "windows-sys 0.42.0",
+]
+
+[[package]]
+name = "test_mvp"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "color-eyre",
+ "eyre",
+ "glam",
+ "rose-core",
+ "rose-platform",
+ "tracing",
+ "violette",
+ "violette-derive",
 ]
 
 [[package]]

@@ -15,7 +15,7 @@
       - 1.0
   alloc::string::String: Suzanne
   sandbox::components::Active: null
-  sandbox::assets::material::Material: ..materials.white_shiny
+  sandbox::assets::material::Material: materials.white_diffuse
   sandbox::assets::mesh::MeshAsset: models.suzanne
 8589934593:
   rose_core::transform::Transform:

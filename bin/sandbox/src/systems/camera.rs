@@ -1,6 +1,6 @@
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::{FRAC_PI_2, TAU};
 
-use glam::{EulerRot, Quat, vec2, Vec2, Vec3};
+use glam::{Quat, vec2, Vec2, Vec2Swizzles, Vec3};
 use hecs::World;
 
 use input::Input;
@@ -46,7 +46,7 @@ impl PanOrbitSystem {
             controller.target_rotation += delta;
         }
         if right {
-            let pos = cam_transform.right() * delta.x + cam_transform.down() * delta.y;
+            let pos = (delta.xy() * vec2(1., -1.)).extend(0.);
             controller.focus += pos;
         }
 
@@ -54,16 +54,17 @@ impl PanOrbitSystem {
         if controller.target_rotation.x > TAU {
             controller.target_rotation.x -= TAU;
         }
-        controller.target_rotation.y = controller.target_rotation.y.clamp(-PI, PI);
+        controller.target_rotation.y = controller.target_rotation.y.clamp(-FRAC_PI_2, FRAC_PI_2);
 
         controller.radius -= 0.2 * controller.radius * scroll;
         controller.radius = f32::max(0.05, controller.radius);
-        cam_transform.rotation = Quat::from_euler(
-            EulerRot::XYZ,
-            -controller.target_rotation.y,
-            -controller.target_rotation.x,
-            0.,
-        );
+        // cam_transform.rotation = Quat::from_euler(
+        //     EulerRot::XYZ,
+        //     controller.target_rotation.y,
+        //     controller.target_rotation.x,
+        //     0.,
+        // );
+        cam_transform.rotation = Quat::from_rotation_x(controller.target_rotation.y) * Quat::from_rotation_y(controller.target_rotation.x);
         cam_transform.position = controller.focus - controller.radius * Vec3::Z;
     }
 }

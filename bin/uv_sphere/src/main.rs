@@ -138,12 +138,12 @@ impl Application for App {
 
     #[tracing::instrument(target = "App::render", skip_all)]
     fn render(&mut self, ctx: RenderContext) -> Result<()> {
-        self.renderer.begin_render()?;
+        self.renderer.begin_render(&self.camera)?;
         self.renderer.submit_mesh(
             Rc::downgrade(&self.material),
             Rc::downgrade(&self.mesh).transformed(self.transform),
         );
-        self.renderer.flush(&self.camera, ctx.dt, Vec3::ZERO)?;
+        self.renderer.flush(ctx.dt, Vec3::ZERO)?;
         Ok(())
     }
 

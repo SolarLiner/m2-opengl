@@ -12,7 +12,7 @@ homepage = "https://github.com/SolarLiner/m2-opengl"
 bytemuck = { version = "1.7.3", features = ["derive"] }
 egui = { version = "0.20.1", features = ["bytemuck"] }
 eyre = "0.6.8"
-glam = { version = "0.22.0", features = ["bytemuck", "rand", "num-traits"] }
+glam = { version = "0.22.0", features = ["bytemuck", "rand", "num-traits", "glam-assert"] }
 tracing = "0.1.33"
 winit = "0.27.5"
 

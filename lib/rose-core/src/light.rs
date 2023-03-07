@@ -131,7 +131,7 @@ impl GpuLight {
     pub fn download_buffer(buf: &LightBuffer) -> Result<Vec<Self>> {
         let slice = buf.slice(..);
         let lights = slice
-            .get(BufferAccess::MAP_READ)?
+            .get_all(BufferAccess::MAP_READ)?
             .iter()
             .copied()
             .map(|gl| gl.into())

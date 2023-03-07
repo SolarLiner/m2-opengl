@@ -4,9 +4,8 @@ use std::path::Path;
 use eyre::Result;
 use glam::{Vec2, Vec3};
 
-use rose_core::{camera::Camera, transform::Transformed};
-use violette::shader::FragmentShader;
-use violette::texture::{Dimension, TextureFormat};
+use rose_core::camera::ViewUniformBuffer;
+use rose_core::transform::Transformed;
 use violette::{
     framebuffer::Framebuffer,
     gl,
@@ -14,6 +13,9 @@ use violette::{
     shader::VertexShader,
     texture::Texture,
 };
+use violette::program::UniformBlockIndex;
+use violette::shader::FragmentShader;
+use violette::texture::{Dimension, TextureFormat};
 use violette_derive::VertexAttributes;
 
 use crate::Mesh;
@@ -92,12 +94,12 @@ pub struct Material {
     uniform_normal_enabled: UniformLocation,
     uniform_normal_amt: UniformLocation,
     uniform_rough_metal: UniformLocation,
-    uniform_view_proj: UniformLocation,
+    uniform_view: UniformBlockIndex,
     uniform_model: UniformLocation,
 }
 
 impl Material {
-    pub fn create() -> Result<Self> {
+    pub fn create(camera_uniform: Option<&ViewUniformBuffer>) -> Result<Self> {
         let shaders_dir = Path::new("assets").join("shaders");
         let vert_shader = VertexShader::load(shaders_dir.join("mesh.vert.glsl"))?;
         let frag_shader = FragmentShader::load(shaders_dir.join("mesh.frag.glsl"))?;
@@ -110,8 +112,11 @@ impl Material {
         let uniform_normal_amt = program.uniform("normal_amount").unwrap();
         let uniform_normal_enabled = program.uniform("normal_enabled").unwrap();
         let uniform_rough_metal = program.uniform("rough_metal").unwrap();
-        let uniform_view_proj = program.uniform("view_proj").unwrap();
         let uniform_model = program.uniform("model").unwrap();
+        let uniform_view = program.uniform_block("View", 0).unwrap();
+        if let Some(buf) = camera_uniform {
+            program.bind_block(uniform_view, &buf.slice(0..=0))?;
+        }
         Ok(Self {
             program,
             uniform_color,
@@ -120,24 +125,22 @@ impl Material {
             uniform_normal_enabled,
             uniform_rough_metal,
             uniform_model,
-            uniform_view_proj,
+            uniform_view,
         })
     }
 
-    #[tracing::instrument(skip(self,meshes), fields(meshes=meshes.len()))]
-    pub fn draw_meshes<MC: std::ops::Deref<Target = Mesh>>(
+    pub fn set_camera_uniform(&self, buffer: &ViewUniformBuffer) -> Result<()> {
+        self.program.bind_block(self.uniform_view, &buffer.slice(0..=0))?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, meshes), fields(meshes = meshes.len()))]
+    pub fn draw_meshes<MC: std::ops::Deref<Target=Mesh>>(
         &self,
         framebuffer: &Framebuffer,
-        camera: &Camera,
         instance: &MaterialInstance,
-        meshes: &mut [Transformed<MC>],
+        meshes: &[Transformed<MC>],
     ) -> Result<()> {
-        let mut ordering = (0..meshes.len()).collect::<Vec<_>>();
-        ordering.sort_by_cached_key(|ix| meshes[*ix].transform.distance_to_camera(camera));
-        let mat_view_proj = camera.projection.matrix() * camera.transform.matrix();
-        self.program
-            .set_uniform(self.uniform_view_proj, mat_view_proj)?;
-
         self.program
             .set_uniform(self.uniform_color, instance.color.as_uniform(0)?)?;
         if let Some(normal) = &instance.normal_map {
@@ -151,8 +154,7 @@ impl Material {
         self.program
             .set_uniform(self.uniform_rough_metal, instance.roughness_metal.as_uniform(2)?)?;
 
-        for mesh_ix in ordering {
-            let mesh = &meshes[mesh_ix];
+        for mesh in meshes {
             self.program
                 .set_uniform(self.uniform_model, mesh.transform.matrix())?;
             mesh.draw(&self.program, framebuffer, false)?;

@@ -1,10 +1,9 @@
-use std::hash::{Hash, Hasher};
-use std::ops::Mul;
+use std::{
+    hash::{Hash, Hasher},
+    ops::Mul,
+};
 
-use float_ord::FloatOrd;
 use glam::{Mat4, Quat, Vec3};
-
-use crate::camera::Camera;
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -37,11 +36,6 @@ impl Transform {
 
     pub fn backward(&self) -> Vec3 {
         -self.forward()
-    }
-
-    pub fn distance_to_camera(&self, camera: &Camera) -> FloatOrd<f32> {
-        let dist = self.position.distance(camera.transform.position);
-        FloatOrd(dist)
     }
 }
 
@@ -128,10 +122,7 @@ impl Transform {
     }
 
     pub fn matrix(&self) -> Mat4 {
-        // Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
-        Mat4::from_translation(self.position)
-            * Mat4::from_quat(self.rotation)
-            * Mat4::from_scale(self.scale)
+        Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
     }
 }
 

@@ -4,7 +4,7 @@ use eyre::{Context, Result};
 use glam::UVec2;
 
 use rose_core::{light::LightBuffer, screen_draw::ScreenDraw};
-use rose_core::camera::Camera;
+use rose_core::camera::ViewUniformBuffer;
 use rose_core::mesh::Mesh;
 use rose_core::transform::Transformed;
 use violette::{
@@ -30,12 +30,12 @@ pub struct GeometryBuffers {
     rough_metal: Texture<[f32; 2]>,
     out_color: Texture<[f32; 3]>,
     out_depth: Texture<DepthStencil<f32, ()>>,
-    uniform_camera_pos: UniformLocation,
     uniform_frame_pos: UniformLocation,
     uniform_frame_albedo: UniformLocation,
     uniform_frame_normal: UniformLocation,
     uniform_frame_rough_metal: UniformLocation,
     uniform_block_light: UniformBlockIndex,
+    uniform_block_view: UniformBlockIndex,
     debug_uniform_in_texture: UniformLocation,
 }
 
@@ -93,12 +93,12 @@ impl GeometryBuffers {
             .context("Cannot load blit program")?;
         let debug_uniform_in_texture = debug_texture.uniform("in_texture").unwrap();
 
-        let uniform_camera_pos = screen_pass.uniform("camera_pos").unwrap();
         let uniform_frame_pos = screen_pass.uniform("frame_position").unwrap();
         let uniform_frame_albedo = screen_pass.uniform("frame_albedo").unwrap();
         let uniform_frame_normal = screen_pass.uniform("frame_normal").unwrap();
         let uniform_frame_rough_metal = screen_pass.uniform("frame_rough_metal").unwrap();
         let uniform_block_light = screen_pass.uniform_block("Light", 0).unwrap();
+        let uniform_block_view = screen_pass.uniform_block("View", 0).unwrap();
 
         Ok(Self {
             deferred_fbo,
@@ -110,13 +110,13 @@ impl GeometryBuffers {
             rough_metal,
             out_color,
             out_depth,
-            uniform_camera_pos,
             debug_uniform_in_texture,
             uniform_frame_pos,
             uniform_frame_albedo,
             uniform_frame_normal,
             uniform_frame_rough_metal,
             uniform_block_light,
+            uniform_block_view,
             screen_pass,
             debug_texture,
         })
@@ -129,15 +129,14 @@ impl GeometryBuffers {
     #[tracing::instrument(skip_all)]
     pub fn draw_meshes<MC: std::ops::Deref<Target = Mesh<Vertex>>>(
         &self,
-        camera: &Camera,
         material: &Material,
         instance: &MaterialInstance,
-        meshes: &mut [Transformed<MC>],
+        meshes: &[Transformed<MC>],
     ) -> Result<()> {
         Framebuffer::disable_blending();
         Framebuffer::disable_scissor();
         Framebuffer::enable_depth_test(DepthTestFunction::Less);
-        material.draw_meshes(&self.deferred_fbo, camera, instance, meshes)?;
+        material.draw_meshes(&self.deferred_fbo, instance, meshes)?;
 
         Ok(())
     }
@@ -178,25 +177,24 @@ impl GeometryBuffers {
         self.size
     }
 
+
     #[tracing::instrument(skip_all)]
     pub fn process(
         &self,
-        camera: &Camera,
+        cam_uniform: &ViewUniformBuffer,
         lights: &LightBuffer,
         mut env: Option<&mut dyn Environment>,
     ) -> Result<&Texture<[f32; 3]>> {
-        self.screen_pass
-            .set_uniform(self.uniform_camera_pos, camera.transform.position)?;
         Framebuffer::enable_blending(Blend::One, Blend::One);
         Framebuffer::clear_color([0., 0., 0., 1.]);
         Framebuffer::disable_blending();
         self.output_fbo.do_clear(ClearBuffer::COLOR);
         if let Some(env) = &mut env {
-            env.process_background(&self.output_fbo, camera)?;
+            env.process_background(&self.output_fbo, cam_uniform)?;
         }
         if lights.is_empty() {
             if let Some(env) = env {
-                env.illuminate_scene(&self.output_fbo, camera, &self.normal_coverage)?;
+                env.illuminate_scene(&self.output_fbo, cam_uniform, &self.normal_coverage)?;
             }
             return Ok(&self.out_color);
         }
@@ -215,7 +213,7 @@ impl GeometryBuffers {
             .set_uniform(self.uniform_frame_rough_metal, unit_rough_metal)?;
 
         if let Some(env) = env {
-            env.illuminate_scene(&self.output_fbo, camera, &self.normal_coverage)?;
+            env.illuminate_scene(&self.output_fbo, cam_uniform, &self.normal_coverage)?;
         }
 
         for light_ix in 0..lights.len() {

@@ -7,8 +7,14 @@ uniform sampler2D frame_albedo;
 uniform sampler2D frame_normal;
 uniform sampler2D frame_rough_metal;
 
-// uniform float exposure;
-uniform vec3 camera_pos;
+layout(std140) uniform View {
+    mat4 mat_view;
+    mat4 mat_proj;
+    mat4 inv_view;
+    mat4 inv_proj;
+    vec4 viewport;
+    vec3 camera_pos;
+} view;
 
 out vec4 out_color;
 
@@ -77,23 +83,15 @@ vec3 specular_brdf(vec3 V, vec3 H, vec3 L, vec3 N, float distance, float roughne
     return num/denominator;
 }
 
-vec3 get_lighting(vec3 V, vec3 L, vec3 N, float distance, float roughness, float metallic) {
+vec3 get_lighting(vec3 V, vec3 L, vec3 N, vec3 albedo, float distance, float roughness, float metallic) {
     vec3 H = normalize(V+L);
     vec3 kS = fresnel(max(0.0, dot(H, V)), F0);
     vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
     vec3 specular = specular_brdf(V, H, L, N, distance, roughness);
     vec3 radiance = diffuse_brdf(distance);
     float NdotL = max(0.0, dot(N, L));
-    return radiance * (1 - metallic) * NdotL + specular;
+    return (kD * albedo / M_PI + specular) * radiance * NdotL;
 }
-
-// float desaturate(vec3 col) {
-//     return dot(col, vec3(0.2126, 0.7152, 0.0722));
-// }
-
-// vec3 reinhard(vec3 col) {
-//     return col / (1.0 + desaturate(col));
-// }
 
 void main() {
     vec4 nc = texture(frame_normal, v_uv);
@@ -112,21 +110,19 @@ void main() {
         return;
     }
 
-    vec3 view_dir = normalize(position - camera_pos);// <- world space
+    vec3 view_dir = normalize(position - view.camera_pos);// <- world space
 
     float light_distance;
     vec3 light_dir;// <- world space
     if (light.kind == LIGHT_KIND_POINT) {
         light_distance = distance(light.pos_dir, position);// <- nominal
-        light_dir = normalize(position - light.pos_dir);// <- nominal, world space
+        light_dir = normalize(light.pos_dir - position);// <- nominal, world space
     } else {
         light_distance = 1.;
         light_dir = -light.pos_dir;// <- nominal, world space
     }
 
 
-    vec3 k = light.color * get_lighting(view_dir, light_dir, normal, light_distance, roughness, metallic);
-
-    vec3 reflectance = albedo * k;
+    vec3 reflectance = light.color * get_lighting(view_dir, light_dir, normal, albedo, light_distance, roughness, metallic);
     out_color = vec4(reflectance, 1.0);
 }
