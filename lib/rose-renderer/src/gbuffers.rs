@@ -14,7 +14,7 @@ use violette::{
     texture::{DepthStencil, Dimension, SampleMode, Texture},
 };
 
-use crate::env::Environment;
+use crate::env::{Environment, MaterialInfo};
 use crate::material::{Material, MaterialInstance, Vertex};
 
 #[derive(Debug)]
@@ -189,17 +189,27 @@ impl GeometryBuffers {
         Framebuffer::clear_color([0., 0., 0., 1.]);
         self.output_fbo.do_clear(ClearBuffer::COLOR);
         if let Some(env) = &mut env {
-            env.process_background(&self.output_fbo, cam_uniform)?;
-        }
-        if lights.is_empty() {
-            if let Some(env) = env {
-                env.illuminate_scene(&self.output_fbo, cam_uniform, &self.normal_coverage)?;
-            }
-            return Ok(&self.out_color);
+            let mat_info = MaterialInfo {
+                position: &self.pos,
+                albedo: &self.albedo,
+                normal_coverage: &self.normal_coverage,
+                roughness_metal: &self.rough_metal,
+            };
+            env.process_background(&self.output_fbo, cam_uniform, mat_info)?;
         }
 
         if let Some(env) = env {
-            env.illuminate_scene(&self.output_fbo, cam_uniform, &self.normal_coverage)?;
+            let mat_info = MaterialInfo {
+                position: &self.pos,
+                albedo: &self.albedo,
+                normal_coverage: &self.normal_coverage,
+                roughness_metal: &self.rough_metal,
+            };
+            env.illuminate_scene(&self.output_fbo, cam_uniform, mat_info)?;
+        }
+
+        if lights.is_empty() {
+            return Ok(&self.out_color);
         }
 
         let unit_pos = self.pos.as_uniform(0)?;

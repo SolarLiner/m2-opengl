@@ -1,5 +1,7 @@
 #version 330 core
 
+const float M_PI = 3.1415926535;
+
 in vec2 v_uv;
 
 layout(std140) uniform View {
@@ -12,9 +14,13 @@ layout(std140) uniform View {
 } view;
 
 uniform sampler2D normal_map;
-uniform sampler2D env_map;
+uniform vec3 horizon_color;
+uniform vec3 ground_color;
+uniform vec3 zenith_color;
+uniform bool is_illumination;
 
-out vec4 out_color;
+out vec3 out_color;
+
 
 vec4 ndc2clip(vec4 ndc_pos) {
     vec4 clip_pos;
@@ -37,22 +43,26 @@ vec2 spherical_to_polar(vec3 sph) {
 
 void main() {
     float a = texture(normal_map, v_uv).a;
-    if (a <= 0.5) {
+    if (a <= 0.5 && is_illumination) {
         discard;
         //        out_color = vec4(vec3(0), 1);
         //        return;
     }
 
-    vec3 normal = texture(normal_map, v_uv).rgb;
     vec4 ray_clip = vec4(v_uv * 2 - 1, -1, 1);
     vec4 ray_eye = view.inv_proj * ray_clip;
     ray_eye.zw = vec2(-1, 0);
     vec3 ray_world = (view.inv_view * ray_eye).xyz;
     ray_world = normalize(ray_world);
 
-    vec3 reflected_ray = reflect(normal, ray_world);
-    vec2 uv = spherical_to_polar(reflected_ray);
-    //    vec3 color = texture(env_map, uv).rgb;
-    vec3 color = textureLod(env_map, uv, 3).rgb;
-    out_color = vec4(color, 1);
+    float lat_pc = ray_world.y / M_PI;
+    if (is_illumination) {
+        if (lat_pc > 0) out_color = mix(horizon_color, zenith_color, lat_pc);
+        else out_color = mix(horizon_color, ground_color, -lat_pc);
+    } else {
+        vec3 normal = texture(normal_map, v_uv).rgb;
+        ray_world = reflect(ray_world, normal);
+        if (lat_pc > 0) out_color = mix(horizon_color, zenith_color, lat_pc);
+        else out_color = mix(ground_color + horizon_color, vec3(0), -lat_pc);
+    }
 }
