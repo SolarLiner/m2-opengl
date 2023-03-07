@@ -47,6 +47,7 @@ pub struct PostprocessInterface {
 }
 
 impl PostprocessInterface {
+    #[cfg(feature = "debug-ui")]
     pub fn ui(&mut self, ui: &mut Ui) {
         egui::Grid::new("pp-iface")
             .striped(true)

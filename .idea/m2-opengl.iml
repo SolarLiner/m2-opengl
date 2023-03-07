@@ -23,7 +23,9 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/pan-orbit-camera/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/asset-server/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/input/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/sph/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/bin/test_mvp/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/rose-envmap/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

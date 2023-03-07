@@ -7,7 +7,9 @@ use glam::{vec3, Vec3};
 use rose_core::camera::ViewUniformBuffer;
 use rose_core::screen_draw::ScreenDraw;
 use violette::{framebuffer::Framebuffer, program::UniformLocation, texture::Texture};
+use violette::base::resource::Resource;
 use violette::program::UniformBlockIndex;
+use violette::texture::TextureWrap;
 
 pub trait Environment: fmt::Debug + Any {
     fn process_background(&mut self, frame: &Framebuffer, camera: &ViewUniformBuffer)
@@ -165,9 +167,13 @@ impl SimpleSky {
 #[derive(Debug)]
 pub struct EnvironmentMap {
     bg_draw: ScreenDraw,
+    illum_draw: ScreenDraw,
     map: Texture<[f32; 3]>,
     u_bg_view: UniformBlockIndex,
     u_bg_sampler: UniformLocation,
+    u_ill_view: UniformBlockIndex,
+    u_ill_sampler: UniformLocation,
+    u_ill_normal: UniformLocation,
 }
 
 impl Environment for EnvironmentMap {
@@ -181,15 +187,22 @@ impl Environment for EnvironmentMap {
         self.bg_draw
             .set_uniform(self.u_bg_sampler, self.map.as_uniform(0)?)?;
         self.bg_draw.draw(frame)?;
+        self.map.unbind();
         Ok(())
     }
 
     fn illuminate_scene(
         &mut self,
         frame: &Framebuffer,
-        camera: &ViewUniformBuffer,
+        view_uniform: &ViewUniformBuffer,
         normal_coverage: &Texture<[f32; 4]>,
     ) -> Result<()> {
+        self.illum_draw.bind_block(self.u_ill_view, &view_uniform.slice(0..=0))?;
+        self.illum_draw.set_uniform(self.u_ill_sampler, self.map.as_uniform(0)?)?;
+        self.illum_draw.set_uniform(self.u_ill_normal, normal_coverage.as_uniform(1)?)?;
+        self.illum_draw.draw(frame)?;
+        self.map.unbind();
+        normal_coverage.unbind();
         Ok(())
     }
 
@@ -205,14 +218,25 @@ impl Environment for EnvironmentMap {
 impl EnvironmentMap {
     pub fn new(texture: impl AsRef<Path>) -> Result<Self> {
         let bg_draw = ScreenDraw::load("assets/shaders/env/equirectangular.bg.glsl")?;
-        let map = Texture::load_rgb32f(texture)?;
         let u_bg_view = bg_draw.uniform_block("View", 0).unwrap();
         let u_bg_sampler = bg_draw.uniform("env_map").unwrap();
+        let illum_draw = ScreenDraw::load("assets/shaders/env/equirectangular.illum.glsl")?;
+        let u_ill_view = illum_draw.uniform_block("View", 0).unwrap();
+        let u_ill_sampler = illum_draw.uniform("env_map").unwrap();
+        let u_ill_normal = illum_draw.uniform("normal_map").unwrap();
+        let map = Texture::load_rgb32f(texture)?;
+        map.wrap_s(TextureWrap::Repeat)?;
+        map.wrap_t(TextureWrap::Repeat)?;
+        map.generate_mipmaps()?;
         Ok(Self {
             bg_draw,
+            illum_draw,
             map,
             u_bg_view,
             u_bg_sampler,
+            u_ill_view,
+            u_ill_sampler,
+            u_ill_normal,
         })
     }
 }

@@ -185,9 +185,8 @@ impl GeometryBuffers {
         lights: &LightBuffer,
         mut env: Option<&mut dyn Environment>,
     ) -> Result<&Texture<[f32; 3]>> {
-        Framebuffer::enable_blending(Blend::One, Blend::One);
-        Framebuffer::clear_color([0., 0., 0., 1.]);
         Framebuffer::disable_blending();
+        Framebuffer::clear_color([0., 0., 0., 1.]);
         self.output_fbo.do_clear(ClearBuffer::COLOR);
         if let Some(env) = &mut env {
             env.process_background(&self.output_fbo, cam_uniform)?;
@@ -197,6 +196,10 @@ impl GeometryBuffers {
                 env.illuminate_scene(&self.output_fbo, cam_uniform, &self.normal_coverage)?;
             }
             return Ok(&self.out_color);
+        }
+
+        if let Some(env) = env {
+            env.illuminate_scene(&self.output_fbo, cam_uniform, &self.normal_coverage)?;
         }
 
         let unit_pos = self.pos.as_uniform(0)?;
@@ -212,10 +215,7 @@ impl GeometryBuffers {
         self.screen_pass
             .set_uniform(self.uniform_frame_rough_metal, unit_rough_metal)?;
 
-        if let Some(env) = env {
-            env.illuminate_scene(&self.output_fbo, cam_uniform, &self.normal_coverage)?;
-        }
-
+        Framebuffer::enable_blending(Blend::One, Blend::One);
         for light_ix in 0..lights.len() {
             self.screen_pass
                 .bind_block(self.uniform_block_light, &lights.slice(light_ix..=light_ix))?;
