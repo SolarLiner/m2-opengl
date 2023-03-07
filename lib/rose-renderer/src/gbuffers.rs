@@ -195,8 +195,7 @@ impl GeometryBuffers {
                 normal_coverage: &self.normal_coverage,
                 roughness_metal: &self.rough_metal,
             };
-            env.process_background(&self.output_fbo, cam_uniform, mat_info)?;
-            env.illuminate_scene(&self.output_fbo, cam_uniform, mat_info)?;
+            env.draw(&self.output_fbo, cam_uniform, mat_info)?;
         }
 
         if lights.is_empty() {

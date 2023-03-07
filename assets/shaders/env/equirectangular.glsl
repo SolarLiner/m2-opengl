@@ -52,11 +52,7 @@ vec3 background() {
     return texture(env_map, uv).rgb;
 }
 
-vec3 illuminate() {
-    vec4 nc = texture(frame_normal, v_uv);
-    if (nc.a <= 0.5) discard;
-
-    vec3 normal = nc.rgb;
+vec3 illuminate(vec3 normal) {
     vec3 albedo = texture(frame_albedo, v_uv).rgb;
     vec2 rough_metal = texture(frame_rough_metal, v_uv).rg;
 
@@ -66,7 +62,8 @@ vec3 illuminate() {
 }
 
 void main() {
-    vec3 color = is_illuminate ? illuminate() : background();
+    vec4 nc = texture(frame_normal, v_uv);
+    vec3 color = nc.a <= 0.5 ? background() : illuminate(nc.xyz);
     out_color = vec4(color, 1);
 }
 

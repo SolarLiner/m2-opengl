@@ -41,28 +41,32 @@ vec2 spherical_to_polar(vec3 sph) {
     return uv;
 }
 
-void main() {
-    float a = texture(normal_map, v_uv).a;
-    if (a <= 0.5 && is_illumination) {
-        discard;
-        //        out_color = vec4(vec3(0), 1);
-        //        return;
-    }
-
+vec3 get_ray_dir() {
     vec4 ray_clip = vec4(v_uv * 2 - 1, -1, 1);
     vec4 ray_eye = view.inv_proj * ray_clip;
     ray_eye.zw = vec2(-1, 0);
     vec3 ray_world = (view.inv_view * ray_eye).xyz;
-    ray_world = normalize(ray_world);
+    return normalize(ray_world);
+}
 
+vec3 gradient(float t) {
+    if (t > 0) return mix(horizon_color, zenith_color, t);
+    else return mix(ground_color + horizon_color * 0.5, vec3(0), -t);
+}
+
+void main() {
+    float a = texture(normal_map, v_uv).a;
+    vec3 ray_world = get_ray_dir();
     float lat_pc = ray_world.y / M_PI;
-    if (is_illumination) {
-        if (lat_pc > 0) out_color = mix(horizon_color, zenith_color, lat_pc);
-        else out_color = mix(horizon_color, ground_color, -lat_pc);
-    } else {
-        vec3 normal = texture(normal_map, v_uv).rgb;
-        ray_world = reflect(ray_world, normal);
-        if (lat_pc > 0) out_color = mix(horizon_color, zenith_color, lat_pc);
-        else out_color = mix(ground_color + horizon_color, vec3(0), -lat_pc);
+    out_color = gradient(lat_pc);
+
+    vec4 nc = texture(normal_map, v_uv);
+    if (nc.a <= 0.5) {
+        return;
     }
+
+    vec3 normal = nc.xyz;
+    vec3 refl_dir = reflect(ray_world, normal);
+    lat_pc = refl_dir.y / M_PI;
+    out_color = gradient(lat_pc);
 }

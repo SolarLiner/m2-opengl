@@ -98,6 +98,7 @@ impl RenderSystem {
     pub fn new(size: UVec2) -> Result<Self> {
         let mut renderer = Renderer::new(size)?;
         renderer.set_environment(EnvironmentMap::new("assets/textures/table_mountain_2_puresky_4k.exr")?);
+        // renderer.set_environment(SimpleSky::new(SimpleSkyParams::default())?);
         Ok(Self {
             clear_color: Vec3::ZERO,
             camera: Camera::default(),
