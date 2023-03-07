@@ -1,0 +1,3 @@
+color = "textures.cerberus_diffuse"
+normal = "textures.cerberus_normal"
+rough_metal = "textures.cerberus_rough_metal"
