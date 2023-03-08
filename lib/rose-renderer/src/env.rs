@@ -1,6 +1,6 @@
 use std::{any::Any, fmt, path::Path};
 
-use eyre::{Context, Result};
+use eyre::{Context, Report, Result};
 use glam::{vec3, Vec3};
 
 use rose_core::{camera::ViewUniformBuffer, screen_draw::ScreenDraw};
@@ -174,7 +174,12 @@ impl Environment for EnvironmentMap {
 }
 
 impl EnvironmentMap {
-    pub fn new(texture: impl AsRef<Path>) -> Result<Self> {
+    pub fn load(texture: impl AsRef<Path>) -> Result<Self> {
+        let map = Texture::load_rgb32f(texture)?;
+        Self::new(map)
+    }
+
+    fn new(map: Texture<[f32; 3]>) -> Result<EnvironmentMap, Report> {
         let draw = ScreenDraw::load("assets/shaders/env/equirectangular.glsl")?;
         let u_view = draw.uniform_block("View");
         let u_sampler = draw.uniform("env_map");
@@ -182,7 +187,6 @@ impl EnvironmentMap {
         let u_normal = draw.uniform("frame_normal");
         let u_rough_metal = draw.uniform("frame_rough_metal");
 
-        let map = Texture::load_rgb32f(texture)?;
         map.wrap_s(TextureWrap::Repeat)?;
         map.wrap_t(TextureWrap::Repeat)?;
         map.filter_min(SampleMode::Linear)?;

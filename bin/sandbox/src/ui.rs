@@ -1,6 +1,5 @@
-use std::{
-    cell::RefCell, collections::HashSet, marker::PhantomData,
-};
+use std::{cell::RefCell, collections::HashSet, marker::PhantomData};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use egui::{
@@ -17,6 +16,7 @@ use rose_ecs::CoreSystems;
 use rose_ecs::prelude::*;
 use rose_ecs::prelude::asset::DirLoadable;
 use rose_ecs::systems::{RenderSystem, UiSystem};
+use rose_renderer::env::{EnvironmentMap, SimpleSky, SimpleSkyParams};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Tabs {
@@ -24,18 +24,20 @@ pub enum Tabs {
     Inspector,
     Viewport,
     Assets,
+    Environment,
     Postprocessing,
     CameraDebug,
     RendererDebug,
 }
 
 impl Tabs {
-    pub const ALL: [Tabs; 7] = [
+    pub const ALL: [Tabs; 8] = [
         Self::SceneHierarchy,
         Self::Inspector,
         Self::Viewport,
         Self::Assets,
         Self::Postprocessing,
+        Self::Environment,
         Self::CameraDebug,
         Self::RendererDebug,
     ];
@@ -48,6 +50,7 @@ impl ToString for Tabs {
             Self::Inspector => "Inspector".to_string(),
             Self::Viewport => "Viewport".to_string(),
             Self::Assets => "Assets".to_string(),
+            Self::Environment => "Environment".to_string(),
             Self::Postprocessing => "Post-processing".to_string(),
             Self::CameraDebug => "Camera debug".to_string(),
             Self::RendererDebug => "Renderer debug".to_string(),
@@ -61,6 +64,7 @@ pub struct EditorUiSystem {
     core_system: UiSystem,
     tabs: Arc<Mutex<Tree<Tabs>>>,
     selected_entity: Option<Entity>,
+    envmap_path: Option<PathBuf>,
 }
 
 impl EditorUiSystem {
@@ -92,6 +96,7 @@ impl EditorUiSystem {
             core_system,
             tabs: Arc::new(Mutex::new(tabs)),
             selected_entity: None,
+            envmap_path: None,
         }
     }
 
@@ -290,12 +295,15 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                 }
                                 let size = ui.available_size();
                                 let (_, response) = ui.allocate_exact_size(size, Sense::click());
-                                if response.context_menu(|ui| {
-                                    if ui.small_button("Add empty").clicked() {
-                                        cmd.spawn(());
-                                        ui.close_menu();
-                                    }
-                                }).clicked() {
+                                if response
+                                    .context_menu(|ui| {
+                                        if ui.small_button("Add empty").clicked() {
+                                            cmd.spawn(());
+                                            ui.close_menu();
+                                        }
+                                    })
+                                    .clicked()
+                                {
                                     self.system.selected_entity.take();
                                 }
                             });
@@ -451,6 +459,58 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                 });
                             });
                     });
+                }
+            }
+            Tabs::Environment => {
+                ui.collapsing("Environment map", |ui| {
+                    let mut remove_path = false;
+                    if let Some(path) = self.system.envmap_path.as_mut() {
+                        ui.horizontal(|ui| {
+                            if ui.button("X").clicked() {
+                                self.renderer.renderer.set_environment(
+                                    SimpleSky::new(SimpleSkyParams::default()).unwrap(),
+                                );
+                                remove_path = true;
+                            }
+                            if ui.button("Change").clicked() {
+                                if let Some(new_path) = rfd::FileDialog::new()
+                                    .add_filter(
+                                        "Images",
+                                        &["jpg", "png", "bmp", "exr", "hdr", "tif", "tga"],
+                                    )
+                                    .pick_file()
+                                {
+                                    self.renderer
+                                        .renderer
+                                        .set_environment(EnvironmentMap::load(&new_path).unwrap());
+                                    path.clone_from(&new_path);
+                                }
+                            }
+                        })
+                            .response;
+                        ui.end_row();
+                    } else {
+                        if ui.button("Open").clicked() {
+                            if let Some(new_path) = rfd::FileDialog::new()
+                                .add_filter(
+                                    "Images",
+                                    &["jpg", "png", "bmp", "exr", "hdr", "tif", "tga"],
+                                )
+                                .pick_file()
+                            {
+                                self.renderer
+                                    .renderer
+                                    .set_environment(EnvironmentMap::load(&new_path).unwrap());
+                                self.system.envmap_path.replace(new_path);
+                            }
+                        }
+                    }
+                    if remove_path {
+                        self.system.envmap_path.take();
+                    }
+                });
+                if let Some(simple_sky) = self.renderer.renderer.environment_mut::<SimpleSky>() {
+                    ui.collapsing("Simple sky parameters", |ui| simple_sky.params.ui(ui));
                 }
             }
             Tabs::Postprocessing => {
