@@ -7,7 +7,8 @@ uniform sampler2D frame;
 uniform sampler2D bloom_tex;
 uniform float luminance_average = 0.5;
 uniform float bloom_strength = 1e-2;
-uniform float lens_flare_strength = 1e-3;
+uniform float lens_flare_strength = 4e-3;
+uniform float distortion_amt = 2;
 uniform float ghost_spacing = 0.8;
 uniform int ghost_count = 5;
 uniform float halo_radius = 0.94;
@@ -47,15 +48,26 @@ vec3 threshold(vec3 rgb, float t) {
     return max(rgb - t, vec3(0));
 }
 
+vec2 dist_offset(vec2 uv)
+{
+    vec2 p = 2 * uv - 1;
+    float theta  = atan(p.y, p.x);
+    float radius = length(p);
+    radius = pow(radius, distortion_amt);
+    p.x = radius * cos(theta);
+    p.y = radius * sin(theta);
+    return 0.5 * (p + 1.0);
+}
+
 vec3 lens_flare() {
-    vec2 uv = 1 - v_uv;
+    vec2 uv = dist_offset(1 - v_uv);
     vec3 ghosts = vec3(0);
     vec2 ghost_vec = (0.5 - uv) * ghost_spacing;
     for (int i = 0; i < ghost_count;  ++i){
         vec2 suv = (uv + ghost_vec * vec2(i));
         float d = distance(suv, vec2(0.5));
         float weight = 1 - smoothstep(0, 0.5, d);
-        vec3 s = threshold(texture(bloom_tex, suv).rgb, 5);
+        vec3 s = threshold(texture(bloom_tex, suv).rgb, 20);
         vec3 color = vec3(random(vec2(i, 0)), random(vec2(i, 1)), random(vec2(i, 3)));
         color = mix(vec3(1), color, 0.5);
         ghosts += s * weight * color;

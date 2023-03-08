@@ -54,7 +54,7 @@ impl Postprocess {
             uniform_bloom_tex,
             uniform_bloom_strength,
             texture,
-            luminance_bias: 1.,
+            luminance_bias: 1.5f32.exp2(),
             bloom_radius: 1e-3,
         })
     }

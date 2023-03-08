@@ -135,10 +135,10 @@ impl Renderer {
             material: Material::create(Some(&camera_uniform))?,
             post_process,
             post_process_iface: PostprocessInterface {
-                exposure: 1.,
+                exposure: 1.5f32.exp2(),
                 bloom: BloomInterface {
                     size: 1e-3,
-                    strength: 8e-2,
+                    strength: 4e-2,
                 },
             },
             environment: None,
