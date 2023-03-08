@@ -273,11 +273,15 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                 let name_label = ui.label("Name:").id;
                                                 ui.text_edit_singleline(&mut *name)
                                                     .labelled_by(name_label);
-                                                ui.separator();
-                                                if ui.small_button("Remove").clicked() {
-                                                    cmd.despawn(entity.entity());
-                                                    ui.close_menu();
+                                            } else {
+                                                if ui.small_button("Add name").clicked() {
+                                                    cmd.insert_one(entity.entity(), String::new());
                                                 }
+                                            }
+                                            ui.separator();
+                                            if ui.small_button("Remove").clicked() {
+                                                cmd.despawn(entity.entity());
+                                                ui.close_menu();
                                             }
                                         });
                                     if label_resp.clicked() {
