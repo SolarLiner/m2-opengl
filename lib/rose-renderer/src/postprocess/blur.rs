@@ -35,8 +35,9 @@ impl Blur {
             let mip = Texture::new(depth, depth, depth, Dimension::D2);
             mip.filter_min(SampleMode::Linear)?;
             mip.filter_mag(SampleMode::Linear)?;
-            mip.wrap_s(TextureWrap::ClampEdge)?;
-            mip.wrap_t(TextureWrap::ClampEdge)?;
+            mip.wrap_r(TextureWrap::MirroredRepeat)?;
+            mip.wrap_s(TextureWrap::MirroredRepeat)?;
+            mip.wrap_t(TextureWrap::MirroredRepeat)?;
             mip.reserve_memory()?;
             vec.push(mip);
             Ok::<_, eyre::Report>(vec)
