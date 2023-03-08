@@ -327,7 +327,8 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                             };
                             ui.with_layout(Layout::top_down_justified(Align::Min), |ui| {
                                 ui.menu_button("+", |ui| {
-                                    self.system.core_system.components_ui(ui, eref, cmd)
+                                    // self.system.core_system.components_ui(ui, eref, cmd)
+                                    self.system.core_system.spawn_component_popup(ui, eref, cmd);
                                 });
                             });
                             Grid::new("selected-entity-properties")
