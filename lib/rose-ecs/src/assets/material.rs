@@ -2,10 +2,10 @@ use std::ops;
 use std::sync::Arc;
 
 use assets_manager::{
-    loader::{ImageLoader, LoadFrom, TomlLoader},
-    AnyCache, Asset, BoxedError, Compound, SharedString,
+    AnyCache,
+    Asset, BoxedError, Compound, loader::{ImageLoader, LoadFrom, TomlLoader}, SharedString,
 };
-use color_eyre::Help;
+use eyre::Context;
 use eyre::Result;
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
@@ -94,7 +94,7 @@ impl Compound for Material {
                 TextureSlotDesc::Texture(id) => TextureSlot::Texture(
                     cache
                         .load(&id)
-                        .with_note(|| format!("Loading {:?}", id))?
+                        .with_context(|| format!("Loading {:?}", id))?
                         .cloned(),
                 ),
             })

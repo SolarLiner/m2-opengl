@@ -6,8 +6,8 @@ use obj::raw::material::MtlColor;
 
 use rose_renderer::material::Vertex;
 
-use crate::assets::material::TextureSlotDesc;
-use crate::assets::mesh::MeshAsset;
+use super::super::material::TextureSlotDesc;
+use super::super::mesh::MeshAsset;
 
 pub struct WavefrontLoader {}
 

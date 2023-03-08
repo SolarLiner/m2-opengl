@@ -27,18 +27,14 @@ use rose_renderer::env::EnvironmentMap;
 use violette::texture::Texture;
 
 use crate::{
-    assets::{
-        material::{Material, TextureSlot},
-        mesh::MeshAsset,
-    },
-    components::{Active, Inactive, Light as LightComponent, LightKind},
+    assets::*,
+    components::{*, Light as LightComponent},
 };
-use crate::components::CameraParams;
 
 pub struct RenderSystem {
     pub clear_color: Vec3,
     pub camera: Camera,
-    pub(crate) renderer: ThreadGuard<Renderer>,
+    pub renderer: ThreadGuard<Renderer>,
     meshes_map: DashMap<SharedString, ThreadGuard<Rc<Mesh>>>,
     materials_map: DashMap<SharedString, ThreadGuard<Rc<MaterialInstance>>>,
     lights_hash: u64,
@@ -58,7 +54,7 @@ impl RenderSystem {
 }
 
 impl RenderSystem {
-    pub(crate) fn default_material_handle(
+    pub fn default_material_handle(
         &self,
         cache: AnyCache<'static>,
     ) -> Handle<'static, Material> {

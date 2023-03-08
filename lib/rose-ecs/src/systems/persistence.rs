@@ -14,6 +14,8 @@ use serde::{
 };
 use serde::ser::SerializeSeq;
 
+use rose_core::utils::thread_guard::ThreadGuard;
+
 pub trait SerializableComponent:
 Component + serde::Serialize + serde::Deserialize<'static>
 {}
@@ -89,9 +91,9 @@ impl DynAsset {
 }
 
 pub struct PersistenceSystem {
-    asset_cache: Option<AnyCache<'static>>,
-    registry: HashMap<TypeId, DynPersistence>,
-    asset_types: HashMap<TypeId, DynAsset>,
+    asset_cache: Option<ThreadGuard<AnyCache<'static>>>,
+    registry: HashMap<TypeId, ThreadGuard<DynPersistence>>,
+    asset_types: HashMap<TypeId, ThreadGuard<DynAsset>>,
     type_map: HashMap<&'static str, TypeId>,
 }
 
@@ -109,7 +111,7 @@ impl PersistenceSystem {
         let type_id = TypeId::of::<C>();
         let dyn_persistence = DynPersistence::new::<C>();
         self.type_map.insert(dyn_persistence.name, type_id);
-        self.registry.insert(type_id, dyn_persistence);
+        self.registry.insert(type_id, ThreadGuard::new(dyn_persistence));
         self
     }
 
@@ -117,7 +119,7 @@ impl PersistenceSystem {
         let type_id = TypeId::of::<A>();
         let dyn_asset = DynAsset::new::<A>();
         self.type_map.insert(dyn_asset.name, type_id);
-        self.asset_types.insert(type_id, dyn_asset);
+        self.asset_types.insert(type_id, ThreadGuard::new(dyn_asset));
         self
     }
 
@@ -129,7 +131,7 @@ impl PersistenceSystem {
         where
             D::Error: 'static + Send + Sync,
     {
-        self.asset_cache.replace(cache);
+        self.asset_cache.replace(ThreadGuard::new(cache));
         Ok(row::deserialize(self, de)?)
     }
 
@@ -142,7 +144,7 @@ impl PersistenceSystem {
         where
             S::Error: 'static + Send + Sync,
     {
-        self.asset_cache.replace(cache);
+        self.asset_cache.replace(ThreadGuard::new(cache));
         row::serialize(world, self, ser)?;
         Ok(())
     }
@@ -163,7 +165,7 @@ impl DeserializeContext for PersistenceSystem {
                 let value = map.next_value::<serde_json::Value>()?;
                 (pers.deserialize)(entity, value).map_err(de::Error::custom)?;
             } else if let Some(asset) = self.asset_types.get(type_id) {
-                (asset.load)(self.asset_cache.unwrap(), entity, &map.next_value::<String>()?)
+                (asset.load)(*self.asset_cache.unwrap(), entity, &map.next_value::<String>()?)
                     .map_err(de::Error::custom)?;
             }
         }

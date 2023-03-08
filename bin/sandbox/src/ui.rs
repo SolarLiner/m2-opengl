@@ -1,29 +1,22 @@
 use std::{
-    any::TypeId, cell::RefCell, collections::HashMap, collections::HashSet, f32::consts::PI,
-    marker::PhantomData,
+    cell::RefCell, collections::HashSet, marker::PhantomData,
 };
+use std::sync::{Arc, Mutex};
 
-use assets_manager::{
-    AnyCache,
-    Asset,
-    asset::DirLoadable, Handle, SharedString, source::{DirEntry, Source},
-};
 use egui::{
-    Align, Color32, Context, DragValue, Grid, Layout, PointerButton, RichText, Sense, TextEdit, Ui,
+    Align, Color32, Context, DragValue, Grid, Layout, PointerButton, Sense, TextEdit, Ui,
     WidgetText,
 };
 use egui_dock::{NodeIndex, TabViewer, Tree};
 use egui_gizmo::{Gizmo, GizmoMode};
-use glam::{EulerRot, Mat4, Quat, Vec2, vec3, Vec3};
-use hecs::{CommandBuffer, Component, Entity, EntityRef};
+use glam::{Mat4, Vec2};
 
 use rose_core::transform::Transform;
-
-use crate::{
-    assets::{material::Material, mesh::MeshAsset, scene::NamedObject},
-    scene::Scene,
-};
-use crate::systems::render::RenderSystem;
+use rose_ecs::assets::{Material, MeshAsset, NamedObject, ObjectBundle};
+use rose_ecs::CoreSystems;
+use rose_ecs::prelude::*;
+use rose_ecs::prelude::asset::DirLoadable;
+use rose_ecs::systems::{RenderSystem, UiSystem};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Tabs {
@@ -62,73 +55,75 @@ impl ToString for Tabs {
     }
 }
 
-pub struct UiSystem {
+pub struct EditorUiSystem {
     pub last_state: UiState,
     pub gizmo_mode: GizmoMode,
-    tabs: Tree<Tabs>,
+    core_system: UiSystem,
+    tabs: Arc<Mutex<Tree<Tabs>>>,
     selected_entity: Option<Entity>,
-    component_ui_registry: HashMap<TypeId, DynComponentUi>,
-    spawn_component: Vec<DynInsertComponent>,
 }
 
-impl UiSystem {
+impl EditorUiSystem {
     pub fn new() -> Self {
         let mut tabs = Tree::new(vec![Tabs::Viewport]);
         let [main, left] = tabs.split_left(NodeIndex::root(), 0.2, vec![Tabs::SceneHierarchy]);
         tabs.split_right(main, 0.8, vec![Tabs::Assets]);
         tabs.split_below(left, 0.5, vec![Tabs::Inspector]);
+        let mut core_system = UiSystem::new();
+        core_system
+            .register_component::<Transform>()
+            .register_component::<Active>()
+            .register_component::<Inactive>()
+            .register_component::<CameraParams>()
+            .register_component::<PanOrbitCamera>()
+            .register_component::<Handle<'static, MeshAsset>>()
+            .register_component::<Handle<'static, Material>>()
+            .register_component::<Light>()
+            .register_component::<SceneId>()
+            .register_spawn::<Transform>()
+            .register_spawn::<Active>()
+            .register_spawn::<Inactive>()
+            .register_spawn::<CameraParams>()
+            .register_spawn::<PanOrbitCamera>()
+            .register_spawn::<Light>();
         Self {
             last_state: UiState::default(),
             gizmo_mode: GizmoMode::Translate,
-            tabs,
+            core_system,
+            tabs: Arc::new(Mutex::new(tabs)),
             selected_entity: None,
-            component_ui_registry: HashMap::new(),
-            spawn_component: vec![],
         }
     }
 
-    pub fn register_component_ui<C: ComponentUi>(mut self) -> Self {
-        self.component_ui_registry
-            .insert(TypeId::of::<C>(), &component_ui::<C>);
-        self
-    }
-
-    pub fn register_spawn_component<C: NamedComponent + Default>(mut self) -> Self {
-        self.spawn_component.push(&insert_component::<C>);
-        self
-    }
-
-    pub fn on_ui(&mut self, ctx: &Context, scene: Option<&Scene>, renderer: &mut RenderSystem) {
+    pub fn on_ui(&mut self, ctx: &Context, scene: Option<&Scene>, core: &mut CoreSystems) {
         if scene.is_none() {
             self.selected_entity.take();
         }
-        let mut state = UiStateLocal::new(
-            scene,
-            self.gizmo_mode,
-            &mut self.selected_entity,
-            &self.component_ui_registry,
-            &self.spawn_component,
-            renderer,
-        );
-        egui::CentralPanel::default()
-            .frame(egui::Frame::none())
-            .show(ctx, |ui| {
-                egui_dock::DockArea::new(&mut self.tabs)
-                    .style({
-                        let mut style = egui_dock::Style::from_egui(ctx.style().as_ref());
-                        style.show_add_popup = true;
-                        style.show_add_buttons = true;
-                        style.show_context_menu = true;
-                        style.border_color = Color32::TRANSPARENT;
-                        style
-                    })
-                    .show_inside(ui, &mut state);
-            });
-        for (node, tab) in state.new_nodes.drain(..) {
-            self.tabs.set_focused_node(node);
-            self.tabs.push_to_focused_leaf(tab);
+        let (state, new_nodes) = {
+            let tabs = self.tabs.clone();
+            let mut state = UiStateLocal::new(scene, self, self.gizmo_mode, &mut core.render);
+            egui::CentralPanel::default()
+                .frame(egui::Frame::none())
+                .show(ctx, |ui| {
+                    egui_dock::DockArea::new(&mut tabs.lock().unwrap())
+                        .style({
+                            let mut style = egui_dock::Style::from_egui(ctx.style().as_ref());
+                            style.show_add_popup = true;
+                            style.show_add_buttons = true;
+                            style.show_context_menu = true;
+                            style.border_color = Color32::TRANSPARENT;
+                            style
+                        })
+                        .show_inside(ui, &mut state);
+                });
+            (state.state, state.new_nodes)
+        };
+        for (node, tab) in new_nodes {
+            let mut tabs = self.tabs.lock().unwrap();
+            tabs.set_focused_node(node);
+            tabs.push_to_focused_leaf(tab);
         }
-        self.last_state = state.state;
+        self.last_state = state;
     }
 }
 
@@ -151,32 +146,26 @@ impl Default for UiState {
 
 struct UiStateLocal<'a> {
     state: UiState,
+    system: &'a mut EditorUiSystem,
     new_nodes: Vec<(NodeIndex, Tabs)>,
     scene: Option<&'a Scene>,
     gizmo_mode: GizmoMode,
-    selected_entity: &'a mut Option<Entity>,
-    component_ui_registry: &'a HashMap<TypeId, DynComponentUi>,
-    spawn_component: &'a [DynInsertComponent],
     renderer: &'a mut RenderSystem,
 }
 
 impl<'a> UiStateLocal<'a> {
     fn new(
         scene: Option<&'a Scene>,
+        system: &'a mut EditorUiSystem,
         gizmo_mode: GizmoMode,
-        selected_entity: &'a mut Option<Entity>,
-        component_ui_registry: &'a HashMap<TypeId, DynComponentUi>,
-        spawn_component: &'a [DynInsertComponent],
         renderer: &'a mut RenderSystem,
     ) -> Self {
         Self {
             state: UiState::default(),
+            system,
             new_nodes: vec![],
             gizmo_mode,
             scene,
-            selected_entity,
-            component_ui_registry,
-            spawn_component,
             renderer,
         }
     }
@@ -197,7 +186,9 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                             let size = ui.available_size_before_wrap();
                             let (rect, response) =
                                 ui.allocate_exact_size(size, Sense::click_and_drag());
-                            let gizmo_interaction = if let Some(entity) = *self.selected_entity {
+                            let gizmo_interaction = if let Some(entity) =
+                                self.system.selected_entity
+                            {
                                 scene.with_world(|world, _| {
                                     let eref = match world.entity(entity) {
                                         Ok(eref) => eref,
@@ -274,7 +265,8 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                             })
                                         })
                                         .unwrap_or("<Unnamed>".to_string());
-                                    let selected = *self.selected_entity == Some(entity.entity());
+                                    let selected =
+                                        self.system.selected_entity == Some(entity.entity());
                                     let label_resp =
                                         ui.selectable_label(selected, name).context_menu(|ui| {
                                             if let Some(mut name) = entity.get::<&mut String>() {
@@ -289,14 +281,14 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                             }
                                         });
                                     if label_resp.clicked() {
-                                        self.selected_entity.replace(entity.entity());
+                                        self.system.selected_entity.replace(entity.entity());
                                     }
                                 }
                             });
                             let size = ui.available_size();
                             let (_, response) = ui.allocate_exact_size(size, Sense::click());
                             if response.clicked() {
-                                self.selected_entity.take();
+                                self.system.selected_entity.take();
                             }
                         });
                     } else {
@@ -307,7 +299,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
             Tabs::Inspector => {
                 if let Some(scene) = self.scene {
                     scene.with_world(|world, cmd| {
-                        if let Some(entity) = *self.selected_entity {
+                        if let Some(entity) = self.system.selected_entity {
                             // let eref = world.entity(entity).unwrap();
                             let eref = match world.entity(entity) {
                                 Ok(eref) => eref,
@@ -318,9 +310,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                             };
                             ui.with_layout(Layout::top_down_justified(Align::Min), |ui| {
                                 ui.menu_button("+", |ui| {
-                                    for spawn_cmp in self.spawn_component {
-                                        spawn_cmp(ui, eref, cmd);
-                                    }
+                                    self.system.core_system.components_ui(ui, eref, cmd)
                                 });
                             });
                             Grid::new("selected-entity-properties")
@@ -344,12 +334,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                     ui.end_row();
                                 });
 
-                            for type_id in eref.component_types() {
-                                if let Some(component_ui) = self.component_ui_registry.get(&type_id)
-                                {
-                                    component_ui(ui, eref, cmd);
-                                }
-                            }
+                            self.system.core_system.components_ui(ui, eref, cmd);
                         }
                     });
                 } else {
@@ -400,7 +385,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                             let id = &id[2..];
                                             ui.monospace(id).context_menu(|ui| {
                                                 ui.set_max_width(250.);
-                                                if let Some(entity) = *self.selected_entity {
+                                                if let Some(entity) = self.system.selected_entity {
                                                     if ui.small_button("Add mesh component").clicked() {
                                                         match cache.load::<MeshAsset>(id) {
                                                             Ok(mat) => cmd.insert_one(entity, mat),
@@ -414,6 +399,16 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                         }
                                                     }
                                                     ui.separator();
+                                                }
+                                                if ui.small_button("New entity with this object").clicked() {
+                                                    match ObjectBundle::from_asset_cache(cache, Transform::default(), id) {
+                                                        Ok(bundle) => {
+                                                            cmd.spawn(bundle);
+                                                        }
+                                                        Err(err) => {
+                                                            tracing::error!("Could not load {:?} as an object: {}", id, err);
+                                                        }
+                                                    }
                                                 }
                                                 if ui.small_button("New entity with this mesh").clicked() {
                                                     match cache.load::<MeshAsset>(id) {
@@ -497,7 +492,7 @@ impl DirLoadable for AnyDirLoader {
         let source = cache.source();
         let mut ids = vec![];
         source.read_dir(id.as_str(), &mut |entry| {
-            if let DirEntry::File(id, _) = entry {
+            if let source::DirEntry::File(id, _) = entry {
                 ids.push(id.into());
             }
         })?;
@@ -512,7 +507,7 @@ impl<A: Asset> DirLoadable for SingleAssetDirLoader<A> {
         let source = cache.source();
         let mut ids = vec![];
         source.read_dir(id.as_str(), &mut |entry| {
-            if let DirEntry::File(id, ext) = entry {
+            if let source::DirEntry::File(id, ext) = entry {
                 if A::EXTENSIONS.contains(&ext) {
                     ids.push(id.into());
                 }
@@ -521,118 +516,3 @@ impl<A: Asset> DirLoadable for SingleAssetDirLoader<A> {
         Ok(ids)
     }
 }
-
-pub trait NamedComponent: Component {
-    const NAME: &'static str;
-}
-
-pub trait ComponentUi: NamedComponent + Component {
-    fn ui(&mut self, ui: &mut Ui);
-}
-
-impl NamedComponent for Handle<'static, MeshAsset> {
-    const NAME: &'static str = "Mesh";
-}
-
-impl NamedComponent for Handle<'static, Material> {
-    const NAME: &'static str = "Material";
-}
-
-impl<A> ComponentUi for Handle<'static, A>
-    where
-        Self: NamedComponent,
-{
-    fn ui(&mut self, ui: &mut Ui) {
-        Grid::new("material-handle").num_columns(2).show(ui, |ui| {
-            let handle_label = ui.label("Handle").id;
-            ui.label(RichText::new(self.id().as_str()).strong().monospace())
-                .labelled_by(handle_label);
-        });
-    }
-}
-
-impl NamedComponent for Transform {
-    const NAME: &'static str = "Transform";
-}
-
-impl ComponentUi for Transform {
-    fn ui(&mut self, ui: &mut Ui) {
-        let ui_pos3 = |ui: &mut Ui, v: &mut Vec3| {
-            let pos_label = ui.label("Position").id;
-            ui.horizontal(|ui| {
-                ui.add(DragValue::new(&mut v.x).prefix("X: ").suffix(" m"));
-                ui.add(DragValue::new(&mut v.y).prefix("Y: ").suffix(" m"));
-                ui.add(DragValue::new(&mut v.z).prefix("Z: ").suffix(" m"));
-            })
-                .response
-                .labelled_by(pos_label);
-        };
-        let ui_rot3 = |ui: &mut Ui, v: &mut Quat| {
-            let (a, b, c) = v.to_euler(EulerRot::ZYX);
-            let mut rot_v3 = vec3(c, b, a) * 180. / PI;
-            let pos_label = ui.label("Rotation").id;
-            ui.horizontal(|ui| {
-                ui.add(DragValue::new(&mut rot_v3.x).prefix("X: ").suffix(" °"));
-                ui.add(DragValue::new(&mut rot_v3.y).prefix("Y: ").suffix(" °"));
-                ui.add(DragValue::new(&mut rot_v3.z).prefix("Z: ").suffix(" °"));
-            })
-                .response
-                .labelled_by(pos_label);
-            let rot_v3 = rot_v3 * PI / 180.;
-            let [b, c, a] = rot_v3.to_array();
-            *v = Quat::from_euler(EulerRot::ZYX, a, b, c);
-        };
-        let ui_scale3 = |ui: &mut Ui, v: &mut Vec3| {
-            let pos_label = ui.label("Scale").id;
-            ui.horizontal(|ui| {
-                *v *= 100.;
-                ui.add(DragValue::new(&mut v.x).prefix("X: ").suffix(" %"));
-                ui.add(DragValue::new(&mut v.y).prefix("Y: ").suffix(" %"));
-                ui.add(DragValue::new(&mut v.z).prefix("Z: ").suffix(" %"));
-                *v /= 100.;
-            })
-                .response
-                .labelled_by(pos_label);
-        };
-
-        Grid::new("selected-entity-transform")
-            .num_columns(2)
-            .show(ui, |ui| {
-                ui_pos3(ui, &mut self.position);
-                ui.end_row();
-
-                ui_rot3(ui, &mut self.rotation);
-                ui.end_row();
-
-                ui_scale3(ui, &mut self.scale);
-                // ui.end_row();
-            });
-    }
-}
-
-fn component_ui<T: ComponentUi>(ui: &mut Ui, entity: EntityRef, cmd: &mut CommandBuffer) {
-    if let Some(mut component) = entity.get::<&mut T>() {
-        ui.collapsing(T::NAME, |ui| component.ui(ui))
-            .header_response
-            .context_menu(|ui| {
-                if ui.small_button("Remove").clicked() {
-                    cmd.remove_one::<T>(entity.entity());
-                }
-            });
-    }
-}
-
-type DynComponentUi = &'static (dyn Send + Sync + Fn(&mut Ui, EntityRef<'_>, &mut CommandBuffer));
-
-fn insert_component<C: NamedComponent + Default>(
-    ui: &mut Ui,
-    entity: EntityRef,
-    cmd: &mut CommandBuffer,
-) {
-    if ui.small_button(C::NAME).clicked() {
-        cmd.insert_one(entity.entity(), C::default());
-    }
-}
-
-type DynInsertComponent =
-&'static (dyn Fn(&mut Ui, EntityRef<'_>, &mut CommandBuffer) + Send + Sync);

@@ -1,0 +1,43 @@
+4294967296:
+  rose_core::transform::Transform:
+    position:
+      - -0.3811390697956085
+      - 0.12267330288887024
+      - 8.344650268554688e-7
+    rotation:
+      - 0.0
+      - -0.6794283986091614
+      - 0.0
+      - 0.733741819858551
+    scale:
+      - 1.0
+      - 1.0
+      - 1.0
+  rose_ecs::components::Active: null
+  alloc::string::String: Cerberus
+  rose_ecs::assets::mesh::MeshAsset: models.cerberus
+  rose_ecs::assets::material::Material: materials.cerberus
+4294967297:
+  rose_core::transform::Transform:
+    position:
+      - 0.0
+      - 0.0
+      - 0.0
+    rotation:
+      - 0.0
+      - 0.18660640716552734
+      - 0.0
+      - 0.9824347496032715
+    scale:
+      - 0.9999918341636658
+      - 1.0
+      - 0.9999918341636658
+  rose_ecs::components::Light:
+    color:
+      - 1.0
+      - 0.8034012317657471
+      - 0.5952380895614624
+    kind: Directional
+    power: 20.0
+  rose_ecs::components::Active: null
+  alloc::string::String: Sun

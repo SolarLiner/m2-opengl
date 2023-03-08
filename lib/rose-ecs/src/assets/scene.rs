@@ -1,21 +1,28 @@
 use std::ops;
 
-use assets_manager::{AnyCache, Asset, BoxedError, Compound, SharedString};
-use assets_manager::loader::TomlLoader;
-use color_eyre::Help;
+use assets_manager::{
+    AnyCache,
+    Asset,
+    BoxedError,
+    Compound,
+    loader::TomlLoader,
+    SharedString,
+};
 use serde::{Deserialize, Serialize};
 
 use rose_core::transform::{Transformed as TransformedCore, TransformExt};
 
-use crate::assets::object::{ObjectDesc, TransformDesc};
-use crate::components::{CameraParams, Light};
+use crate::{
+    assets::object::{ObjectDesc, TransformDesc},
+    components::{CameraParams, Light},
+};
 
 #[derive(Debug, Copy, Clone, Default, Deserialize, Serialize)]
 pub struct Transformed<T> {
     #[serde(default)]
-    pub(crate) transform: TransformDesc,
+    pub transform: TransformDesc,
     #[serde(flatten)]
-    pub(crate) value: T,
+    pub value: T,
 }
 
 impl<T> ops::Deref for Transformed<T> {
@@ -43,7 +50,7 @@ impl<T> ops::Deref for Named<T> {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NamedObject {
-    pub(crate) object: SharedString,
+    pub object: SharedString,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -152,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_load_scene_desc_file() {
-        let input = include_str!("./fixtures/scene_example.toml");
+        let input = include_str!("fixtures/scene_example.toml");
         let desc: SceneDesc = toml::de::from_str(input).unwrap();
         println!("{:#?}", desc);
     }

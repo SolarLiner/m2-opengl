@@ -1,59 +1,32 @@
 use std::path::Path;
 
-use assets_manager::Handle;
 use egui_gizmo::GizmoMode;
 use eyre::Result;
 use glam::{Vec2, Vec3};
-use hecs::EntityBuilder;
 use rfd::FileDialog;
 
 use rose_core::transform::Transform;
-use rose_core::utils::thread_guard::ThreadGuard;
+use rose_ecs::assets::ObjectBundle;
+use rose_ecs::CoreSystems;
+use rose_ecs::prelude::*;
+use rose_ecs::systems::PanOrbitSystem;
 use rose_platform::{
     Application, events::WindowEvent, LogicalSize, PhysicalSize, RenderContext, UiContext,
     WindowBuilder,
 };
 use violette::framebuffer::{ClearBuffer, Framebuffer};
 
-use crate::{
-    assets::{
-        material::Material,
-        mesh::MeshAsset,
-        object::ObjectBundle,
-    },
-    components::{
-        Active,
-        CameraParams,
-        Inactive,
-        Light,
-        LightBundle,
-        PanOrbitCamera,
-        SceneId,
-    },
-    scene::Scene,
-    systems::{
-        camera::PanOrbitSystem,
-        input::InputSystem,
-        persistence::PersistenceSystem,
-        render::RenderSystem,
-        ui::UiSystem,
-    },
-};
+use crate::ui::EditorUiSystem;
 
-mod assets;
-pub mod components;
-mod scene;
-mod systems;
+pub mod ui;
 
 struct Sandbox {
+    core_systems: CoreSystems,
+    editor_cam_controller: PanOrbitCamera,
+    pan_orbit_system: PanOrbitSystem,
+    ui_system: EditorUiSystem,
     editor_scene: Option<Scene>,
     active_scene: Option<Scene>,
-    editor_cam_controller: PanOrbitCamera,
-    input_system: InputSystem,
-    render_system: RenderSystem,
-    pan_orbit_system: PanOrbitSystem,
-    ui_system: UiSystem,
-    persistence_system: ThreadGuard<PersistenceSystem>,
 }
 
 impl Sandbox {
@@ -96,7 +69,7 @@ impl Sandbox {
     fn save_scene_as(&mut self, path: impl AsRef<Path>) -> Result<()> {
         if let Some(scene) = &mut self.editor_scene {
             scene.set_path(path);
-            scene.save(&mut self.persistence_system)?;
+            self.core_systems.save_scene(scene)?;
         }
         Ok(())
     }
@@ -106,7 +79,7 @@ impl Sandbox {
     }
 
     fn do_open_scene(&mut self, path: impl AsRef<Path>) -> Result<()> {
-        let scene = Scene::load(&mut self.persistence_system, path)?;
+        let scene = self.core_systems.load_scene(path)?;
         self.editor_scene.replace(scene);
         self.active_scene.take();
         Ok(())
@@ -115,7 +88,7 @@ impl Sandbox {
     fn start_active_scene(&mut self) {
         self.stop_active_scene();
         if let Some(scene) = &self.editor_scene {
-            match scene.reload(&mut self.persistence_system) {
+            match scene.reload(&mut self.core_systems.persistence) {
                 Ok(scene) => {
                     self.active_scene.replace(scene);
                 }
@@ -135,85 +108,49 @@ impl Application for Sandbox {
     fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
         let logical_size = size.to_logical(scale_factor);
         let size = Vec2::from_array(size.into()).as_uvec2();
-        let mut render_system = RenderSystem::new(size)?;
-        render_system.clear_color = Vec3::splat(0.1);
+        let mut core_systems = CoreSystems::new(size)?;
+        let editor_scene = std::env::args().nth(1).and_then(|file| {
+            match Scene::load(&mut core_systems.persistence, file) {
+                Ok(scene) => Some(scene),
+                Err(err) => {
+                    tracing::error!("Cannot load scene: {}", err);
+                    None
+                }
+            }
+        });
 
-        let mut persistence = PersistenceSystem::new();
-        persistence
-            .register_component::<String>()
-            .register_component::<Active>()
-            .register_component::<Inactive>()
-            .register_component::<Transform>()
-            .register_component::<CameraParams>()
-            .register_component::<PanOrbitCamera>()
-            .register_component::<Light>()
-            .register_asset::<MeshAsset>()
-            .register_asset::<Material>();
-
-        let editor_scene =
-            std::env::args().nth(1)
-                .and_then(|file| match Scene::load(&mut persistence, file) {
-                    Ok(scene) => Some(scene),
-                    Err(err) => {
-                        tracing::error!("Cannot load scene: {}", err);
-                        None
-                    }
-                });
-
-        let ui_system = UiSystem::new()
-            .register_component_ui::<Transform>()
-            .register_component_ui::<Active>()
-            .register_component_ui::<Inactive>()
-            .register_component_ui::<CameraParams>()
-            .register_component_ui::<PanOrbitCamera>()
-            .register_component_ui::<Handle<'static, MeshAsset>>()
-            .register_component_ui::<Handle<'static, Material>>()
-            .register_component_ui::<Light>()
-            .register_component_ui::<SceneId>()
-            .register_spawn_component::<Transform>()
-            .register_spawn_component::<Active>()
-            .register_spawn_component::<Inactive>()
-            .register_spawn_component::<CameraParams>()
-            .register_spawn_component::<PanOrbitCamera>()
-            .register_spawn_component::<Light>();
+        let ui_system = EditorUiSystem::new();
 
         Ok(Self {
             editor_scene,
             active_scene: None,
             editor_cam_controller: PanOrbitCamera::default(),
-            input_system: InputSystem::default(),
-            render_system,
+            core_systems: core_systems,
             pan_orbit_system: PanOrbitSystem::new(logical_size),
             ui_system,
-            persistence_system: ThreadGuard::new(persistence),
         })
     }
 
     fn resize(&mut self, size: PhysicalSize<u32>, scale_factor: f64) -> Result<()> {
-        self.render_system.resize(size)?;
+        self.core_systems.resize(size)?;
         self.pan_orbit_system
             .set_window_size(size.to_logical(scale_factor));
         Ok(())
     }
 
     fn interact(&mut self, event: WindowEvent) -> Result<()> {
-        self.input_system.on_event(event);
+        self.core_systems.on_event(event)?;
         Ok(())
     }
 
     fn render(&mut self, ctx: RenderContext) -> Result<()> {
-        self.input_system.on_frame();
+        self.core_systems.begin_frame();
         if let Some(scene) = &mut self.active_scene {
             scene.on_frame();
             scene.with_world_mut(|world| {
                 self.pan_orbit_system
-                    .on_frame(&self.input_system.input, world)
+                    .on_frame(self.core_systems.input(), world)
             });
-            scene.with_world(|world, _| {
-                self.render_system.update_from_active_camera(world);
-                self.render_system.on_frame(ctx.dt, world)
-            })?;
-            scene.flush_commands();
         } else if let Some(scene) = &mut self.editor_scene {
             scene.on_frame();
             let win_size = ctx
@@ -226,14 +163,16 @@ impl Application for Sandbox {
                 self.ui_system.last_state.mouse_scroll * ctx.dt.as_secs_f32() * 20.,
                 self.ui_system.last_state.mouse_buttons,
                 &mut self.editor_cam_controller,
-                &mut self.render_system.camera.transform,
+                &mut self.core_systems.viewport_camera_mut().transform,
             );
-            scene.with_world(|world, _| self.render_system.on_frame(ctx.dt, world))?;
-            scene.flush_commands();
         } else {
             Framebuffer::clear_color(Vec3::splat(0.1).extend(1.).to_array());
             Framebuffer::backbuffer().do_clear(ClearBuffer::COLOR);
         }
+        self.core_systems.end_frame(
+            self.active_scene.as_mut().or(self.editor_scene.as_mut()),
+            ctx.dt,
+        )?;
         Ok(())
     }
 
@@ -279,10 +218,13 @@ impl Application for Sandbox {
                         ui.menu_button("Templates", |ui| {
                             if ui.small_button("Mesh").clicked() {
                                 scene.with_world(|_world, cmd| {
-                                    let mesh =
-                                        self.render_system.primitive_cube(scene.asset_cache());
+                                    let mesh = self
+                                        .core_systems
+                                        .render
+                                        .primitive_cube(scene.asset_cache());
                                     let material = self
-                                        .render_system
+                                        .core_systems
+                                        .render
                                         .default_material_handle(scene.asset_cache());
                                     cmd.spawn(
                                         EntityBuilder::new()
@@ -340,7 +282,7 @@ impl Application for Sandbox {
         self.ui_system.on_ui(
             ctx.egui,
             self.editor_scene.as_ref(),
-            &mut self.render_system,
+            &mut self.core_systems,
         );
     }
 }

@@ -2603,25 +2603,50 @@ dependencies = [
  "eyre",
  "glam",
  "image",
- "num-derive",
- "num-traits",
- "once_cell",
- "rand",
- "serde",
- "tracing",
- "violette",
- "violette-derive",
+    "num-derive",
+    "num-traits",
+    "once_cell",
+    "rand",
+    "serde",
+    "tracing",
+    "violette",
+    "violette-derive",
+]
+
+[[package]]
+name = "rose-ecs"
+version = "0.1.0"
+dependencies = [
+    "assets_manager",
+    "crossbeam-channel",
+    "dashmap",
+    "egui",
+    "eyre",
+    "glam",
+    "hecs",
+    "image",
+    "input",
+    "obj-rs",
+    "rose-core",
+    "rose-platform",
+    "rose-renderer",
+    "serde",
+    "serde_json",
+    "serde_yaml",
+    "toml 0.7.2",
+    "tracing",
+    "violette",
 ]
 
 [[package]]
 name = "rose-platform"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
- "egui",
- "eyre",
- "glam",
- "glutin",
+    "color-eyre",
+    "egui",
+    "eyre",
+    "glam",
+    "glutin",
  "glutin-winit",
  "histo",
  "once_cell",
@@ -2735,32 +2760,29 @@ dependencies = [
 name = "sandbox"
 version = "0.1.0"
 dependencies = [
- "assets_manager",
  "color-eyre",
  "crossbeam-channel",
- "dashmap",
- "egui",
- "egui-gizmo",
- "egui_dock",
- "eyre",
- "glam",
- "hecs",
- "image",
- "input",
- "obj-rs",
- "rayon",
- "rfd",
- "rose-core",
- "rose-platform",
- "rose-renderer",
- "serde",
- "serde_json",
- "serde_yaml",
- "toml 0.7.2",
- "toml_edit",
- "tracing",
- "typetag",
- "violette",
+    "dashmap",
+    "egui",
+    "egui-gizmo",
+    "egui_dock",
+    "eyre",
+    "glam",
+    "input",
+    "rayon",
+    "rfd",
+    "rose-core",
+    "rose-ecs",
+    "rose-platform",
+    "rose-renderer",
+    "serde",
+    "serde_json",
+    "serde_yaml",
+    "toml 0.7.2",
+    "toml_edit",
+    "tracing",
+    "typetag",
+    "violette",
 ]
 
 [[package]]
@@ -2815,13 +2837,13 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.93"
+version = "1.0.94"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cad406b69c91885b5107daf2c29572f6c8cdb3c66826821e286c533490c0bc76"
+checksum = "1c533a59c9d8a93a09c6ab31f0fd5e5f4dd1b8fc9434804029839884765d04ea"
 dependencies = [
- "itoa",
- "ryu",
- "serde",
+    "itoa",
+    "ryu",
+    "serde",
 ]
 
 [[package]]
@@ -2846,15 +2868,15 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.17"
+version = "0.9.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fb06d4b6cdaef0e0c51fa881acb721bed3c924cfaa71d9c94a3b771dfdf6567"
+checksum = "f82e6c8c047aa50a7328632d067bcae6ef38772a79e28daf32f735e0e4f3dd10"
 dependencies = [
- "indexmap",
- "itoa",
- "ryu",
- "serde",
- "unsafe-libyaml",
+    "indexmap",
+    "itoa",
+    "ryu",
+    "serde",
+    "unsafe-libyaml",
 ]
 
 [[package]]
@@ -3391,9 +3413,9 @@ dependencies = [
 
 [[package]]
 name = "unsafe-libyaml"
-version = "0.2.5"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc7ed8ba44ca06be78ea1ad2c3682a43349126c8818054231ee6f4748012aed2"
+checksum = "ad2024452afd3874bf539695e04af6732ba06517424dbf958fdb16a01f3bef6c"
 
 [[package]]
 name = "url"

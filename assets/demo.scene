@@ -1,6 +1,6 @@
 4294967298:
   alloc::string::String: Suzanne
-  sandbox::components::Active: null
+  rose_ecs::components::Active: null
   rose_core::transform::Transform:
     position:
       - 0.0
@@ -15,18 +15,18 @@
       - 1.0
       - 1.0
       - 1.0
-  sandbox::assets::material::Material: materials.square_floor
-  sandbox::assets::mesh::MeshAsset: models.suzanne
+  rose_ecs::assets::material::Material: materials.square_floor
+  rose_ecs::assets::mesh::MeshAsset: models.suzanne
 8589934593:
   alloc::string::String: Sun
-  sandbox::components::Light:
+  rose_ecs::components::Light:
     color:
       - 1.0
       - 0.839102029800415
       - 0.6523809432983398
     kind: Directional
     power: 2.0
-  sandbox::components::Active: null
+  rose_ecs::components::Active: null
   rose_core::transform::Transform:
     position:
       - 0.0
@@ -57,5 +57,5 @@
       - 1.0000003576278687
       - 1.0
       - 1.0000003576278687
-  sandbox::assets::material::Material: materials.cerberus
-  sandbox::assets::mesh::MeshAsset: models.cerberus
+  rose_ecs::assets::material::Material: materials.cerberus
+  rose_ecs::assets::mesh::MeshAsset: models.cerberus

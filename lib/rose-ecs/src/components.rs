@@ -15,7 +15,10 @@ use rose_core::{
     transform::Transform,
 };
 
-use crate::systems::ui::{ComponentUi, NamedComponent};
+use crate::{
+    NamedComponent,
+    systems::ComponentUi,
+};
 
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Active;

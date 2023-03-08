@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use rose_core::transform::Transform;
 
-use crate::{assets::material::Material, assets::mesh::MeshAsset};
+use crate::assets::{Material, MeshAsset};
 use crate::components::Active;
 
 #[derive(Debug, Copy, Clone, Deserialize, Serialize)]
