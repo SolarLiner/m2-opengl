@@ -412,13 +412,23 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                 }
                                                 if ui.small_button("New entity with this mesh").clicked() {
                                                     match cache.load::<MeshAsset>(id) {
-                                                        Ok(handle) => cmd.spawn((Transform::default(), handle)),
+                                                        Ok(handle) => cmd.spawn(ObjectBundle {
+                                                            transform: Transform::default(),
+                                                            active: Active,
+                                                            mesh: handle,
+                                                            material: self.renderer.default_material_handle(scene.asset_cache()),
+                                                        }),
                                                         Err(err) => tracing::error!("Could not load {:?} as mesh: {}", id, err),
                                                     }
                                                 }
                                                 if ui.small_button("New entity with this material").clicked() {
                                                     match cache.load::<Material>(id) {
-                                                        Ok(handle) => cmd.spawn((Transform::default(), handle)),
+                                                        Ok(handle) => cmd.spawn(ObjectBundle {
+                                                            transform: Transform::default(),
+                                                            active: Active,
+                                                            mesh: self.renderer.primitive_sphere(scene.asset_cache()),
+                                                            material: handle,
+                                                        }),
                                                         Err(err) => tracing::error!("Could not load {:?} as material: {}", id, err),
                                                     }
                                                 }

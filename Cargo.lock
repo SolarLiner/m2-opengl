@@ -2603,50 +2603,50 @@ dependencies = [
  "eyre",
  "glam",
  "image",
-    "num-derive",
-    "num-traits",
-    "once_cell",
-    "rand",
-    "serde",
-    "tracing",
-    "violette",
-    "violette-derive",
+ "num-derive",
+ "num-traits",
+ "once_cell",
+ "rand",
+ "serde",
+ "tracing",
+ "violette",
+ "violette-derive",
 ]
 
 [[package]]
 name = "rose-ecs"
 version = "0.1.0"
 dependencies = [
-    "assets_manager",
-    "crossbeam-channel",
-    "dashmap",
-    "egui",
-    "eyre",
-    "glam",
-    "hecs",
-    "image",
-    "input",
-    "obj-rs",
-    "rose-core",
-    "rose-platform",
-    "rose-renderer",
-    "serde",
-    "serde_json",
-    "serde_yaml",
-    "toml 0.7.2",
-    "tracing",
-    "violette",
+ "assets_manager",
+ "crossbeam-channel",
+ "dashmap",
+ "egui",
+ "eyre",
+ "glam",
+ "hecs",
+ "image",
+ "input",
+ "obj-rs",
+ "rose-core",
+ "rose-platform",
+ "rose-renderer",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "toml 0.7.2",
+ "tracing",
+ "violette",
 ]
 
 [[package]]
 name = "rose-platform"
 version = "0.1.0"
 dependencies = [
-    "color-eyre",
-    "egui",
-    "eyre",
-    "glam",
-    "glutin",
+ "color-eyre",
+ "egui",
+ "eyre",
+ "glam",
+ "glutin",
  "glutin-winit",
  "histo",
  "once_cell",
@@ -2762,27 +2762,27 @@ version = "0.1.0"
 dependencies = [
  "color-eyre",
  "crossbeam-channel",
-    "dashmap",
-    "egui",
-    "egui-gizmo",
-    "egui_dock",
-    "eyre",
-    "glam",
-    "input",
-    "rayon",
-    "rfd",
-    "rose-core",
-    "rose-ecs",
-    "rose-platform",
-    "rose-renderer",
-    "serde",
-    "serde_json",
-    "serde_yaml",
-    "toml 0.7.2",
-    "toml_edit",
-    "tracing",
-    "typetag",
-    "violette",
+ "dashmap",
+ "egui",
+ "egui-gizmo",
+ "egui_dock",
+ "eyre",
+ "glam",
+ "input",
+ "rayon",
+ "rfd",
+ "rose-core",
+ "rose-ecs",
+ "rose-platform",
+ "rose-renderer",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "toml 0.7.2",
+ "toml_edit",
+ "tracing",
+ "typetag",
+ "violette",
 ]
 
 [[package]]
@@ -2841,9 +2841,9 @@ version = "1.0.94"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c533a59c9d8a93a09c6ab31f0fd5e5f4dd1b8fc9434804029839884765d04ea"
 dependencies = [
-    "itoa",
-    "ryu",
-    "serde",
+ "itoa",
+ "ryu",
+ "serde",
 ]
 
 [[package]]
@@ -2872,11 +2872,11 @@ version = "0.9.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f82e6c8c047aa50a7328632d067bcae6ef38772a79e28daf32f735e0e4f3dd10"
 dependencies = [
-    "indexmap",
-    "itoa",
-    "ryu",
-    "serde",
-    "unsafe-libyaml",
+ "indexmap",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
 ]
 
 [[package]]
