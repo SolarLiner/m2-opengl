@@ -78,6 +78,7 @@ pub struct SimpleSky {
     u_horizon_color: UniformLocation,
     u_zenith_color: UniformLocation,
     u_ground_color: UniformLocation,
+    u_albedo: UniformLocation,
     u_normal: UniformLocation,
 }
 
@@ -88,7 +89,17 @@ impl Environment for SimpleSky {
         camera: &ViewUniformBuffer,
         mat_info: MaterialInfo,
     ) -> Result<()> {
-        self.draw_impl(frame, camera, mat_info)?;
+        self.draw.bind_block(&camera.slice(0..=0), self.u_view, 0)?;
+        self.draw
+            .set_uniform(self.u_horizon_color, self.params.horizon_color)?;
+        self.draw
+            .set_uniform(self.u_ground_color, self.params.ground_color)?;
+        self.draw
+            .set_uniform(self.u_zenith_color, self.params.zenith_color)?;
+        self.draw.set_uniform(self.u_albedo, mat_info.albedo.as_uniform(0)?)?;
+        self.draw
+            .set_uniform(self.u_normal, mat_info.normal_coverage.as_uniform(1)?)?;
+        self.draw.draw(frame)?;
         Ok(())
     }
 
@@ -109,6 +120,7 @@ impl SimpleSky {
         let u_horizon_color = draw.uniform("horizon_color");
         let u_zenith_color = draw.uniform("zenith_color");
         let u_ground_color = draw.uniform("ground_color");
+        let u_albedo = draw.uniform("albedo");
         let u_normal = draw.uniform("normal_map");
 
         Ok(Self {
@@ -118,27 +130,9 @@ impl SimpleSky {
             u_horizon_color,
             u_zenith_color,
             u_ground_color,
+            u_albedo,
             u_normal,
         })
-    }
-
-    fn draw_impl(
-        &self,
-        frame: &Framebuffer,
-        camera: &ViewUniformBuffer,
-        mat_info: MaterialInfo,
-    ) -> Result<()> {
-        self.draw.bind_block(&camera.slice(0..=0), self.u_view, 0)?;
-        self.draw
-            .set_uniform(self.u_horizon_color, self.params.horizon_color)?;
-        self.draw
-            .set_uniform(self.u_ground_color, self.params.ground_color)?;
-        self.draw
-            .set_uniform(self.u_zenith_color, self.params.zenith_color)?;
-        self.draw
-            .set_uniform(self.u_normal, mat_info.normal_coverage.as_uniform(0)?)?;
-        self.draw.draw(frame)?;
-        Ok(())
     }
 }
 
@@ -160,7 +154,16 @@ impl Environment for EnvironmentMap {
         camera: &ViewUniformBuffer,
         mat_info: MaterialInfo,
     ) -> Result<()> {
-        self.draw_impl(frame, camera, mat_info)?;
+        self.draw.bind_block(&camera.slice(0..=0), self.u_view, 0)?;
+        self.draw
+            .set_uniform(self.u_albedo, mat_info.albedo.as_uniform(0)?)?;
+        self.draw
+            .set_uniform(self.u_normal, mat_info.normal_coverage.as_uniform(1)?)?;
+        self.draw
+            .set_uniform(self.u_rough_metal, mat_info.roughness_metal.as_uniform(2)?)?;
+        self.draw
+            .set_uniform(self.u_sampler, self.map.as_uniform(3)?)?;
+        self.draw.draw(frame)?;
         Ok(())
     }
 
@@ -202,24 +205,5 @@ impl EnvironmentMap {
             u_normal,
             u_rough_metal,
         })
-    }
-
-    fn draw_impl(
-        &self,
-        frame: &Framebuffer,
-        camera: &ViewUniformBuffer,
-        mat_info: MaterialInfo,
-    ) -> Result<()> {
-        self.draw.bind_block(&camera.slice(0..=0), self.u_view, 0)?;
-        self.draw
-            .set_uniform(self.u_albedo, mat_info.albedo.as_uniform(0)?)?;
-        self.draw
-            .set_uniform(self.u_normal, mat_info.normal_coverage.as_uniform(1)?)?;
-        self.draw
-            .set_uniform(self.u_rough_metal, mat_info.roughness_metal.as_uniform(2)?)?;
-        self.draw
-            .set_uniform(self.u_sampler, self.map.as_uniform(3)?)?;
-        self.draw.draw(frame)?;
-        Ok(())
     }
 }

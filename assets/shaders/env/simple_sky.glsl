@@ -13,6 +13,7 @@ layout(std140) uniform View {
     vec3 camera_pos;
 } view;
 
+uniform sampler2D albedo;
 uniform sampler2D normal_map;
 uniform vec3 horizon_color;
 uniform vec3 ground_color;
@@ -55,18 +56,16 @@ vec3 gradient(float t) {
 }
 
 void main() {
-    float a = texture(normal_map, v_uv).a;
-    vec3 ray_world = get_ray_dir();
-    float lat_pc = ray_world.y / M_PI;
-    out_color = gradient(lat_pc);
-
     vec4 nc = texture(normal_map, v_uv);
     if (nc.a <= 0.5) {
-        return;
+        vec3 ray_world = get_ray_dir();
+        float lat_pc = ray_world.y / M_PI;
+        out_color = gradient(lat_pc);
+    } else {
+        vec3 albedo = texture(albedo, v_uv).rgb;
+        vec3 normal = nc.xyz;
+        vec3 refl_dir = reflect(get_ray_dir(), normal);
+        float lat_pc = refl_dir.y / M_PI;
+        out_color = albedo * gradient(lat_pc);
     }
-
-    vec3 normal = nc.xyz;
-    vec3 refl_dir = reflect(ray_world, normal);
-    lat_pc = refl_dir.y / M_PI;
-    out_color = gradient(lat_pc);
 }
