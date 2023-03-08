@@ -58,7 +58,7 @@ vec3 illuminate(vec3 normal) {
 
     vec3 reflected_ray = reflect(get_ray_dir(), normal);
     vec2 uv = spherical_to_polar(reflected_ray);
-    return albedo * textureLod(env_map, uv, rough_metal.r * 10).rgb;
+    return albedo * textureLod(env_map, uv, sqrt(rough_metal.r) * 15).rgb;
 }
 
 void main() {
