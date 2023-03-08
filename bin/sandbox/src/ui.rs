@@ -288,12 +288,17 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                         self.system.selected_entity.replace(entity.entity());
                                     }
                                 }
+                                let size = ui.available_size();
+                                let (_, response) = ui.allocate_exact_size(size, Sense::click());
+                                if response.context_menu(|ui| {
+                                    if ui.small_button("Add empty").clicked() {
+                                        cmd.spawn(());
+                                        ui.close_menu();
+                                    }
+                                }).clicked() {
+                                    self.system.selected_entity.take();
+                                }
                             });
-                            let size = ui.available_size();
-                            let (_, response) = ui.allocate_exact_size(size, Sense::click());
-                            if response.clicked() {
-                                self.system.selected_entity.take();
-                            }
                         });
                     } else {
                         ui.monospace("No loaded scene");
