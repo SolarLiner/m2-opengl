@@ -7,8 +7,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(feature = "debug-ui")]
-use egui::Ui;
 use eyre::Result;
 use float_ord::FloatOrd;
 use glam::{UVec2, vec2, Vec3, Vec4Swizzles};
@@ -32,6 +30,7 @@ use violette::base::resource::ResourceExt;
 
 use crate::env::Environment;
 use crate::material::MaterialInstance;
+use crate::postprocess::LensFlareParams;
 
 pub mod env;
 pub mod gbuffers;
@@ -44,51 +43,87 @@ pub type Mesh = rose_core::mesh::Mesh<material::Vertex>;
 pub struct PostprocessInterface {
     pub exposure: f32,
     pub bloom: BloomInterface,
+    pub lens_flare: LensFlareParams,
 }
 
 impl PostprocessInterface {
     #[cfg(feature = "debug-ui")]
-    pub fn ui(&mut self, ui: &mut Ui) {
-        egui::Grid::new("pp-iface")
-            .striped(true)
-            .num_columns(2)
-            .show(ui, |ui| {
-                let exposure_label = ui.label("Exposure:");
-                ui.add(
-                    egui::Slider::new(&mut self.exposure, 1e-6..=1e4)
-                        .logarithmic(true)
-                        .show_value(true)
-                        .suffix(" EV")
-                        .custom_formatter(|v, _| format!("{:+1.1}", v.log2()))
-                        .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev)))
-                        .text("Exposure"),
-                )
-                    .labelled_by(exposure_label.id);
-                ui.end_row();
+    pub fn ui(&mut self, ui: &mut egui::Ui) {
+        use egui::{
+            DragValue,
+            Grid,
+        };
 
-                let bloom_size_label = ui.label("Bloom size:");
-                ui.add(
-                    egui::Slider::new(&mut self.bloom.size, 0f32..=0.5)
-                        .logarithmic(true)
-                        .clamp_to_range(false)
-                        .show_value(true),
-                )
-                    .labelled_by(bloom_size_label.id);
-                ui.end_row();
+        ui.collapsing("Main", |ui| {
+            Grid::new("pp-iface")
+                .striped(true)
+                .num_columns(2)
+                .show(ui, |ui| {
+                    let exposure_label = ui.label("Exposure:");
+                    ui.add(
+                        egui::Slider::new(&mut self.exposure, 1e-6..=1e4)
+                            .logarithmic(true)
+                            .show_value(true)
+                            .suffix(" EV")
+                            .custom_formatter(|v, _| format!("{:+1.1}", v.log2()))
+                            .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev)))
+                            .text("Exposure"),
+                    )
+                        .labelled_by(exposure_label.id);
+                    ui.end_row();
 
-                let bloom_strength_label = ui.label("Bloom strength:");
-                ui.add(
-                    egui::Slider::new(&mut self.bloom.strength, 1e-4..=1e2)
-                        .logarithmic(true)
-                        .show_value(true)
-                        .suffix(" %")
-                        .custom_formatter(|x, _| format!("{:2.1}", x * 100.))
-                        .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.))
-                        .text("Bloom strength"),
-                )
-                    .labelled_by(bloom_strength_label.id);
-                ui.end_row();
-            });
+                    let bloom_size_label = ui.label("Bloom size:");
+                    ui.add(
+                        egui::Slider::new(&mut self.bloom.size, 0f32..=0.5)
+                            .logarithmic(true)
+                            .clamp_to_range(false)
+                            .show_value(true),
+                    )
+                        .labelled_by(bloom_size_label.id);
+                    ui.end_row();
+
+                    let bloom_strength_label = ui.label("Bloom strength:");
+                    ui.add(
+                        egui::Slider::new(&mut self.bloom.strength, 1e-4..=1e2)
+                            .logarithmic(true)
+                            .show_value(true)
+                            .suffix(" %")
+                            .custom_formatter(|x, _| format!("{:2.1}", x * 100.))
+                            .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.))
+                            .text("Bloom strength"),
+                    )
+                        .labelled_by(bloom_strength_label.id);
+                    ui.end_row();
+                });
+        });
+        ui.collapsing("Lens Flare", |ui| {
+            Grid::new("postprocess-lens-flares")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    let strength_label = ui.label("Strength").id;
+                    self.lens_flare.strength *= 100.;
+                    ui.add(DragValue::new(&mut self.lens_flare.strength).suffix(" %")).labelled_by(strength_label);
+                    self.lens_flare.strength /= 100.;
+                    ui.end_row();
+
+                    let threshold_label = ui.label("Threshold").id;
+                    self.lens_flare.threshold = self.lens_flare.threshold.log2();
+                    ui.add(DragValue::new(&mut self.lens_flare.threshold).suffix(" EV")).labelled_by(threshold_label);
+                    self.lens_flare.threshold = self.lens_flare.threshold.exp2();
+                    ui.end_row();
+
+                    let dist_label = ui.label("Distortion").id;
+                    ui.add(DragValue::new(&mut self.lens_flare.distortion)).labelled_by(dist_label);
+                    ui.end_row();
+
+                    let ghost_spacing_label = ui.label("Ghost spacing").id;
+                    ui.add(DragValue::new(&mut self.lens_flare.ghost_spacing).speed(0.01)).labelled_by(ghost_spacing_label);
+                    ui.end_row();
+
+                    let ghost_count_label = ui.label("Ghost count").id;
+                    ui.add(DragValue::new(&mut self.lens_flare.ghost_count)).labelled_by(ghost_count_label);
+                });
+        });
     }
 }
 
@@ -140,6 +175,7 @@ impl Renderer {
                     size: 1e-3,
                     strength: 4e-2,
                 },
+                lens_flare: LensFlareParams::default(),
             },
             environment: None,
             view_uniform,
@@ -214,6 +250,7 @@ impl Renderer {
         self.post_process.bloom_radius = self.post_process_iface.bloom.size;
         self.post_process
             .set_bloom_strength(self.post_process_iface.bloom.strength)?;
+        self.post_process.set_lens_flare_parameters(self.post_process_iface.lens_flare)?;
 
         self.view_uniform.update_from_camera(camera);
         self.view_uniform
@@ -305,7 +342,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "debug-ui")]
-    pub fn ui_toolbar(&mut self, ui: &mut Ui) {
+    pub fn ui_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.toggle_value(&mut self.debug_window_open, "Debug menu");
         ui.menu_button("Post processing", |ui| {
             let pp_iface = self.post_process_interface();
@@ -329,7 +366,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "debug-ui")]
-    pub fn ui_render_stats(&mut self, ui: &mut Ui) {
+    pub fn ui_render_stats(&mut self, ui: &mut egui::Ui) {
         ui.label(format!(
             "{:3} Objects submitted | {:3} objects rendered",
             self.last_render_submitted, self.last_render_rendered
@@ -352,7 +389,7 @@ impl Renderer {
     }
 
     #[cfg(feature = "debug-ui")]
-    pub fn ui_debug_panel(&self, ui: &mut Ui) {
+    pub fn ui_debug_panel(&self, ui: &mut egui::Ui) {
         const GET_NAME: fn(usize) -> &'static str = |ix| match ix {
             0 => "Position",
             1 => "Albedo",
@@ -409,7 +446,7 @@ impl Renderer {
 
 #[cfg(feature = "debug-ui")]
 fn make_texture_frame(
-    ui: &mut Ui,
+    ui: &mut egui::Ui,
     name: &str,
     draw: impl 'static + Fn(&Framebuffer) + Send + Sync,
 ) -> egui::Response {

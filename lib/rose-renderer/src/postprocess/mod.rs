@@ -16,16 +16,21 @@ mod blur;
 
 #[derive(Debug)]
 pub struct Postprocess {
+    pub bloom_radius: f32,
+    pub luminance_bias: f32,
     draw: ScreenDraw,
     bloom: Blur,
     auto_exposure: AutoExposure,
-    uniform_texture: UniformLocation,
-    uniform_avg_luminance: UniformLocation,
+    u_texture: UniformLocation,
+    u_avg_luminance: UniformLocation,
     texture: Texture<[f32; 3]>,
-    uniform_bloom_tex: UniformLocation,
-    uniform_bloom_strength: UniformLocation,
-    pub bloom_radius: f32,
-    pub luminance_bias: f32,
+    u_bloom_tex: UniformLocation,
+    u_bloom_strength: UniformLocation,
+    u_lens_flare_strength: UniformLocation,
+    u_lens_flare_threshold: UniformLocation,
+    u_distortion_amt: UniformLocation,
+    u_ghost_spacing: UniformLocation,
+    u_ghost_count: UniformLocation,
 }
 
 impl Postprocess {
@@ -43,16 +48,26 @@ impl Postprocess {
         let draw = ScreenDraw::load("assets/shaders/postprocess.frag.glsl")?;
         let draw_texture = draw.uniform("frame");
         let avg_luminance = draw.uniform("luminance_average");
-        let uniform_bloom_strength = draw.uniform("bloom_strength");
-        let uniform_bloom_tex = draw.uniform("bloom_tex");
+        let u_bloom_strength = draw.uniform("bloom_strength");
+        let u_bloom_tex = draw.uniform("bloom_tex");
+        let u_lens_flare_strength = draw.uniform("lens_flare_strength");
+        let u_lens_flare_threshold = draw.uniform("lens_flare_threshold");
+        let u_distortion_amt = draw.uniform("distortion_amt");
+        let u_ghost_spacing = draw.uniform("ghost_spacing");
+        let u_ghost_count = draw.uniform("ghost_count");
         Ok(Self {
             draw,
             bloom: Blur::new(size, 5)?,
             auto_exposure: AutoExposure::new(size)?,
-            uniform_texture: draw_texture,
-            uniform_avg_luminance: avg_luminance,
-            uniform_bloom_tex,
-            uniform_bloom_strength,
+            u_texture: draw_texture,
+            u_avg_luminance: avg_luminance,
+            u_bloom_tex,
+            u_bloom_strength,
+            u_lens_flare_strength,
+            u_lens_flare_threshold,
+            u_distortion_amt,
+            u_ghost_spacing,
+            u_ghost_count,
             texture,
             luminance_bias: 1.5f32.exp2(),
             bloom_radius: 1e-3,
@@ -61,7 +76,16 @@ impl Postprocess {
 
     pub fn set_bloom_strength(&self, strength: f32) -> Result<()> {
         self.draw
-            .set_uniform(self.uniform_bloom_strength, strength)?;
+            .set_uniform(self.u_bloom_strength, strength)?;
+        Ok(())
+    }
+
+    pub fn set_lens_flare_parameters(&self, params: LensFlareParams) -> Result<()> {
+        self.draw.set_uniform(self.u_lens_flare_strength, params.strength)?;
+        self.draw.set_uniform(self.u_lens_flare_threshold, params.threshold)?;
+        self.draw.set_uniform(self.u_distortion_amt, params.distortion)?;
+        self.draw.set_uniform(self.u_ghost_spacing, params.ghost_spacing)?;
+        self.draw.set_uniform(self.u_ghost_count, params.ghost_count)?;
         Ok(())
     }
 
@@ -91,14 +115,14 @@ impl Postprocess {
             .process(input, lerp)
             .unwrap_or_else(|_| self.auto_exposure.average_luminance());
         self.draw.set_uniform(
-            self.uniform_avg_luminance,
+            self.u_avg_luminance,
             avg_luminance / self.luminance_bias,
         )?;
         let bloom = self.bloom.process(input, self.bloom_radius)?;
         self.draw
-            .set_uniform(self.uniform_texture, input.as_uniform(0)?)?;
+            .set_uniform(self.u_texture, input.as_uniform(0)?)?;
         self.draw
-            .set_uniform(self.uniform_bloom_tex, bloom.as_uniform(1)?)?;
+            .set_uniform(self.u_bloom_tex, bloom.as_uniform(1)?)?;
         Framebuffer::viewport(0, 0, width.get() as _, height.get() as _);
         self.draw.draw(frame)?;
         Ok(())
@@ -107,5 +131,26 @@ impl Postprocess {
     #[cfg(feature = "debug-ui")]
     pub fn average_luminance(&self) -> f32 {
         self.auto_exposure.average_luminance()
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct LensFlareParams {
+    pub strength: f32,
+    pub distortion: f32,
+    pub threshold: f32,
+    pub ghost_spacing: f32,
+    pub ghost_count: i32,
+}
+
+impl Default for LensFlareParams {
+    fn default() -> Self {
+        Self {
+            strength: 2e-3,
+            distortion: 2.,
+            threshold: 1.,
+            ghost_spacing: 0.31,
+            ghost_count: 5,
+        }
     }
 }

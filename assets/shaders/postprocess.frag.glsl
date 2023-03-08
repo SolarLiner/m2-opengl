@@ -8,11 +8,10 @@ uniform sampler2D bloom_tex;
 uniform float luminance_average = 0.5;
 uniform float bloom_strength = 1e-2;
 uniform float lens_flare_strength = 4e-3;
+uniform float lens_flare_threshold = 20;
 uniform float distortion_amt = 2;
 uniform float ghost_spacing = 0.8;
 uniform int ghost_count = 5;
-uniform float halo_radius = 0.94;
-uniform float halo_thickness = 0.2;
 
 float desaturate(vec3 col) {
     return dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -67,7 +66,7 @@ vec3 lens_flare() {
         vec2 suv = (uv + ghost_vec * vec2(i));
         float d = distance(suv, vec2(0.5));
         float weight = 1 - smoothstep(0, 0.5, d);
-        vec3 s = threshold(texture(bloom_tex, suv).rgb, 20);
+        vec3 s = threshold(texture(bloom_tex, suv).rgb, lens_flare_threshold);
         vec3 color = vec3(random(vec2(i, 0)), random(vec2(i, 1)), random(vec2(i, 3)));
         color = mix(vec3(1), color, 0.5);
         ghosts += s * weight * color;
