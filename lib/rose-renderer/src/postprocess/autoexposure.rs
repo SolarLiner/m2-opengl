@@ -4,11 +4,11 @@ use eyre::Result;
 use glam::{UVec2, Vec3};
 
 use rose_core::screen_draw::ScreenDraw;
-use violette::program::UniformLocation;
 use violette::{
     framebuffer::Framebuffer,
     texture::{Dimension, SampleMode, Texture},
 };
+use violette::program::UniformLocation;
 
 #[derive(Debug)]
 pub struct AutoExposure {
@@ -36,7 +36,7 @@ impl AutoExposure {
         let fbo = Framebuffer::new();
         fbo.attach_color(0, &target)?;
         fbo.assert_complete()?;
-        let uniform_in_texture = screen_draw.uniform("in_texture").unwrap();
+        let uniform_in_texture = screen_draw.uniform("in_texture");
         Ok(Self {
             screen_draw,
             uniform_in_texture,

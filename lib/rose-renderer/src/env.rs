@@ -105,12 +105,11 @@ impl SimpleSky {
     pub fn new(params: SimpleSkyParams) -> Result<Self> {
         let draw = ScreenDraw::load("assets/shaders/env/simple_sky.glsl")
             .with_context(|| "Loading simple sky background shader")?;
-        // let u_bg_view_proj = background_paint.uniform("view_proj").unwrap();
-        let u_view = draw.uniform_block("View", 0).unwrap();
-        let u_horizon_color = draw.uniform("horizon_color").unwrap();
-        let u_zenith_color = draw.uniform("zenith_color").unwrap();
-        let u_ground_color = draw.uniform("ground_color").unwrap();
-        let u_normal = draw.uniform("normal_map").unwrap();
+        let u_view = draw.uniform_block("View");
+        let u_horizon_color = draw.uniform("horizon_color");
+        let u_zenith_color = draw.uniform("zenith_color");
+        let u_ground_color = draw.uniform("ground_color");
+        let u_normal = draw.uniform("normal_map");
 
         Ok(Self {
             params,
@@ -129,7 +128,7 @@ impl SimpleSky {
         camera: &ViewUniformBuffer,
         mat_info: MaterialInfo,
     ) -> Result<()> {
-        self.draw.bind_block(self.u_view, &camera.slice(0..=0))?;
+        self.draw.bind_block(&camera.slice(0..=0), self.u_view, 0)?;
         self.draw
             .set_uniform(self.u_horizon_color, self.params.horizon_color)?;
         self.draw
@@ -177,11 +176,11 @@ impl Environment for EnvironmentMap {
 impl EnvironmentMap {
     pub fn new(texture: impl AsRef<Path>) -> Result<Self> {
         let draw = ScreenDraw::load("assets/shaders/env/equirectangular.glsl")?;
-        let u_view = draw.uniform_block("View", 0)?;
-        let u_sampler = draw.uniform("env_map").unwrap();
-        let u_albedo = draw.uniform("frame_albedo").unwrap();
-        let u_normal = draw.uniform("frame_normal").unwrap();
-        let u_rough_metal = draw.uniform("frame_rough_metal").unwrap();
+        let u_view = draw.uniform_block("View");
+        let u_sampler = draw.uniform("env_map");
+        let u_albedo = draw.uniform("frame_albedo");
+        let u_normal = draw.uniform("frame_normal");
+        let u_rough_metal = draw.uniform("frame_rough_metal");
 
         let map = Texture::load_rgb32f(texture)?;
         map.wrap_s(TextureWrap::Repeat)?;
@@ -207,7 +206,7 @@ impl EnvironmentMap {
         camera: &ViewUniformBuffer,
         mat_info: MaterialInfo,
     ) -> Result<()> {
-        self.draw.bind_block(self.u_view, &camera.slice(0..=0))?;
+        self.draw.bind_block(&camera.slice(0..=0), self.u_view, 0)?;
         self.draw
             .set_uniform(self.u_albedo, mat_info.albedo.as_uniform(0)?)?;
         self.draw

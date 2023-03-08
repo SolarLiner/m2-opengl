@@ -91,14 +91,14 @@ impl GeometryBuffers {
             .context("Cannot load screen shader pass")?;
         let debug_texture = ScreenDraw::load("assets/shaders/blit.frag.glsl")
             .context("Cannot load blit program")?;
-        let debug_uniform_in_texture = debug_texture.uniform("in_texture").unwrap();
+        let debug_uniform_in_texture = debug_texture.uniform("in_texture");
 
-        let uniform_frame_pos = screen_pass.uniform("frame_position").unwrap();
-        let uniform_frame_albedo = screen_pass.uniform("frame_albedo").unwrap();
-        let uniform_frame_normal = screen_pass.uniform("frame_normal").unwrap();
-        let uniform_frame_rough_metal = screen_pass.uniform("frame_rough_metal").unwrap();
-        let uniform_block_light = screen_pass.uniform_block("Light", 0).unwrap();
-        let uniform_block_view = screen_pass.uniform_block("View", 0).unwrap();
+        let uniform_frame_pos = screen_pass.uniform("frame_position");
+        let uniform_frame_albedo = screen_pass.uniform("frame_albedo");
+        let uniform_frame_normal = screen_pass.uniform("frame_normal");
+        let uniform_frame_rough_metal = screen_pass.uniform("frame_rough_metal");
+        let uniform_block_light = screen_pass.uniform_block("Light");
+        let uniform_block_view = screen_pass.uniform_block("View");
 
         Ok(Self {
             deferred_fbo,
@@ -218,7 +218,7 @@ impl GeometryBuffers {
         Framebuffer::enable_blending(Blend::One, Blend::One);
         for light_ix in 0..lights.len() {
             self.screen_pass
-                .bind_block(self.uniform_block_light, &lights.slice(light_ix..=light_ix))?;
+                .bind_block(&lights.slice(light_ix..=light_ix), self.uniform_block_light, 0)?;
             self.screen_pass.draw(&self.output_fbo)?;
         }
 

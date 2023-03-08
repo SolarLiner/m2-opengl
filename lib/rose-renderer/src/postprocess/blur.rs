@@ -50,10 +50,10 @@ impl Blur {
         fbo.enable_buffers([0])?;
         fbo.assert_complete()?;
 
-        let uniform_down_tex = draw_downsample.uniform("in_texture").unwrap();
-        let uniform_down_size = draw_downsample.uniform("screen_size").unwrap();
-        let uniform_up_tex = draw_upsample.uniform("in_texture").unwrap();
-        let uniform_up_radius = draw_upsample.uniform("filter_radius").unwrap();
+        let uniform_down_tex = draw_downsample.uniform("in_texture");
+        let uniform_down_size = draw_downsample.uniform("screen_size");
+        let uniform_up_tex = draw_upsample.uniform("in_texture");
+        let uniform_up_radius = draw_upsample.uniform("filter_radius");
         let mut this = Self {
             mip_chain,
             fbo,
@@ -100,7 +100,7 @@ impl Blur {
             let size = mip.size_vec().truncate();
             Framebuffer::viewport(0, 0, size.x as _, size.y as _);
             self.fbo.attach_color(0, mip)?;
-            self.draw_downsample.set_uniform(self.draw_downsample.uniform("first_mip").unwrap(), first_mip)?;
+            self.draw_downsample.set_uniform(self.draw_downsample.uniform("first_mip"), first_mip)?;
             self.draw_downsample.draw(&self.fbo)?;
 
             self.draw_downsample

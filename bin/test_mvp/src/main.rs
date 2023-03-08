@@ -32,13 +32,13 @@ impl Application for TestMvp {
     fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
         let draw = ScreenDraw::load("assets/shaders/env/equirectangular.bg.glsl")?;
         let texture = Texture::load_rgb32f("assets/textures/table_mountain_2_puresky_4k.exr")?;
-        let u_view = draw.uniform_block("View", 0).unwrap();
-        draw.set_uniform(draw.uniform("env_map").unwrap(), texture.as_uniform(0)?)?;
+        let u_view = draw.uniform_block("View");
+        draw.set_uniform(draw.uniform("env_map"), texture.as_uniform(0)?)?;
         let mut camera = Camera::default();
         camera.projection.update(Vec2::from_array(size.into()));
         camera.transform.rotation = Quat::from_euler(EulerRot::YXZ, 0., 0.5, 0.);
         let view_uniform = ViewUniform::from(camera.clone()).create_buffer()?;
-        draw.bind_block(u_view, &view_uniform.slice(0..=0))?;
+        draw.bind_block(&view_uniform.slice(0..=0), u_view, 0)?;
         Ok(Self {
             win_size: Vec2::from_array(size.into()),
             draw: ThreadGuard::new(draw),

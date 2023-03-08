@@ -52,7 +52,7 @@ impl Application for TriangleApp {
             ],
             [0, 1, 2],
         )?;
-        let uniform_scale = mat_program.uniform("scale").unwrap();
+        let uniform_scale = mat_program.uniform("scale");
         Ok(Self {
             mesh_scale: 1.,
             mat_program: ThreadGuard::new(mat_program),

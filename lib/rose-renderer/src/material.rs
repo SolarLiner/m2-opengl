@@ -107,15 +107,15 @@ impl Material {
             .with_shader(vert_shader.id)
             .with_shader(frag_shader.id)
             .link()?;
-        let uniform_color = program.uniform("color").unwrap();
-        let uniform_normal = program.uniform("normal_map").unwrap();
-        let uniform_normal_amt = program.uniform("normal_amount").unwrap();
-        let uniform_normal_enabled = program.uniform("normal_enabled").unwrap();
-        let uniform_rough_metal = program.uniform("rough_metal").unwrap();
-        let uniform_model = program.uniform("model").unwrap();
-        let uniform_view = program.uniform_block("View", 0).unwrap();
+        let uniform_color = program.uniform("color");
+        let uniform_normal = program.uniform("normal_map");
+        let uniform_normal_amt = program.uniform("normal_amount");
+        let uniform_normal_enabled = program.uniform("normal_enabled");
+        let uniform_rough_metal = program.uniform("rough_metal");
+        let uniform_model = program.uniform("model");
+        let uniform_view = program.uniform_block("View");
         if let Some(buf) = camera_uniform {
-            program.bind_block(uniform_view, &buf.slice(0..=0))?;
+            program.bind_block(&buf.slice(0..=0), uniform_view, 0)?;
         }
         Ok(Self {
             program,
@@ -130,7 +130,7 @@ impl Material {
     }
 
     pub fn set_camera_uniform(&self, buffer: &ViewUniformBuffer) -> Result<()> {
-        self.program.bind_block(self.uniform_view, &buffer.slice(0..=0))?;
+        self.program.bind_block(&buffer.slice(0..=0), self.uniform_view, 0)?;
         Ok(())
     }
 

@@ -3,7 +3,7 @@ use std::{collections::HashMap, num::NonZeroU32};
 use bytemuck::{offset_of, Pod, Zeroable};
 use egui::epaint::{self, Primitive};
 use eyre::Result;
-use glam::{vec2, IVec2, Vec2};
+use glam::{IVec2, vec2, Vec2};
 use winit::dpi::PhysicalSize;
 
 use rose_core::{
@@ -62,8 +62,8 @@ impl UiImpl {
             Some("assets/shaders/ui.frag.glsl"),
             None::<&'static str>,
         )?;
-        let uniform_screen_size = program.uniform("u_screen_size").unwrap();
-        let uniform_sampler = program.uniform("u_sampler").unwrap();
+        let uniform_screen_size = program.uniform("u_screen_size");
+        let uniform_sampler = program.uniform("u_sampler");
         let mesh = Mesh::empty()?;
         Ok(Self {
             program,

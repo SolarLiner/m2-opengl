@@ -41,10 +41,10 @@ impl Postprocess {
         texture.reserve_memory()?;
 
         let draw = ScreenDraw::load("assets/shaders/postprocess.frag.glsl")?;
-        let draw_texture = draw.uniform("frame").unwrap();
-        let avg_luminance = draw.uniform("luminance_average").unwrap();
-        let uniform_bloom_strength = draw.uniform("bloom_strength").unwrap();
-        let uniform_bloom_tex = draw.uniform("bloom_tex").unwrap();
+        let draw_texture = draw.uniform("frame");
+        let avg_luminance = draw.uniform("luminance_average");
+        let uniform_bloom_strength = draw.uniform("bloom_strength");
+        let uniform_bloom_tex = draw.uniform("bloom_tex");
         Ok(Self {
             draw,
             bloom: Blur::new(size, 5)?,
