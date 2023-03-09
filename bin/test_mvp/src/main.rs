@@ -29,7 +29,7 @@ impl TestMvp {
 }
 
 impl Application for TestMvp {
-    fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
+    fn new(size: PhysicalSize<f32>, _scale_factor: f64) -> Result<Self> {
         let draw = ScreenDraw::load("assets/shaders/env/equirectangular.bg.glsl")?;
         let texture = Texture::load_rgb32f("assets/textures/table_mountain_2_puresky_4k.exr")?;
         let u_view = draw.uniform_block("View");
@@ -50,7 +50,7 @@ impl Application for TestMvp {
         })
     }
 
-    fn resize(&mut self, size: PhysicalSize<u32>, scale_factor: f64) -> Result<()> {
+    fn resize(&mut self, size: PhysicalSize<u32>, _scale_factor: f64) -> Result<()> {
         self.win_size = Vec2::from_array(size.into());
         self.camera.projection.update(self.win_size);
         let size = size.cast();
@@ -84,7 +84,7 @@ impl Application for TestMvp {
         Ok(())
     }
 
-    fn render(&mut self, ctx: RenderContext) -> Result<()> {
+    fn render(&mut self, _ctx: RenderContext) -> Result<()> {
         self.camera.transform.rotation = self.get_rotation();
         ViewUniform::from(self.camera.clone()).update_uniform_buffer(&mut self.view_uniform)?;
         let backbuffer = Framebuffer::backbuffer();

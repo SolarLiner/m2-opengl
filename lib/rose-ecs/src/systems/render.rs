@@ -166,7 +166,7 @@ impl RenderSystem {
                     None
                 };
                 let rough_metal = if let Some(rough_metal) = &mat.normal {
-                    let (width, height) = rough_metal.dimensions();
+                    let (width, _height) = rough_metal.dimensions();
                     let mut rough_metal = rough_metal.to_rgb32f();
                     image::imageops::flip_vertical_in_place(&mut rough_metal);
                     let image = rough_metal

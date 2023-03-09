@@ -35,27 +35,22 @@ impl HierarchicalSystem {
             .reduce_with(|mut a, b| {
                 a.extend(b);
                 a
-            })
-            .unwrap_or_else(HashMap::new);
+            }).unwrap_or_default();
         let mut q = world.query::<&H>();
         let v = q.view();
         let mut built_globals = hierarchy
             .par_iter()
-            .filter_map(|(e, opt)| if let None = opt { Some(*e) } else { None })
+            .filter_map(|(e, opt)| if opt.is_none() { Some(*e) } else { None })
             .map(|e| {
                 tracing::debug!(parent: &curspan, "Building {:?} root", e);
                 (e, v.get(e).unwrap().make_root())
             })
             .collect::<HashMap<_, _>>();
 
-        let mut parents = hierarchy
+        let parents = hierarchy
             .into_iter()
             .filter_map(|(e, opt)| {
-                if let Some(parent) = opt {
-                    Some((e, parent))
-                } else {
-                    None
-                }
+                opt.map(|parent| (e, parent))
             })
             .collect::<HashMap<_, _>>();
 
@@ -93,7 +88,7 @@ pub trait MakeChild {
 
 impl MakeChild for World {
     type Ret = Entity;
-    fn spawn_child(&mut self, parent: Entity, mut child: &mut EntityBuilder) -> Entity {
+    fn spawn_child(&mut self, parent: Entity, child: &mut EntityBuilder) -> Entity {
         self.spawn(child.add(Parent(parent)).build())
     }
 }
@@ -101,7 +96,7 @@ impl MakeChild for World {
 impl MakeChild for CommandBuffer {
     type Ret = ();
 
-    fn spawn_child(&mut self, parent: Entity, mut child: &mut EntityBuilder) -> Self::Ret {
+    fn spawn_child(&mut self, parent: Entity, child: &mut EntityBuilder) -> Self::Ret {
         self.spawn(child.add(Parent(parent)).build());
     }
 }
@@ -119,7 +114,7 @@ impl MakeChildren for World {
             I: IntoIterator<Item=&'e mut EntityBuilder>,
             I::IntoIter: ExactSizeIterator,
     {
-        let mut entities_it = entities.into_iter();
+        let entities_it = entities.into_iter();
         let entities = self
             .reserve_entities(entities_it.len() as _)
             .collect::<Vec<_>>();
@@ -135,15 +130,15 @@ impl MakeChildren for World {
 #[repr(transparent)]
 pub struct GlobalTransform(pub Transform);
 
-impl Into<Transform> for GlobalTransform {
-    fn into(self) -> Transform {
-        self.0
+impl From<GlobalTransform> for Transform {
+    fn from(val: GlobalTransform) -> Self {
+        val.0
     }
 }
 
-impl<'a> Into<Transform> for &'a GlobalTransform {
-    fn into(self) -> Transform {
-        self.0
+impl<'a> From<&'a GlobalTransform> for Transform {
+    fn from(val: &'a GlobalTransform) -> Self {
+        val.0
     }
 }
 

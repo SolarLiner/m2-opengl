@@ -1,6 +1,6 @@
 use std::{borrow::Cow, io::Cursor};
 
-use assets_manager::{Asset, BoxedError, loader::Loader};
+use assets_manager::{BoxedError, loader::Loader};
 use glam::Vec3;
 
 use rose_renderer::material::Vertex;

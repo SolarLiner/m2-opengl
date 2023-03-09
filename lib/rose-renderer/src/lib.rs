@@ -1,5 +1,4 @@
 use std::{
-    any::Any,
     cell::RefCell,
     collections::HashMap,
     rc::{Rc, Weak},
@@ -26,7 +25,6 @@ use violette::{
     Cull,
     framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer}, FrontFace,
 };
-use violette::base::resource::ResourceExt;
 
 use crate::env::Environment;
 use crate::material::MaterialInstance;

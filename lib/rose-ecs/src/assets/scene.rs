@@ -55,21 +55,13 @@ pub struct NamedObject {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct SceneDesc {
     pub camera: Transformed<CameraParams>,
     pub lights: Vec<Named<Transformed<Light>>>,
     pub objects: Vec<Named<Transformed<NamedObject>>>,
 }
 
-impl Default for SceneDesc {
-    fn default() -> Self {
-        Self {
-            camera: Transformed::default(),
-            lights: vec![],
-            objects: vec![],
-        }
-    }
-}
 
 impl Asset for SceneDesc {
     const EXTENSIONS: &'static [&'static str] = &["scene", "toml"];

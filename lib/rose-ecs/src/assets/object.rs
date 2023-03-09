@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-
 use assets_manager::{
     AnyCache, Asset, BoxedError, Compound, Handle, loader::TomlLoader, SharedString,
 };
