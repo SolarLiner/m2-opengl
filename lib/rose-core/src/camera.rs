@@ -4,7 +4,7 @@ use crevice::std140::AsStd140;
 use eyre::Result;
 use glam::{Mat4, Vec2, Vec3, vec4, Vec4};
 
-use violette::buffer::UniformBuffer;
+use violette::buffer::{BufferUsageHint, UniformBuffer};
 
 use crate::transform::Transform;
 
@@ -78,7 +78,10 @@ impl ViewUniform {
     }
 
     pub fn create_buffer(&self) -> Result<ViewUniformBuffer> {
-        ViewUniformBuffer::with_data(&[self.as_std140()])
+        // ViewUniformBuffer::with_data(&[self.as_std140()])
+        let mut buffer = ViewUniformBuffer::new();
+        buffer.set(&[self.as_std140()], BufferUsageHint::Stream)?;
+        Ok(buffer)
     }
 }
 

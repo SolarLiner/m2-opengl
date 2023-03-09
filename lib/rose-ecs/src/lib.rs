@@ -19,7 +19,7 @@ use crate::assets::{Material, MeshAsset};
 use crate::components::{Active, CameraParams, Inactive, Light, PanOrbitCamera};
 use crate::scene::Scene;
 use crate::systems::{input::InputSystem, render::RenderSystem};
-use crate::systems::hierarchy::HierarchicalSystem;
+use crate::systems::hierarchy::{HierarchicalSystem, Parent};
 use crate::systems::PersistenceSystem;
 
 pub mod assets;
@@ -38,6 +38,7 @@ impl CoreSystems {
         let mut persistence = PersistenceSystem::new();
         persistence
             .register_component::<String>()
+            .register_component::<Parent>()
             .register_component::<Active>()
             .register_component::<Inactive>()
             .register_component::<Transform>()
@@ -70,22 +71,18 @@ impl CoreSystems {
     }
 
     pub fn begin_frame(&mut self) {
-        self.input.on_frame();
     }
 
     pub fn end_frame(&mut self, scene: Option<&mut Scene>, dt: Duration) -> Result<()> {
         if let Some(scene) = scene {
             scene.with_world(|world, cmd| {
-                rayon::join(
-                    || {
-                        self.render.update_from_active_camera(world);
-                    },
-                    || HierarchicalSystem.update::<Transform>(world, cmd),
-                );
+                HierarchicalSystem.update::<Transform>(world, cmd);
+                self.render.update_from_active_camera(world);
                 self.render.on_frame(dt, world)
             })?;
             scene.flush_commands();
         }
+        self.input.on_frame();
         Ok(())
     }
 

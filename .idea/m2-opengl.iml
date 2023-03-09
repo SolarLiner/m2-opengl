@@ -28,6 +28,7 @@
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-envmap/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/bin/transform_hierarchy/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-ecs/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/load_gltf/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

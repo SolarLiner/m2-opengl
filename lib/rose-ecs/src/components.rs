@@ -174,6 +174,7 @@ pub struct PanOrbitCameraBundle {
     pub transform: Transform,
     pub params: CameraParams,
     pub pan_orbit: PanOrbitCamera,
+    pub active: Active,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]

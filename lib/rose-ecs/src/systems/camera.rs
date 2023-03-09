@@ -11,11 +11,51 @@ use crate::components::PanOrbitCamera;
 
 #[derive(Debug)]
 pub struct PanOrbitSystem {
-    pub sensitivity: f32,
+    pub mouse_sensitivity: f32,
+    pub scroll_sensitivity: f32,
     logical_window_size: Vec2,
 }
 
 impl PanOrbitSystem {
+    pub fn new(size: LogicalSize<f32>) -> Self {
+        Self {
+            mouse_sensitivity: 100.,
+            scroll_sensitivity: 100.,
+            logical_window_size: Vec2::from_array(size.into()),
+        }
+    }
+
+    pub fn set_window_size(&mut self, size: LogicalSize<f32>) {
+        self.logical_window_size = Vec2::from_array(size.into());
+    }
+
+    pub fn on_frame(&self, input: &Input, world: &mut World) {
+        let aspect_ratio = self.logical_window_size.x / self.logical_window_size.y;
+        let delta = vec2(aspect_ratio, 1.) * input.mouse.delta().truncate()
+            / self.logical_window_size
+            * self.mouse_sensitivity;
+        let scroll = input.mouse.delta().z * self.scroll_sensitivity;
+        let buttons = (
+            input.mouse.state.is_pressed(&MouseButton::Left),
+            input.mouse.state.is_pressed(&MouseButton::Right),
+        );
+        for (_, (transform, pan_orbit)) in world
+            .query::<(&mut Transform, &mut PanOrbitCamera)>()
+            .iter()
+        {
+            self.frame_one(delta, scroll, buttons, pan_orbit, transform);
+        }
+    }
+
+    pub fn with_sensitivity(mut self, sensitivity: f32) -> PanOrbitSystem {
+        self.mouse_sensitivity = sensitivity;
+        self
+    }
+
+    pub fn resize(&mut self, size: LogicalSize<f32>) {
+        self.logical_window_size = Vec2::from_array(size.into());
+    }
+
     pub fn frame_manual(
         &self,
         input: &Input,
@@ -25,7 +65,7 @@ impl PanOrbitSystem {
         let aspect_ratio = self.logical_window_size.x / self.logical_window_size.y;
         let delta = vec2(aspect_ratio, 1.) * input.mouse.delta().truncate()
             / self.logical_window_size
-            * self.sensitivity;
+            * self.mouse_sensitivity;
         let scroll = input.mouse.delta().z;
         let buttons = (
             input.mouse.state.is_pressed(&MouseButton::Left),
@@ -43,10 +83,10 @@ impl PanOrbitSystem {
         cam_transform: &mut Transform,
     ) {
         if left {
-            controller.target_rotation += delta;
+            controller.target_rotation += delta * controller.radius;
         }
         if right {
-            let pos = (delta.xy() * vec2(1., -1.)).extend(0.);
+            let pos = (delta.xy() * vec2(1., -1.)).extend(0.) * controller.radius;
             controller.focus += pos;
         }
 
@@ -66,36 +106,5 @@ impl PanOrbitSystem {
         // );
         cam_transform.rotation = Quat::from_rotation_x(controller.target_rotation.y) * Quat::from_rotation_y(controller.target_rotation.x);
         cam_transform.position = controller.focus - controller.radius * Vec3::Z;
-    }
-}
-
-impl PanOrbitSystem {
-    pub fn new(size: LogicalSize<f32>) -> Self {
-        Self {
-            sensitivity: 100.,
-            logical_window_size: Vec2::from_array(size.into()),
-        }
-    }
-
-    pub fn set_window_size(&mut self, size: LogicalSize<f32>) {
-        self.logical_window_size = Vec2::from_array(size.into());
-    }
-
-    pub fn on_frame(&self, input: &Input, world: &mut World) {
-        let aspect_ratio = self.logical_window_size.x / self.logical_window_size.y;
-        let delta = vec2(aspect_ratio, 1.) * input.mouse.delta().truncate()
-            / self.logical_window_size
-            * self.sensitivity;
-        let scroll = input.mouse.delta().z;
-        let buttons = (
-            input.mouse.state.is_pressed(&MouseButton::Left),
-            input.mouse.state.is_pressed(&MouseButton::Right),
-        );
-        for (_, (transform, pan_orbit)) in world
-            .query::<(&mut Transform, &mut PanOrbitCamera)>()
-            .iter()
-        {
-            self.frame_one(delta, scroll, buttons, pan_orbit, transform);
-        }
     }
 }

@@ -1,0 +1,27 @@
+[package]
+name = "load_gltf"
+edition.workspace = true
+version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+color-eyre = "0.6.2"
+gltf = "1.1.0"
+image = "0.24.5"
+smol = "1.3.0"
+
+rose-core = { path = "../../lib/rose-core" }
+rose-ecs = { path = "../../lib/rose-ecs" }
+rose-platform = { path = "../../lib/rose-platform", features = ["tracy"] }
+rose-ui = { path = "../../lib/rose-ui" }
+rose-renderer = { path = "../../lib/rose-renderer" }
+violette = { path = "../../lib/violette" }
+
+bytemuck.workspace = true
+egui.workspace = true
+eyre.workspace = true
+glam.workspace = true
+tracing.workspace = true

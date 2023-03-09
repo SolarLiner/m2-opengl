@@ -45,7 +45,7 @@ impl RenderSystem {
     pub fn update_from_active_camera(&mut self, world: &World) {
         let mut q = world.query::<(&GlobalTransform, &CameraParams)>().with::<&Active>().without::<&Inactive>();
         let Some((_, (tr, camera))) = q.iter().next() else {
-            tracing::warn!("No active camera. Make sure you have a camera set up using the CameraBundle, or by having Transform, CameraParams and the Active components on the entity.");
+            tracing::warn!("No active camera. Make sure you have a camera set up using the CameraBundle, or by having GlobalTransform, CameraParams and the Active components on the entity.");
             return;
         };
         self.camera.projection.zrange = camera.zrange.clone();

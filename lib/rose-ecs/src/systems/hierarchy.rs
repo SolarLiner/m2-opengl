@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use rose_core::transform::Transform;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize)]
 pub struct Parent(pub Entity);
 
 pub trait Hierarchical: Component {
