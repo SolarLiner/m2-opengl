@@ -10,7 +10,7 @@ homepage = "https://github.com/SolarLiner/m2-opengl"
 
 [workspace.dependencies]
 bytemuck = { version = "1.7.3", features = ["derive"] }
-crevice = "0.12.0"
+crevice = { version = "0.12.0", features = ["glam"] }
 egui = { version = "0.20.1", features = ["bytemuck"] }
 eyre = "0.6.8"
 glam = { version = "0.22.0", features = ["bytemuck", "rand", "num-traits", "glam-assert"] }

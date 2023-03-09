@@ -15,15 +15,11 @@ use rose_core::transform::Transform;
 use rose_platform::events::WindowEvent;
 use rose_platform::PhysicalSize;
 
-use crate::{
-    systems::{
-        input::InputSystem,
-        render::RenderSystem,
-    }
-};
 use crate::assets::{Material, MeshAsset};
 use crate::components::{Active, CameraParams, Inactive, Light, PanOrbitCamera};
 use crate::scene::Scene;
+use crate::systems::{input::InputSystem, render::RenderSystem};
+use crate::systems::hierarchy::HierarchicalSystem;
 use crate::systems::PersistenceSystem;
 
 pub mod assets;
@@ -72,24 +68,29 @@ impl CoreSystems {
     pub fn input(&self) -> &Input {
         &self.input.input
     }
-}
 
-impl CoreSystems {
     pub fn begin_frame(&mut self) {
         self.input.on_frame();
     }
 
     pub fn end_frame(&mut self, scene: Option<&mut Scene>, dt: Duration) -> Result<()> {
         if let Some(scene) = scene {
-            scene.with_world(|world, _| self.render.on_frame(dt, world))?;
+            scene.with_world(|world, cmd| {
+                rayon::join(
+                    || {
+                        self.render.update_from_active_camera(world);
+                    },
+                    || HierarchicalSystem.update::<Transform>(world, cmd),
+                );
+                self.render.on_frame(dt, world)
+            })?;
             scene.flush_commands();
         }
         Ok(())
     }
 
-    pub fn on_event(&mut self, event: WindowEvent) -> Result<()> {
-        self.input.on_event(event);
-        Ok(())
+    pub fn on_event(&mut self, event: WindowEvent) -> bool {
+        self.input.on_event(event)
     }
 
     pub fn load_scene(&mut self, path: impl AsRef<Path>) -> Result<Scene> {
@@ -98,20 +99,31 @@ impl CoreSystems {
 
     pub fn save_scene(&mut self, scene: &Scene) -> Result<()> {
         let mut ser = serde_yaml::Serializer::new(BufWriter::new(File::create(scene.path())?));
-        scene.with_world(|world, _| self.persistence.serialize_world(scene.asset_cache(), &mut ser, world))?;
+        scene.with_world(|world, _| {
+            self.persistence
+                .serialize_world(scene.asset_cache(), &mut ser, world)
+        })?;
         Ok(())
     }
 }
 
 pub mod prelude {
-    pub use assets_manager::{*, asset::{Asset, Compound}, source::Source};
+    pub use assets_manager::{
+        *,
+        asset::{Asset, Compound},
+        source::Source,
+    };
     pub use hecs::*;
 
     pub use crate::{
         components::*,
+        CoreSystems,
         scene::Scene,
-        systems::persistence::SerializableComponent,
-        };
+        systems::{
+            hierarchy::{MakeChild, MakeChildren},
+            persistence::SerializableComponent,
+        },
+    };
 }
 
 pub trait NamedComponent: Component {

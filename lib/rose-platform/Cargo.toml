@@ -17,7 +17,7 @@ once_cell = "1.17.0"
 raw-window-handle = "0.5.0"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.11", features = ["env-filter", "json"] }
-tracing-tracy = { version = "0.10.2", optional = true }
+tracing-tracy = { version = "0.10.2", optional = true, features = ["enable"] }
 
 rose-core = { path = "../rose-core" }
 rose-ui = { path = "../rose-ui", optional = true }

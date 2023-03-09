@@ -4,10 +4,7 @@ use crevice::std140::AsStd140;
 use eyre::Result;
 use glam::{Mat4, Vec2, Vec3, vec4, Vec4};
 
-use violette::{
-    buffer::UniformBuffer,
-    program::Uniform,
-};
+use violette::buffer::UniformBuffer;
 
 use crate::transform::Transform;
 
@@ -52,18 +49,6 @@ pub struct Camera {
     pub projection: Projection,
 }
 
-impl Camera {
-    pub fn matrix(&self) -> Mat4 {
-        self.projection.matrix() * self.transform.matrix()
-    }
-}
-
-impl Camera {
-    pub fn as_uniform(&self) -> impl Uniform {
-        self.matrix()
-    }
-}
-
 pub type ViewUniformBuffer = UniformBuffer<<ViewUniform as AsStd140>::Output>;
 
 #[derive(Debug, Copy, Clone, AsStd140)]
@@ -78,7 +63,7 @@ pub struct ViewUniform {
 
 impl ViewUniform {
     pub fn update_from_camera(&mut self, camera: &Camera) {
-        self.mat_view = camera.transform.matrix();
+        self.mat_view = Mat4::from_rotation_translation(camera.transform.rotation, camera.transform.position);
         self.mat_proj = camera.projection.matrix();
         self.inv_view = self.mat_view.inverse();
         self.inv_proj = self.mat_proj.inverse();

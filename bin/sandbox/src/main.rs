@@ -139,7 +139,7 @@ impl Application for Sandbox {
     }
 
     fn interact(&mut self, event: WindowEvent) -> Result<()> {
-        self.core_systems.on_event(event)?;
+        self.core_systems.on_event(event);
         Ok(())
     }
 

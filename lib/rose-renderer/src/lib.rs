@@ -36,6 +36,7 @@ pub mod env;
 pub mod gbuffers;
 pub mod material;
 pub mod postprocess;
+pub mod bones;
 
 pub type Mesh = rose_core::mesh::Mesh<material::Vertex>;
 

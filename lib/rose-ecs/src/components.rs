@@ -15,14 +15,14 @@ use rose_core::{
     transform::Transform,
 };
 
-use crate::{
-    NamedComponent,
-    systems::ComponentUi,
-};
+use crate::NamedComponent;
+#[cfg(feature = "ui")]
+use crate::systems::ComponentUi;
 
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Active;
 
+#[cfg(feature = "ui")]
 impl ComponentUi for Active {
     fn ui(&mut self, ui: &mut Ui) {
         ui.weak("No associated component data");
@@ -36,6 +36,7 @@ impl NamedComponent for Active {
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Inactive;
 
+#[cfg(feature = "ui")]
 impl ComponentUi for Inactive {
     fn ui(&mut self, ui: &mut Ui) {
         ui.weak("No associated component data");
@@ -62,6 +63,7 @@ impl From<Projection> for CameraParams {
     }
 }
 
+#[cfg(feature = "ui")]
 impl ComponentUi for CameraParams {
     fn ui(&mut self, ui: &mut Ui) {
         Grid::new("camera-params")
@@ -120,6 +122,7 @@ pub struct PanOrbitCamera {
     pub focus: Vec3,
 }
 
+#[cfg(feature = "ui")]
 impl ComponentUi for PanOrbitCamera {
     fn ui(&mut self, ui: &mut Ui) {
         Grid::new("pan-orbit-camera").num_columns(2).show(ui, |ui| {
@@ -188,6 +191,7 @@ pub struct Light {
     pub power: f32,
 }
 
+#[cfg(feature = "ui")]
 impl ComponentUi for Light {
     fn ui(&mut self, ui: &mut Ui) {
         Grid::new("component-light").num_columns(2).show(ui, |ui| {
@@ -248,6 +252,7 @@ pub struct LightBundle {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SceneId(pub SharedString);
 
+#[cfg(feature = "ui")]
 impl ComponentUi for SceneId {
     fn ui(&mut self, ui: &mut Ui) {
         ui.label("Scene ID marker for tracking nested scenes.");

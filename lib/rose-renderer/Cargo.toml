@@ -15,6 +15,7 @@ rose-core = { path = "../rose-core" }
 rose-ui = { path = "../rose-ui", optional = true }
 
 bytemuck.workspace = true
+crevice.workspace = true
 egui = { workspace = true, optional = true }
 eyre.workspace = true
 glam.workspace = true

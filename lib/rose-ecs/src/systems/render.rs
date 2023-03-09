@@ -30,6 +30,7 @@ use crate::{
     assets::*,
     components::{*, Light as LightComponent},
 };
+use crate::systems::hierarchy::GlobalTransform;
 
 pub struct RenderSystem {
     pub clear_color: Vec3,
@@ -42,14 +43,14 @@ pub struct RenderSystem {
 
 impl RenderSystem {
     pub fn update_from_active_camera(&mut self, world: &World) {
-        let mut q = world.query::<(&Transform, &CameraParams)>().with::<&Active>().without::<&Inactive>();
+        let mut q = world.query::<(&GlobalTransform, &CameraParams)>().with::<&Active>().without::<&Inactive>();
         let Some((_, (tr, camera))) = q.iter().next() else {
             tracing::warn!("No active camera. Make sure you have a camera set up using the CameraBundle, or by having Transform, CameraParams and the Active components on the entity.");
             return;
         };
         self.camera.projection.zrange = camera.zrange.clone();
         self.camera.projection.fovy = camera.fovy;
-        self.camera.transform.clone_from(tr);
+        self.camera.transform = tr.into();
     }
 }
 
@@ -118,15 +119,16 @@ impl RenderSystem {
 
     fn submit_meshes(&mut self, world: &World) {
         for (_, (mesh_handle, material_handle, transform)) in world
-            .query::<(&Handle<MeshAsset>, &Handle<Material>, &Transform)>()
+            .query::<(&Handle<MeshAsset>, &Handle<Material>, &GlobalTransform)>()
             .iter()
         {
+            let transform = transform.into();
             tracing::trace!(message="Submitting mesh", mesh=%mesh_handle.id(), material=%material_handle.id());
             let mesh = self.meshes_map.get(mesh_handle.id()).unwrap();
             let material = self.materials_map.get(material_handle.id()).unwrap();
             self.renderer.submit_mesh(
                 Rc::downgrade(&*material),
-                Rc::downgrade(&*mesh).transformed(*transform),
+                Rc::downgrade(&*mesh).transformed(transform),
             );
         }
     }
@@ -210,10 +212,10 @@ impl RenderSystem {
 
     fn iter_active_lights(&self, world: &World) -> Vec<(Transform, LightComponent)> {
         let mut query = world
-            .query::<(&Transform, &LightComponent)>()
+            .query::<(&GlobalTransform, &LightComponent)>()
             .with::<&Active>()
             .without::<&Inactive>();
-        query.iter().map(|(_, (t, l))| (*t, *l)).collect()
+        query.iter().map(|(_, (t, l))| (t.into(), *l)).collect()
     }
 }
 

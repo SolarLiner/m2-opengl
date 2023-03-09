@@ -13,4 +13,5 @@ pub mod persistence;
 
 #[cfg(feature = "ui")]
 pub mod ui;
+pub mod hierarchy;
 

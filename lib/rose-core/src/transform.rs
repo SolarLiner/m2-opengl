@@ -2,8 +2,9 @@ use std::{
     hash::{Hash, Hasher},
     ops::Mul,
 };
+use std::f32::consts::PI;
 
-use glam::{Mat4, Quat, Vec3};
+use glam::{EulerRot, Mat4, Quat, Vec3};
 
 #[derive(Debug, Copy, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -11,6 +12,16 @@ pub struct Transform {
     pub position: Vec3,
     pub rotation: Quat,
     pub scale: Vec3,
+}
+
+impl Transform {
+    pub fn rotated_deg(self, rot: Vec3) -> Self {
+        self.rotated(rot * PI / 180.)
+    }
+    pub fn rotated(mut self, rot: Vec3) -> Self {
+        self.rotation *= Quat::from_euler(EulerRot::ZYX, rot.z, rot.y, rot.x);
+        self
+    }
 }
 
 impl Transform {
@@ -36,6 +47,49 @@ impl Transform {
 
     pub fn backward(&self) -> Vec3 {
         -self.forward()
+    }
+
+    pub fn translation(pos: Vec3) -> Self {
+        Self {
+            position: pos,
+            ..Default::default()
+        }
+    }
+
+    pub fn rotation(quat: Quat) -> Self {
+        Self {
+            rotation: quat,
+            ..Default::default()
+        }
+    }
+
+    pub fn from_matrix(mat: Mat4) -> Self {
+        let (scale, rotation, position) = mat.to_scale_rotation_translation();
+        Self {
+            position,
+            rotation,
+            scale,
+        }
+    }
+
+    pub fn looking_at(self, target: Vec3) -> Self {
+        self.looking_at_and_up(target, Vec3::Y)
+    }
+
+    pub fn looking_at_and_up(self, target: Vec3, up: Vec3) -> Self {
+        Self::from_matrix(
+            Mat4::from_scale(self.scale) * Mat4::look_at_rh(self.position, target, up),
+        )
+    }
+
+    pub fn scaled(mut self, scale: Vec3) -> Self {
+        self.scale = scale;
+        self
+    }
+
+    pub fn matrix(&self) -> Mat4 {
+        Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
+        // Mat4::from_translation(self.position) * Mat4::from_quat(self.rotation) * Mat4::from_scale(self.scale)
     }
 }
 
@@ -88,41 +142,6 @@ impl From<Quat> for Transform {
 impl From<Mat4> for Transform {
     fn from(mat: Mat4) -> Self {
         Self::from_matrix(mat)
-    }
-}
-
-impl Transform {
-    pub fn translation(pos: Vec3) -> Self {
-        Self {
-            position: pos,
-            ..Default::default()
-        }
-    }
-
-    pub fn rotation(quat: Quat) -> Self {
-        Self {
-            rotation: quat,
-            ..Default::default()
-        }
-    }
-
-    pub fn from_matrix(mat: Mat4) -> Self {
-        let (scale, rotation, position) = mat.to_scale_rotation_translation();
-        Self {
-            position,
-            rotation,
-            scale,
-        }
-    }
-
-    pub fn looking_at(self, target: Vec3) -> Self {
-        Self::from_matrix(
-            Mat4::from_scale(self.scale) * Mat4::look_at_rh(self.position, target, Vec3::Y),
-        )
-    }
-
-    pub fn matrix(&self) -> Mat4 {
-        Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
     }
 }
 

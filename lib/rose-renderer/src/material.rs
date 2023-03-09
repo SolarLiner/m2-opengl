@@ -2,7 +2,7 @@ use std::num::NonZeroU32;
 use std::path::Path;
 
 use eyre::Result;
-use glam::{Vec2, Vec3};
+use glam::{IVec4, UVec4, Vec2, Vec3};
 
 use rose_core::camera::ViewUniformBuffer;
 use rose_core::transform::Transformed;
@@ -26,6 +26,7 @@ pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
     pub uv: Vec2,
+    pub bones_ix: IVec4,
 }
 
 // impl VertexAttributes for Vertex {
@@ -45,7 +46,13 @@ impl Vertex {
             position,
             normal,
             uv,
+            bones_ix: IVec4::splat(-1),
         }
+    }
+
+    pub fn attach_bones(mut self, bones_ix: UVec4) -> Self {
+        self.bones_ix = bones_ix.as_ivec4();
+        self
     }
 }
 
