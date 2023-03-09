@@ -18,10 +18,14 @@ use tracing::Instrument;
 
 use rose_core::transform::Transform;
 use rose_ecs::{
-    assets::{Material, MeshAsset, TextureSlot},
+    assets::{
+        Image,
+        Material,
+        MeshAsset,
+        TextureSlot,
+    },
     prelude::*,
 };
-use rose_ecs::assets::Image;
 use rose_renderer::material::Vertex;
 
 pub async fn load_gltf_scenes(path: impl Into<PathBuf>) -> Result<Scene> {
@@ -39,15 +43,6 @@ pub async fn load_gltf_scenes(path: impl Into<PathBuf>) -> Result<Scene> {
     tracing::info!("Entering scene {:?}", gltf_scene.name());
     let mut scene = Scene::new(path.parent().unwrap())?;
     let cache = scene.asset_cache();
-    let default_material = cache.get_or_insert(
-        "prim:default_material",
-        Material {
-            color: TextureSlot::Color(Vec3::splat(0.7)),
-            normal: None,
-            normal_amount: 1.,
-            rough_metal: TextureSlot::Color(vec3(0.3, 0., 0.)),
-        },
-    );
     scene.with_world_mut(|world| {
         for node in gltf_scene.nodes() {
             tracing::info!("Entering node {:?}", gltf_scene.name());
@@ -71,7 +66,7 @@ pub async fn load_gltf_scenes(path: impl Into<PathBuf>) -> Result<Scene> {
             let entity = world.spawn(entity.build());
             if let Some(mesh) = node.mesh() {
                 let mut entities =
-                    load_node_mesh(cache, mesh, default_material, &buffers[..], &images)?;
+                    load_node_mesh(cache, mesh, &buffers[..], &images)?;
                 world.spawn_children(entity, &mut entities);
             }
         }
@@ -83,7 +78,6 @@ pub async fn load_gltf_scenes(path: impl Into<PathBuf>) -> Result<Scene> {
 fn load_node_mesh(
     cache: AnyCache<'static>,
     mesh: Mesh,
-    default_material: Handle<'static, Material>,
     buffers: &[BufferData],
     images: &[ImageData],
 ) -> Result<Vec<EntityBuilder>> {
@@ -143,7 +137,9 @@ fn load_node_mesh(
             ));
         let rough_metal = pbr.metallic_roughness_texture().map(|tex| {
             let texture = &images[tex.texture().index()];
-            gltf_image_into_texture_slot(texture)
+            let image = image2image(texture).into_rgb32f();
+            let data = image.pixels().flat_map(|px| [px[1], px[2], 0.]).collect::<Vec<_>>();
+            TextureSlot::Texture(DynamicImage::ImageRgb32F(ImageBuffer::from_raw(image.width(), image.height(), data).unwrap()).into())
         }).unwrap_or(TextureSlot::Color(vec3(pbr.roughness_factor(), pbr.metallic_factor(), 0.)));
         let normal = prim.material().normal_texture().map(|tex| {
             let texture = &images[tex.texture().index()];
@@ -167,6 +163,11 @@ fn gltf_image_into_texture_slot(texture: &Data) -> TextureSlot {
 }
 
 fn gltf_image_into_asset(texture: &Data) -> Image {
+    let image = image2image(texture);
+    image.flipv().into()
+}
+
+fn image2image(texture: &Data) -> DynamicImage {
     let image = match texture.format {
         Format::R8 => DynamicImage::ImageLuma8(
             GrayImage::from_raw(texture.width, texture.height, texture.pixels.clone())
@@ -246,7 +247,7 @@ fn gltf_image_into_asset(texture: &Data) -> Image {
                 .unwrap(),
         ),
     };
-    image.into()
+    image
 }
 
 fn coerce_gltf_uv(uv: ReadTexCoords) -> impl Iterator<Item=Vec2> {

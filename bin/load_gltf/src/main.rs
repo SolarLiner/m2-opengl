@@ -31,7 +31,7 @@ impl Application for App {
         core_systems
             .persistence
             .register_component::<GlobalTransform>();
-        core_systems.render.renderer.set_environment(EnvironmentMap::load("assets/textures/derelict_highway_midday_1k.exr")?);
+        core_systems.render.renderer.set_environment(EnvironmentMap::load("assets/textures/table_mountain_2_puresky_4k.exr")?);
         let scene = if let Some(name) = std::env::args().nth(1) {
             let path = PathBuf::from(name);
             let mut scene: Scene = smol::block_on(load_gltf::load_gltf_scenes(&path))?;
@@ -61,8 +61,7 @@ impl Application for App {
         } else {
             eyre::bail!("Need to provide a file to open");
         };
-        let mut pan_orbit_system = PanOrbitSystem::new(size.to_logical(scale_factor));
-        pan_orbit_system.scroll_sensitivity = 1000.;
+        let pan_orbit_system = PanOrbitSystem::new(size.to_logical(scale_factor));
         Ok(Self {
             core_systems,
             scene,

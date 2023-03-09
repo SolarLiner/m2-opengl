@@ -20,7 +20,7 @@ impl PanOrbitSystem {
     pub fn new(size: LogicalSize<f32>) -> Self {
         Self {
             mouse_sensitivity: 100.,
-            scroll_sensitivity: 100.,
+            scroll_sensitivity: 10.,
             logical_window_size: Vec2::from_array(size.into()),
         }
     }
