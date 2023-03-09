@@ -2,3 +2,4 @@ color = "textures.square_floor_diffuse"
 normal = "textures.square_floor_normal"
 normal_amount = 0.5
 rough_metal = "textures.square_floor_rough_metal"
+rough_metal_factor = [0.5, 0]

@@ -1,4 +1,4 @@
 color = "textures.moon_color"
 normal = "textures.moon_normal"
 normal_amount = 0.2
-rough_metal = [0.8, 0, 0]
+rough_metal_factor = [0.8, 0]

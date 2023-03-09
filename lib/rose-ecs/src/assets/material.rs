@@ -5,19 +5,25 @@ use assets_manager::{
     AnyCache,
     Asset, BoxedError, Compound, loader::{ImageLoader, LoadFrom, TomlLoader}, SharedString,
 };
-use eyre::Context;
-use eyre::Result;
-use glam::Vec3;
+use glam::{Vec2, Vec3};
 use serde::{Deserialize, Serialize};
 
+use violette::texture::{SampleMode, TextureWrap};
+
 #[derive(Debug, Clone)]
-pub struct Image(Arc<image::DynamicImage>);
+pub struct Image {
+    pub image: Arc<image::DynamicImage>,
+    pub sample_u: SampleMode,
+    pub sample_v: SampleMode,
+    pub wrap_u: TextureWrap,
+    pub wrap_v: TextureWrap,
+}
 
 impl ops::Deref for Image {
     type Target = image::DynamicImage;
 
     fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
+        self.image.as_ref()
     }
 }
 
@@ -28,48 +34,39 @@ impl Asset for Image {
 
 impl From<image::DynamicImage> for Image {
     fn from(value: image::DynamicImage) -> Self {
-        Self(Arc::new(value))
+        Self {
+            image: Arc::new(value),
+            sample_u: SampleMode::Linear,
+            sample_v: SampleMode::Linear,
+            wrap_u: TextureWrap::ClampEdge,
+            wrap_v: TextureWrap::ClampEdge,
+        }
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum TextureSlotDesc {
-    Color(Vec3),
-    Texture(SharedString),
+const fn default_normal_amount() -> f32 {
+    1.
 }
 
-impl Asset for TextureSlotDesc {
-    const EXTENSION: &'static str = "toml";
-    type Loader = TomlLoader;
+const fn default_color_factor() -> Vec3 {
+    Vec3::ONE
 }
 
-#[derive(Debug, Clone)]
-pub enum TextureSlot {
-    Color(Vec3),
-    Texture(Image),
+const fn default_rough_metal() -> Vec2 {
+    Vec2::ONE
 }
-
-impl Compound for TextureSlot {
-    fn load(cache: AnyCache, id: &SharedString) -> eyre::Result<Self, BoxedError> {
-        let desc = cache.load::<TextureSlotDesc>(id)?.cloned();
-        tracing::debug!(message = "Loading texture slot", ?desc);
-        Ok(match desc {
-            TextureSlotDesc::Color(col) => Self::Color(col),
-            TextureSlotDesc::Texture(path) => Self::Texture(cache.load(&path)?.cloned()),
-        })
-    }
-}
-
-const fn default_normal_amount() -> f32 {1.}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MaterialDesc {
-    pub color: TextureSlotDesc,
+    pub color: Option<SharedString>,
+    #[serde(default = "default_color_factor")]
+    pub color_factor: Vec3,
     pub normal: Option<SharedString>,
     #[serde(default = "default_normal_amount")]
     pub normal_amount: f32,
-    pub rough_metal: TextureSlotDesc,
+    pub rough_metal: Option<SharedString>,
+    #[serde(default = "default_rough_metal")]
+    pub rough_metal_factor: Vec2,
 }
 
 impl Asset for MaterialDesc {
@@ -80,36 +77,29 @@ impl Asset for MaterialDesc {
 
 #[derive(Debug, Clone)]
 pub struct Material {
-    pub color: TextureSlot,
+    pub color: Option<Image>,
+    pub color_factor: Vec3,
     pub normal: Option<Image>,
     pub normal_amount: f32,
-    pub rough_metal: TextureSlot,
+    pub rough_metal: Option<Image>,
+    pub rough_metal_factor: Vec2,
 }
 
 impl Compound for Material {
     fn load(cache: AnyCache, id: &SharedString) -> eyre::Result<Self, BoxedError> {
-        fn slot_from_cache(cache: AnyCache, desc: TextureSlotDesc) -> Result<TextureSlot> {
-            Ok(match desc {
-                TextureSlotDesc::Color(col) => TextureSlot::Color(col),
-                TextureSlotDesc::Texture(id) => TextureSlot::Texture(
-                    cache
-                        .load(&id)
-                        .with_context(|| format!("Loading {:?}", id))?
-                        .cloned(),
-                ),
-            })
-        }
         tracing::debug!(message="Loading material", %id);
         let desc = cache.load::<MaterialDesc>(id)?.cloned();
         Ok(Self {
-            color: slot_from_cache(cache, desc.color)?,
+            color: desc.color.map(|id| cache.load_owned(id.as_str()).unwrap()),
+            color_factor: desc.color_factor,
             normal: if let Some(path) = desc.normal {
                 Some(cache.load(&path)?.cloned())
             } else {
                 None
             },
             normal_amount: desc.normal_amount,
-            rough_metal: slot_from_cache(cache, desc.rough_metal)?,
+            rough_metal: desc.rough_metal.map(|id| cache.load_owned(id.as_str()).unwrap()),
+            rough_metal_factor: desc.rough_metal_factor,
         })
     }
 }

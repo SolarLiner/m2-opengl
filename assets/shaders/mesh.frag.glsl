@@ -9,11 +9,18 @@ layout(location=1) out vec3 frame_albedo;
 layout(location=2) out vec4 frame_normal;
 layout(location=3) out vec2 frame_rough_metal;
 
-uniform sampler2D color;
-uniform sampler2D normal_map;
-uniform float normal_amount = 1.0;
-uniform bool normal_enabled = false;
-uniform sampler2D rough_metal;
+layout(std140) uniform Uniforms {
+    bool has_color;
+    vec3 color_factor;
+    bool has_normal;
+    float normal_amount;
+    bool has_rough_metal;
+    vec2 rough_metal_factor;
+} uniforms;
+
+uniform sampler2D map_color;
+uniform sampler2D map_normal;
+uniform sampler2D map_rough_metal;
 
 mat3 cotangent_frame(vec3 pos, vec3 normal, vec2 uv) {
     vec3 dp1 = dFdx(pos);
@@ -31,17 +38,23 @@ mat3 cotangent_frame(vec3 pos, vec3 normal, vec2 uv) {
 void main() {
     frame_position = vs_position;
 
-    frame_albedo = texture(color, vs_uv).rgb;
+    frame_albedo = uniforms.color_factor;
+    if (uniforms.has_color)
+    frame_albedo *= texture(map_color, vs_uv).rgb;
 
     vec3 out_normal;
-    if (normal_enabled) {
+    if (uniforms.has_normal) {
+        float normal_amount = uniforms.normal_amount;
         mat3 tbn = cotangent_frame(vs_position, vs_normal, vs_uv);
-        vec3 tangent_map = (texture(normal_map, vs_uv).xyz * 2. - 1.) * vec3(normal_amount, normal_amount, 1.);
+        vec3 tangent_map = (texture(map_normal, vs_uv).xyz * 2. - 1.) * vec3(normal_amount, normal_amount, 1.);
         out_normal = normalize(tbn * tangent_map);// <- world space
     } else {
         out_normal = vs_normal;
     }
 
     frame_normal = vec4(out_normal, 1);
-    frame_rough_metal = texture(rough_metal, vs_uv).rg;
+
+    frame_rough_metal = uniforms.rough_metal_factor;
+    if (uniforms.has_rough_metal)
+    frame_rough_metal *= texture(map_rough_metal, vs_uv).rg;
 }

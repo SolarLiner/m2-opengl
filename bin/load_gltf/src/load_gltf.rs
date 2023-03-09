@@ -1,36 +1,33 @@
 use std::path::PathBuf;
 
 use color_eyre::Result;
-use glam::{Mat4, UVec2, Vec2, vec3, Vec3, Vec4};
+use glam::{Mat4, UVec2, vec2, Vec2, Vec3, Vec4};
 use gltf::{
     buffer::Data as BufferData,
     camera::Projection as CamProjection,
-    image::{Data as ImageData, Format},
+    image::{
+        Data as ImageData,
+        Format,
+    },
     Mesh,
     mesh::util::ReadTexCoords,
 };
-use gltf::image::Data;
 use image::{
     buffer::ConvertBuffer, DynamicImage, GrayImage, ImageBuffer, Rgb, RgbaImage, RgbImage,
 };
-use smol::stream::StreamExt;
 use tracing::Instrument;
 
 use rose_core::transform::Transform;
 use rose_ecs::{
-    assets::{
-        Image,
-        Material,
-        MeshAsset,
-        TextureSlot,
-    },
+    assets::{Material, MeshAsset},
     prelude::*,
 };
 use rose_renderer::material::Vertex;
 
-pub async fn load_gltf_scenes(path: impl Into<PathBuf>) -> Result<Scene> {
+pub async fn load_gltf_scene(path: impl Into<PathBuf>) -> Result<Scene> {
     let path = path.into();
-    let _span = tracing::debug_span!("load_sltf_scenes", path=%path.display()).entered();
+    tracing::info!("Loading scene from '{}'", path.display());
+    let _span = tracing::debug_span!("load_gltf_scene", path=%path.display()).entered();
     let (document, buffers, images) = smol::unblock({
         let path = path.clone();
         move || gltf::import(path)
@@ -65,8 +62,7 @@ pub async fn load_gltf_scenes(path: impl Into<PathBuf>) -> Result<Scene> {
 
             let entity = world.spawn(entity.build());
             if let Some(mesh) = node.mesh() {
-                let mut entities =
-                    load_node_mesh(cache, mesh, &buffers[..], &images)?;
+                let mut entities = load_node_mesh(cache, mesh, &buffers[..], &images)?;
                 world.spawn_children(entity, &mut entities);
             }
         }
@@ -126,52 +122,50 @@ fn load_node_mesh(
             child_entity.add(handle);
         }
         let pbr = prim.material().pbr_metallic_roughness();
-        let color_slot = pbr
+        let color = pbr
             .base_color_texture()
             .map(|tex| {
                 let texture = &images[tex.texture().index()];
-                gltf_image_into_texture_slot(texture)
-            })
-            .unwrap_or(TextureSlot::Color(
-                Vec4::from(pbr.base_color_factor()).truncate(),
-            ));
+                image2image(texture).into()
+            });
         let rough_metal = pbr.metallic_roughness_texture().map(|tex| {
-            let texture = &images[tex.texture().index()];
-            let image = image2image(texture).into_rgb32f();
-            let data = image.pixels().flat_map(|px| [px[1], px[2], 0.]).collect::<Vec<_>>();
-            TextureSlot::Texture(DynamicImage::ImageRgb32F(ImageBuffer::from_raw(image.width(), image.height(), data).unwrap()).into())
-        }).unwrap_or(TextureSlot::Color(vec3(pbr.roughness_factor(), pbr.metallic_factor(), 0.)));
-        let normal = prim.material().normal_texture().map(|tex| {
-            let texture = &images[tex.texture().index()];
-            gltf_image_into_asset(texture)
+            let image = image2image(&images[tex.texture().index()]).into_rgb32f();
+            let data = image
+                .pixels()
+                .flat_map(|px| [px[1], px[2], 0.])
+                .collect::<Vec<_>>();
+            DynamicImage::ImageRgb32F(
+                ImageBuffer::from_raw(image.width(), image.height(), data).unwrap(),
+            )
+                .into()
         });
+        let (normal_amount, normal) = prim
+            .material()
+            .normal_texture()
+            .map(|tex| {
+                let texture = &images[tex.texture().index()];
+                (tex.scale(), Some(image2image(texture).into()))
+            })
+            .unwrap_or((1., None));
         let material = Material {
-            color: color_slot,
+            color,
+            color_factor: Vec4::from(pbr.base_color_factor()).truncate(),
             normal,
+            normal_amount,
             rough_metal,
-            normal_amount: 1.,
+            rough_metal_factor: vec2(pbr.roughness_factor(), pbr.metallic_factor()),
         };
-        child_entity.add(cache.get_or_insert(&format!("prim.{:03}.material", prim.index()), material));
+        child_entity
+            .add(cache.get_or_insert(&format!("prim.{:03}.material", prim.index()), material));
         entities.push(child_entity);
     }
     Ok(entities)
 }
 
-fn gltf_image_into_texture_slot(texture: &Data) -> TextureSlot {
-    let image = gltf_image_into_asset(texture);
-    TextureSlot::Texture(image.into())
-}
-
-fn gltf_image_into_asset(texture: &Data) -> Image {
-    let image = image2image(texture);
-    image.flipv().into()
-}
-
-fn image2image(texture: &Data) -> DynamicImage {
+fn image2image(texture: &ImageData) -> DynamicImage {
     let image = match texture.format {
         Format::R8 => DynamicImage::ImageLuma8(
-            GrayImage::from_raw(texture.width, texture.height, texture.pixels.clone())
-                .unwrap(),
+            GrayImage::from_raw(texture.width, texture.height, texture.pixels.clone()).unwrap(),
         ),
         Format::R8G8 => DynamicImage::ImageRgb8(
             RgbImage::from_raw(
@@ -187,12 +181,10 @@ fn image2image(texture: &Data) -> DynamicImage {
                 .convert(),
         ),
         Format::R8G8B8 => DynamicImage::ImageRgb8(
-            RgbImage::from_raw(texture.width, texture.height, texture.pixels.clone())
-                .unwrap(),
+            RgbImage::from_raw(texture.width, texture.height, texture.pixels.clone()).unwrap(),
         ),
         Format::R8G8B8A8 => DynamicImage::ImageRgba8(
-            RgbaImage::from_raw(texture.width, texture.height, texture.pixels.clone())
-                .unwrap(),
+            RgbaImage::from_raw(texture.width, texture.height, texture.pixels.clone()).unwrap(),
         ),
         Format::R16 => DynamicImage::ImageLuma16(
             ImageBuffer::from_raw(
@@ -247,7 +239,7 @@ fn image2image(texture: &Data) -> DynamicImage {
                 .unwrap(),
         ),
     };
-    image
+    image.flipv()
 }
 
 fn coerce_gltf_uv(uv: ReadTexCoords) -> impl Iterator<Item=Vec2> {
@@ -276,7 +268,7 @@ mod tests {
         let path: PathBuf =
             "/home/solarliner/Documents/Projets/Univ/m2-opengl/assets/gltf/CesiumBalloon.glb"
                 .into();
-        let mut scene = smol::block_on(load_gltf_scenes(&path)).unwrap();
+        let mut scene = smol::block_on(load_gltf_scene(&path)).unwrap();
         let entity_count = scene.with_world(|world, _| {
             let mut count = 0;
             for (entity, _) in world.query::<()>().iter() {

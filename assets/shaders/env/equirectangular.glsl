@@ -1,5 +1,7 @@
 #version 330 core
 
+const float M_PI = 3.1415926535;
+
 in vec2 v_uv;
 
 layout(std140) uniform View {
@@ -15,7 +17,6 @@ uniform sampler2D frame_albedo;
 uniform sampler2D frame_normal;
 uniform sampler2D frame_rough_metal;
 uniform sampler2D env_map;
-uniform bool is_illuminate;
 
 out vec4 out_color;
 
@@ -59,6 +60,27 @@ vec3 illuminate(vec3 normal) {
     vec3 reflected_ray = reflect(get_ray_dir(), normal);
     vec2 uv = spherical_to_polar(reflected_ray);
     return albedo * textureLod(env_map, uv, sqrt(rough_metal.r) * 15).rgb;
+}
+
+
+vec3 irradiance(vec3 normal) {
+    vec3 up = vec3(0, 1, 0);
+    vec3 right = normalize(cross(up, normal));
+    up = normalize(cross(normal, right));
+    const float delta = 0.025;
+    float nr_samples = 0;
+    vec3 ret = vec3(0);
+
+    for (float phi = 0; phi < 2 * M_PI; phi += delta) {
+        for (float theta = 0; theta < 0.5 * M_PI; theta += delta) {
+            vec3 tangent = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+            vec3 sample_vec = tangent.x * right + tangent.y * up + tangent.z * normal;
+            ret += texture(env_map, spherical_to_polar(sample_vec)).rgb * cos(theta) * sin(theta);
+            nr_samples++;
+        }
+    }
+
+    return ret;
 }
 
 void main() {

@@ -1,21 +1,19 @@
-use std::num::NonZeroU32;
 use std::path::Path;
 
+use crevice::std140::AsStd140;
 use eyre::Result;
 use glam::{IVec4, UVec4, Vec2, Vec3};
 
 use rose_core::camera::ViewUniformBuffer;
 use rose_core::transform::Transformed;
 use violette::{
+    buffer::UniformBuffer,
     framebuffer::Framebuffer,
     gl,
-    program::{Program, UniformLocation},
-    shader::VertexShader,
+    program::{Program, UniformBlockIndex, UniformLocation},
+    shader::{FragmentShader, VertexShader},
     texture::Texture,
 };
-use violette::program::UniformBlockIndex;
-use violette::shader::FragmentShader;
-use violette::texture::{Dimension, TextureFormat};
 use violette_derive::VertexAttributes;
 
 use crate::Mesh;
@@ -28,17 +26,6 @@ pub struct Vertex {
     pub uv: Vec2,
     pub bones_ix: IVec4,
 }
-
-// impl VertexAttributes for Vertex {
-//     fn attributes() -> &'static [VertexDesc] {
-//         vec![
-//             VertexDesc::from_gl_type::<Vec3>(offset_of!(Self, position)),
-//             VertexDesc::from_gl_type::<Vec3>(offset_of!(Self, normal)),
-//             VertexDesc::from_gl_type::<Vec2>(offset_of!(Self, uv)),
-//         ]
-//         .leak()
-//     }
-// }
 
 impl Vertex {
     pub fn new(position: Vec3, normal: Vec3, uv: Vec2) -> Self {
@@ -56,53 +43,25 @@ impl Vertex {
     }
 }
 
-#[derive(Debug)]
-pub enum TextureSlot<const N: usize> {
-    Texture(Texture<[f32; N]>),
-    Color([f32; N]),
-}
-
-impl<const N: usize> From<Texture<[f32; N]>> for TextureSlot<N> {
-    fn from(v: Texture<[f32; N]>) -> Self {
-        Self::Texture(v)
-    }
-}
-
-impl<const N: usize> From<[f32; N]> for TextureSlot<N> {
-    fn from(v: [f32; N]) -> Self {
-        Self::Color(v)
-    }
-}
-
-impl<const N: usize> TryInto<Texture<[f32; N]>> for TextureSlot<N>
-where
-    [f32; N]: TextureFormat<Subpixel = f32>,
-{
-    type Error = eyre::Report;
-
-    fn try_into(self) -> Result<Texture<[f32; N]>> {
-        Ok(match self {
-            Self::Texture(tex) => tex,
-            Self::Color(col) => {
-                const ONE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(1) };
-                let tex = Texture::new(ONE, ONE, ONE, Dimension::D2);
-                tex.set_data(&col)?;
-                tex
-            }
-        })
-    }
+#[derive(Debug, Copy, Clone, AsStd140)]
+pub struct MaterialUniforms {
+    pub has_color: bool,
+    pub color_factor: Vec3,
+    pub has_normal: bool,
+    pub normal_amount: f32,
+    pub has_rough_metal: bool,
+    pub rough_metal_factor: Vec2,
 }
 
 #[derive(Debug)]
 pub struct Material {
     program: Program,
-    uniform_color: UniformLocation,
-    uniform_normal: UniformLocation,
-    uniform_normal_enabled: UniformLocation,
-    uniform_normal_amt: UniformLocation,
-    uniform_rough_metal: UniformLocation,
-    uniform_view: UniformBlockIndex,
-    uniform_model: UniformLocation,
+    u_color: UniformLocation,
+    u_normal: UniformLocation,
+    u_rough_metal: UniformLocation,
+    u_model: UniformLocation,
+    u_uniforms: UniformBlockIndex,
+    u_view: UniformBlockIndex,
 }
 
 impl Material {
@@ -114,30 +73,30 @@ impl Material {
             .with_shader(vert_shader.id)
             .with_shader(frag_shader.id)
             .link()?;
-        let uniform_color = program.uniform("color");
-        let uniform_normal = program.uniform("normal_map");
-        let uniform_normal_amt = program.uniform("normal_amount");
-        let uniform_normal_enabled = program.uniform("normal_enabled");
-        let uniform_rough_metal = program.uniform("rough_metal");
-        let uniform_model = program.uniform("model");
-        let uniform_view = program.uniform_block("View");
+        let u_color = program.uniform("map_color");
+        let u_normal = program.uniform("map_normal");
+        let u_rough_metal = program.uniform("map_rough_metal");
+        let u_uniforms = program.uniform_block("Uniforms");
+        let u_model = program.uniform("model");
+        let u_view = program.uniform_block("View");
+
         if let Some(buf) = camera_uniform {
-            program.bind_block(&buf.slice(0..=0), uniform_view, 0)?;
+            program.bind_block(&buf.slice(0..=0), u_view, 0)?;
         }
         Ok(Self {
             program,
-            uniform_color,
-            uniform_normal,
-            uniform_normal_amt,
-            uniform_normal_enabled,
-            uniform_rough_metal,
-            uniform_model,
-            uniform_view,
+            u_color,
+            u_normal,
+            u_rough_metal,
+            u_model,
+            u_uniforms,
+            u_view,
         })
     }
 
     pub fn set_camera_uniform(&self, buffer: &ViewUniformBuffer) -> Result<()> {
-        self.program.bind_block(&buffer.slice(0..=0), self.uniform_view, 0)?;
+        self.program
+            .bind_block(&buffer.slice(0..=0), self.u_view, 0)?;
         Ok(())
     }
 
@@ -149,21 +108,23 @@ impl Material {
         meshes: &[Transformed<MC>],
     ) -> Result<()> {
         self.program
-            .set_uniform(self.uniform_color, instance.color.as_uniform(0)?)?;
+            .bind_block(&instance.buffer.slice(0..=0), self.u_uniforms, 1)?;
+        if let Some(color) = instance.color.as_ref() {
+            self.program
+                .set_uniform(self.u_color, color.as_uniform(0)?)?;
+        }
         if let Some(normal) = &instance.normal_map {
             self.program
-                .set_uniform(self.uniform_normal, normal.as_uniform(1)?)?;
-            self.program.set_uniform(self.uniform_normal_amt, instance.normal_map_amount)?;
-            self.program.set_uniform(self.uniform_normal_enabled, 1)?;
-        } else {
-            self.program.set_uniform(self.uniform_normal_enabled, 0)?;
+                .set_uniform(self.u_normal, normal.as_uniform(1)?)?;
         }
-        self.program
-            .set_uniform(self.uniform_rough_metal, instance.roughness_metal.as_uniform(2)?)?;
+        if let Some(rough_metal) = &instance.roughness_metal {
+            self.program
+                .set_uniform(self.u_rough_metal, rough_metal.as_uniform(2)?)?;
+        }
 
         for mesh in meshes {
             self.program
-                .set_uniform(self.uniform_model, mesh.transform.matrix())?;
+                .set_uniform(self.u_model, mesh.transform.matrix())?;
             mesh.draw(&self.program, framebuffer, false)?;
         }
         unsafe { gl::BindTexture(gl::TEXTURE_2D, 0) }
@@ -173,28 +134,48 @@ impl Material {
 
 #[derive(Debug)]
 pub struct MaterialInstance {
-    pub color: Texture<[f32; 3]>,
+    pub color: Option<Texture<[f32; 3]>>,
     pub normal_map: Option<Texture<[f32; 3]>>,
-    pub normal_map_amount: f32,
-    pub roughness_metal: Texture<[f32; 2]>,
+    pub roughness_metal: Option<Texture<[f32; 2]>>,
+    uniforms: MaterialUniforms,
+    buffer: UniformBuffer<Std140MaterialUniforms>,
 }
 
 impl MaterialInstance {
     pub fn create(
-        color_slot: impl Into<TextureSlot<3>>,
+        color_slot: impl Into<Option<Texture<[f32; 3]>>>,
         normal_map: impl Into<Option<Texture<[f32; 3]>>>,
-        rough_metal: impl Into<TextureSlot<2>>,
+        rough_metal: impl Into<Option<Texture<[f32; 2]>>>,
     ) -> Result<Self> {
+        let color = color_slot.into();
+        let normal_map = normal_map.into();
+        let roughness_metal = rough_metal.into();
+        let uniforms = MaterialUniforms {
+            has_color: color.is_some(),
+            color_factor: Vec3::ONE,
+            has_normal: normal_map.is_some(),
+            normal_amount: 1.,
+            has_rough_metal: roughness_metal.is_some(),
+            rough_metal_factor: Vec2::ONE,
+        };
+        let buffer = UniformBuffer::with_data(&[uniforms.as_std140()])?;
         Ok(Self {
-            color: color_slot.into().try_into()?,
-            normal_map: normal_map.into(),
-            roughness_metal: rough_metal.into().try_into()?,
-            normal_map_amount: 1.,
+            color,
+            normal_map,
+            roughness_metal,
+            uniforms,
+            buffer,
         })
     }
 
-    pub fn with_normal_amount(mut self, normal: f32) -> Self {
-        self.normal_map_amount = normal;
-        self
+    pub fn uniforms(&self) -> MaterialUniforms {
+        self.uniforms
+    }
+
+    pub fn update_uniforms(&mut self, func: impl FnOnce(&mut MaterialUniforms)) -> Result<()> {
+        func(&mut self.uniforms);
+        let mut slice = self.buffer.slice(0..=0);
+        slice.set(0, &self.uniforms.as_std140())?;
+        Ok(())
     }
 }

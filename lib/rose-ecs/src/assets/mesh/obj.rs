@@ -1,12 +1,10 @@
-use std::{borrow::Cow, collections::HashMap, io::Cursor, path::PathBuf};
+use std::{borrow::Cow, io::Cursor};
 
-use assets_manager::{AnyCache, Asset, BoxedError, Compound, loader::Loader, SharedString};
-use glam::{Vec2, Vec3, vec3};
-use obj::raw::material::MtlColor;
+use assets_manager::{Asset, BoxedError, loader::Loader};
+use glam::Vec3;
 
 use rose_renderer::material::Vertex;
 
-use super::super::material::TextureSlotDesc;
 use super::super::mesh::MeshAsset;
 
 pub struct WavefrontLoader {}
@@ -31,6 +29,7 @@ impl Loader<MeshAsset> for WavefrontLoader {
     }
 }
 
+#[cfg(never)]
 impl Loader<MtlAsset> for WavefrontLoader {
     fn load(content: Cow<[u8]>, _ext: &str) -> Result<MtlAsset, BoxedError> {
         let mtl = obj::raw::parse_mtl(Cursor::new(content))?;
@@ -44,6 +43,7 @@ impl Loader<MtlAsset> for WavefrontLoader {
     }
 }
 
+#[cfg(never)]
 impl Loader<ObjMesh> for WavefrontLoader {
     fn load(content: Cow<[u8]>, _ext: &str) -> Result<ObjMesh, BoxedError> {
         let obj = obj::raw::parse_obj(Cursor::new(content))?;
@@ -87,13 +87,19 @@ impl Loader<ObjMesh> for WavefrontLoader {
 }
 
 #[derive(Debug, Clone)]
+#[cfg(never)]
 pub struct MtlMaterialAsset {
-    pub color: TextureSlotDesc,
+    pub color: Option<PathBuf>,
+    pub color_factor: Vec3,
     pub normal: Option<PathBuf>,
-    pub roughness: TextureSlotDesc,
-    pub metal: TextureSlotDesc,
+    pub normal_amount: f32,
+    pub roughness: Option<PathBuf>,
+    pub roughness_amount: f32,
+    pub metal: Option<PathBuf>,
+    pub metal_amount: f32,
 }
 
+#[cfg(never)]
 impl From<obj::raw::material::Material> for MtlMaterialAsset {
     fn from(value: obj::raw::material::Material) -> Self {
         let color = if let Some(map) = value.diffuse_map {
@@ -127,47 +133,24 @@ impl From<obj::raw::material::Material> for MtlMaterialAsset {
 }
 
 #[derive(Debug, Clone)]
+#[cfg(never)]
 pub struct MtlAsset {
     materials: HashMap<SharedString, MtlMaterialAsset>,
 }
 
+#[cfg(never)]
 impl Asset for MtlAsset {
     type Loader = WavefrontLoader;
 }
 
 #[derive(Debug, Clone)]
+#[cfg(never)]
 pub struct ObjMesh {
     material_libraries: HashMap<SharedString, PathBuf>,
     meshes: HashMap<SharedString, MeshAsset>,
 }
 
+#[cfg(never)]
 impl Asset for ObjMesh {
     type Loader = WavefrontLoader;
-}
-
-#[derive(Debug, Clone)]
-pub struct LoadedMesh {
-    material_libraries: HashMap<SharedString, MtlAsset>,
-    meshes: HashMap<SharedString, MeshAsset>,
-}
-
-impl Compound for LoadedMesh {
-    fn load(cache: AnyCache, id: &SharedString) -> Result<Self, BoxedError> {
-        tracing::debug!(message="Load obj", %id);
-        let obj_mesh = cache.load::<ObjMesh>(id)?.cloned();
-        let material_libraries = obj_mesh
-            .material_libraries
-            .iter()
-            .map(|(s, path)| {
-                Ok((
-                    s.clone(),
-                    cache.load::<MtlAsset>(path.to_str().unwrap())?.cloned(),
-                ))
-            })
-            .collect::<eyre::Result<_>>()?;
-        Ok(Self {
-            meshes: obj_mesh.meshes,
-            material_libraries,
-        })
-    }
 }

@@ -3,13 +3,15 @@ use std::{
     hash::{Hash, Hasher},
     rc::Rc,
 };
+use std::num::NonZeroU32;
 use std::time::Duration;
 
 use assets_manager::{AnyCache, Handle, SharedString};
 use dashmap::DashMap;
 use eyre::Result;
-use glam::{UVec2, vec3, Vec3};
+use glam::{UVec2, Vec2, Vec3};
 use hecs::World;
+use image::GenericImageView;
 
 use rose_core::{
     camera::Camera,
@@ -19,10 +21,7 @@ use rose_core::{
     utils::thread_guard::ThreadGuard,
 };
 use rose_platform::PhysicalSize;
-use rose_renderer::{
-    material::{MaterialInstance, TextureSlot as MaterialSlot},
-    Mesh, Renderer,
-};
+use rose_renderer::{material::MaterialInstance, Mesh, Renderer};
 use rose_renderer::env::{SimpleSky, SimpleSkyParams};
 use violette::texture::Texture;
 
@@ -43,7 +42,10 @@ pub struct RenderSystem {
 
 impl RenderSystem {
     pub fn update_from_active_camera(&mut self, world: &World) {
-        let mut q = world.query::<(&GlobalTransform, &CameraParams)>().with::<&Active>().without::<&Inactive>();
+        let mut q = world
+            .query::<(&GlobalTransform, &CameraParams)>()
+            .with::<&Active>()
+            .without::<&Inactive>();
         let Some((_, (tr, camera))) = q.iter().next() else {
             tracing::warn!("No active camera. Make sure you have a camera set up using the CameraBundle, or by having GlobalTransform, CameraParams and the Active components on the entity.");
             return;
@@ -55,17 +57,16 @@ impl RenderSystem {
 }
 
 impl RenderSystem {
-    pub fn default_material_handle(
-        &self,
-        cache: AnyCache<'static>,
-    ) -> Handle<'static, Material> {
+    pub fn default_material_handle(&self, cache: AnyCache<'static>) -> Handle<'static, Material> {
         cache.get_or_insert(
             "prim:material:default",
             Material {
-                color: TextureSlot::Color(Vec3::splat(0.5)),
-                normal_amount: 1.,
+                color: None,
+                color_factor: Vec3::splat(0.5),
                 normal: None,
-                rough_metal: TextureSlot::Color(vec3(0.2, 0., 0.)),
+                normal_amount: 1.,
+                rough_metal: None,
+                rough_metal_factor: Vec2::ONE,
             },
         )
     }
@@ -112,8 +113,7 @@ impl RenderSystem {
 
         self.renderer.begin_render(&self.camera)?;
         self.submit_meshes(world);
-        self.renderer
-            .flush(dt, self.clear_color)?;
+        self.renderer.flush(dt, self.clear_color)?;
         Ok(())
     }
 
@@ -155,16 +155,36 @@ impl RenderSystem {
             if handle.reloaded_global() || !self.materials_map.contains_key(handle.id()) {
                 tracing::info!(message="Loading material", handle=%handle.id());
                 let mat = handle.read();
-                let inst = MaterialInstance::create(
-                    into_material_slot3(&mat.color)?,
-                    if let Some(normal) = &mat.normal {
-                        Some(Texture::from_image(normal.to_rgb32f())?)
-                    } else {
-                        None
-                    },
-                    into_material_slot2(&mat.rough_metal)?,
-                )?
-                    .with_normal_amount(mat.normal_amount);
+                let color_slot = if let Some(color) = &mat.color {
+                    Some(Texture::from_image(color.to_rgb32f())?)
+                } else {
+                    None
+                };
+                let normal_map = if let Some(normal) = &mat.normal {
+                    Some(Texture::from_image(normal.to_rgb32f())?)
+                } else {
+                    None
+                };
+                let rough_metal = if let Some(rough_metal) = &mat.normal {
+                    let (width, height) = rough_metal.dimensions();
+                    let mut rough_metal = rough_metal.to_rgb32f();
+                    image::imageops::flip_vertical_in_place(&mut rough_metal);
+                    let image = rough_metal
+                        .into_raw()
+                        .chunks(3)
+                        .flat_map(|v| [v[0], v[1]])
+                        .collect::<Vec<_>>();
+                    let width = NonZeroU32::new(width).unwrap();
+                    Some(Texture::<[f32; 2]>::from_2d_pixels(width, &image)?)
+                } else {
+                    None
+                };
+                let mut inst = MaterialInstance::create(color_slot, normal_map, rough_metal)?;
+                inst.update_uniforms(|uniforms| {
+                    uniforms.color_factor = mat.color_factor;
+                    uniforms.normal_amount = mat.normal_amount;
+                    uniforms.rough_metal_factor = mat.rough_metal_factor;
+                })?;
                 self.materials_map
                     .insert(handle.id().clone(), ThreadGuard::new(Rc::new(inst)));
             }
@@ -177,24 +197,26 @@ impl RenderSystem {
         if light_hash != self.lights_hash {
             tracing::info!(message="Rebuilding lights", hash=%light_hash);
             self.lights_hash = light_hash;
-            let new_lights =
-                self.iter_active_lights(world)
-                    .into_iter()
-                    .inspect(|(transform, light)| tracing::debug!(message="Light", ?transform, ?light))
-                    .map(|(transform, light)| {
-                        let color = light.power * light.color;
-                        match light.kind {
-                            LightKind::Directional => Light::Directional {
-                                color,
-                                dir: transform.rotation.mul_vec3(Vec3::NEG_Z),
-                            },
-                            LightKind::Point => Light::Point {
-                                color,
-                                position: transform.position,
-                            },
-                            LightKind::Ambient => Light::Ambient { color },
-                        }
-                    });
+            let new_lights = self
+                .iter_active_lights(world)
+                .into_iter()
+                .inspect(|(transform, light)| {
+                    tracing::debug!(message = "Light", ?transform, ?light)
+                })
+                .map(|(transform, light)| {
+                    let color = light.power * light.color;
+                    match light.kind {
+                        LightKind::Directional => Light::Directional {
+                            color,
+                            dir: transform.rotation.mul_vec3(Vec3::NEG_Z),
+                        },
+                        LightKind::Point => Light::Point {
+                            color,
+                            position: transform.position,
+                        },
+                        LightKind::Ambient => Light::Ambient { color },
+                    }
+                });
             self.renderer
                 .set_light_buffer(GpuLight::create_buffer(new_lights)?);
         }
@@ -217,28 +239,4 @@ impl RenderSystem {
             .without::<&Inactive>();
         query.iter().map(|(_, (t, l))| (t.into(), *l)).collect()
     }
-}
-
-fn into_material_slot3(slot: &TextureSlot) -> Result<MaterialSlot<3>> {
-    Ok(match slot {
-        TextureSlot::Color(col) => MaterialSlot::Color(col.to_array()),
-        TextureSlot::Texture(img) => MaterialSlot::Texture(Texture::from_image(img.to_rgb32f())?),
-    })
-}
-
-fn into_material_slot2(slot: &TextureSlot) -> Result<MaterialSlot<2>> {
-    Ok(match slot {
-        TextureSlot::Color(vec) => MaterialSlot::Color(vec.truncate().to_array()),
-        TextureSlot::Texture(img) => {
-            let img = img.to_rgb32f();
-            let storage = img
-                .chunks_exact(3)
-                .flat_map(|s| [s[0], s[1]])
-                .collect::<Vec<_>>();
-            MaterialSlot::Texture(Texture::from_2d_pixels(
-                img.width().try_into().unwrap(),
-                &storage,
-            )?)
-        }
-    })
 }

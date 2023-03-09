@@ -34,7 +34,7 @@ impl Application for App {
         core_systems.render.renderer.set_environment(EnvironmentMap::load("assets/textures/table_mountain_2_puresky_4k.exr")?);
         let scene = if let Some(name) = std::env::args().nth(1) {
             let path = PathBuf::from(name);
-            let mut scene: Scene = smol::block_on(load_gltf::load_gltf_scenes(&path))?;
+            let mut scene: Scene = smol::block_on(load_gltf::load_gltf_scene(&path))?;
             scene.with_world(|world, cmd| {
                 // cmd.spawn(LightBundle {
                 //     transform: Transform::translation(Vec3::ONE).looking_at(Vec3::ZERO),
