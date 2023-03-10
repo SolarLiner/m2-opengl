@@ -2743,10 +2743,12 @@ version = "0.1.0"
 dependencies = [
  "bytemuck",
  "crevice",
+ "crossbeam-channel",
  "either",
  "eyre",
  "glam",
  "image",
+ "notify",
  "num-derive",
  "num-traits",
  "once_cell",

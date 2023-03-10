@@ -4,6 +4,7 @@ use eyre::Result;
 use glam::{UVec2, Vec3};
 
 use rose_core::screen_draw::ScreenDraw;
+use rose_core::utils::reload_watcher::ReloadWatcher;
 use violette::{
     framebuffer::Framebuffer,
     texture::{Dimension, SampleMode, Texture},
@@ -20,7 +21,7 @@ pub struct AutoExposure {
 }
 
 impl AutoExposure {
-    pub fn new(size: UVec2) -> Result<Self> {
+    pub fn new(size: UVec2, reload_watcher: &ReloadWatcher) -> Result<Self> {
         let Some(width) = NonZeroU32::new(size.x) else {
             eyre::bail!("Non zero size");
         };
@@ -28,7 +29,7 @@ impl AutoExposure {
             eyre::bail!("Non zero size");
         };
         let depth = unsafe { NonZeroU32::new_unchecked(1) };
-        let screen_draw = ScreenDraw::load("assets/shaders/luminance-estimate.frag.glsl")?;
+        let screen_draw = ScreenDraw::load("screen/luminance-estimate.glsl", reload_watcher)?;
         let target = Texture::new(width, height, depth, Dimension::D2);
         target.filter_mag(SampleMode::Linear)?;
         target.filter_min(SampleMode::Linear)?;
@@ -36,7 +37,7 @@ impl AutoExposure {
         let fbo = Framebuffer::new();
         fbo.attach_color(0, &target)?;
         fbo.assert_complete()?;
-        let uniform_in_texture = screen_draw.uniform("in_texture");
+        let uniform_in_texture = screen_draw.program().uniform("in_texture");
         Ok(Self {
             screen_draw,
             uniform_in_texture,
@@ -65,6 +66,7 @@ impl AutoExposure {
     #[tracing::instrument(skip_all)]
     pub fn process(&mut self, in_texture: &Texture<[f32; 3]>, lerp: f32) -> Result<f32> {
         self.screen_draw
+            .program()
             .set_uniform(self.uniform_in_texture, in_texture.as_uniform(0)?)?;
         Framebuffer::disable_blending();
         Framebuffer::disable_depth_test();

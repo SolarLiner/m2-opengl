@@ -1,11 +1,14 @@
-use std::path::Path;
+use std::sync::RwLock;
 
 use crevice::std140::AsStd140;
 use eyre::Result;
 use glam::{IVec4, UVec4, Vec2, Vec3};
 
-use rose_core::camera::ViewUniformBuffer;
-use rose_core::transform::Transformed;
+use rose_core::{
+    camera::ViewUniformBuffer,
+    transform::Transformed,
+    utils::reload_watcher::{ReloadFileProxy, ReloadWatcher},
+};
 use violette::{
     buffer::UniformBuffer,
     framebuffer::Framebuffer,
@@ -55,20 +58,22 @@ pub struct MaterialUniforms {
 
 #[derive(Debug)]
 pub struct Material {
-    program: Program,
+    program: RwLock<Program>,
     u_color: UniformLocation,
     u_normal: UniformLocation,
     u_rough_metal: UniformLocation,
     u_model: UniformLocation,
     u_uniforms: UniformBlockIndex,
     u_view: UniformBlockIndex,
+    reload_watcher: ReloadFileProxy,
 }
 
 impl Material {
-    pub fn create(camera_uniform: Option<&ViewUniformBuffer>) -> Result<Self> {
-        let shaders_dir = Path::new("assets").join("shaders");
-        let vert_shader = VertexShader::load(shaders_dir.join("mesh.vert.glsl"))?;
-        let frag_shader = FragmentShader::load(shaders_dir.join("mesh.frag.glsl"))?;
+    pub fn create(camera_uniform: Option<&ViewUniformBuffer>, reload_watcher: &ReloadWatcher) -> Result<Self> {
+        let vert_path = reload_watcher.base_path().join("mesh/mesh.vert.glsl");
+        let frag_path = reload_watcher.base_path().join("mesh/mesh.frag.glsl");
+        let vert_shader = VertexShader::load(&vert_path)?;
+        let frag_shader = FragmentShader::load(&frag_path)?;
         let program = Program::new()
             .with_shader(vert_shader.id)
             .with_shader(frag_shader.id)
@@ -84,18 +89,19 @@ impl Material {
             program.bind_block(&buf.slice(0..=0), u_view, 0)?;
         }
         Ok(Self {
-            program,
+            program: RwLock::new(program),
             u_color,
             u_normal,
             u_rough_metal,
             u_model,
             u_uniforms,
             u_view,
+            reload_watcher: reload_watcher.proxy([vert_path.as_path(), frag_path.as_path()]),
         })
     }
 
     pub fn set_camera_uniform(&self, buffer: &ViewUniformBuffer) -> Result<()> {
-        self.program
+        self.program()
             .bind_block(&buffer.slice(0..=0), self.u_view, 0)?;
         Ok(())
     }
@@ -107,28 +113,47 @@ impl Material {
         instance: &MaterialInstance,
         meshes: &[Transformed<MC>],
     ) -> Result<()> {
-        self.program
+        {
+            if self.reload_watcher.should_reload() {
+                let mut paths = self.reload_watcher.paths();
+                let vert_path = paths.next().unwrap();
+                let frag_path = paths.next().unwrap();
+                tracing::debug!(message="Reloading material shader", vert=%vert_path.display(), frag=%frag_path.display());
+                let vert_shader = VertexShader::load(&vert_path)?;
+                let frag_shader = FragmentShader::load(&frag_path)?;
+                *self.program.write().unwrap() = Program::new()
+                    .with_shader(vert_shader.id)
+                    .with_shader(frag_shader.id)
+                    .link()?;
+            }
+        }
+        let program = self.program();
+        program
             .bind_block(&instance.buffer.slice(0..=0), self.u_uniforms, 1)?;
         if let Some(color) = instance.color.as_ref() {
-            self.program
+            program
                 .set_uniform(self.u_color, color.as_uniform(0)?)?;
         }
         if let Some(normal) = &instance.normal_map {
-            self.program
+            program
                 .set_uniform(self.u_normal, normal.as_uniform(1)?)?;
         }
         if let Some(rough_metal) = &instance.roughness_metal {
-            self.program
+            program
                 .set_uniform(self.u_rough_metal, rough_metal.as_uniform(2)?)?;
         }
 
         for mesh in meshes {
-            self.program
+            program
                 .set_uniform(self.u_model, mesh.transform.matrix())?;
-            mesh.draw(&self.program, framebuffer, false)?;
+            mesh.draw(&program, framebuffer, false)?;
         }
         unsafe { gl::BindTexture(gl::TEXTURE_2D, 0) }
         Ok(())
+    }
+
+    fn program(&self) -> impl '_ + Drop + std::ops::Deref<Target=Program> {
+        self.program.read().unwrap()
     }
 }
 

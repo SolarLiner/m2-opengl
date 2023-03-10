@@ -468,9 +468,10 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                     if let Some(path) = self.system.envmap_path.as_mut() {
                         ui.horizontal(|ui| {
                             if ui.button("X").clicked() {
-                                self.renderer.renderer.set_environment(
-                                    SimpleSky::new(SimpleSkyParams::default()).unwrap(),
-                                );
+                                self.renderer.renderer.set_environment(|reload_watcher| {
+                                    SimpleSky::new(SimpleSkyParams::default(), reload_watcher)
+                                        .unwrap()
+                                });
                                 remove_path = true;
                             }
                             if ui.button("Change").clicked() {
@@ -481,9 +482,9 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                     )
                                     .pick_file()
                                 {
-                                    self.renderer
-                                        .renderer
-                                        .set_environment(EnvironmentMap::load(&new_path).unwrap());
+                                    self.renderer.renderer.set_environment(|reload_watcher| {
+                                        EnvironmentMap::load(&new_path, reload_watcher).unwrap()
+                                    });
                                     path.clone_from(&new_path);
                                 }
                             }
@@ -499,9 +500,9 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                 )
                                 .pick_file()
                             {
-                                self.renderer
-                                    .renderer
-                                    .set_environment(EnvironmentMap::load(&new_path).unwrap());
+                                self.renderer.renderer.set_environment(|reload_watcher| {
+                                    EnvironmentMap::load(&new_path, reload_watcher).unwrap()
+                                });
                                 self.system.envmap_path.replace(new_path);
                             }
                         }

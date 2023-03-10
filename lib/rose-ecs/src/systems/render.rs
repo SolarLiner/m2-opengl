@@ -4,6 +4,7 @@ use std::{
     rc::Rc,
 };
 use std::num::NonZeroU32;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use assets_manager::{AnyCache, Handle, SharedString};
@@ -22,7 +23,6 @@ use rose_core::{
 };
 use rose_platform::PhysicalSize;
 use rose_renderer::{material::MaterialInstance, Mesh, Renderer};
-use rose_renderer::env::{SimpleSky, SimpleSkyParams};
 use violette::texture::Texture;
 
 use crate::{
@@ -94,8 +94,9 @@ impl RenderSystem {
 
 impl RenderSystem {
     pub fn new(size: UVec2) -> Result<Self> {
-        let mut renderer = Renderer::new(size)?;
-        renderer.set_environment(SimpleSky::new(SimpleSkyParams::default())?);
+        let base_dir = std::env::var("CARGO_PROJECT_DIR").map(|v| PathBuf::from(v)).or_else(|_| std::env::current_dir()).unwrap();
+        tracing::info!("Base resources directory: {}", base_dir.display());
+        let renderer = Renderer::new(size, &base_dir)?;
         Ok(Self {
             clear_color: Vec3::ZERO,
             camera: Camera::default(),

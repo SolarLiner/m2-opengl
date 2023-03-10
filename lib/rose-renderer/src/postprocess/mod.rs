@@ -5,6 +5,7 @@ use eyre::Result;
 use glam::UVec2;
 
 use rose_core::screen_draw::ScreenDraw;
+use rose_core::utils::reload_watcher::ReloadWatcher;
 use violette::{framebuffer::Framebuffer, program::UniformLocation, texture::Texture};
 use violette::texture::{SampleMode, TextureWrap};
 
@@ -34,7 +35,7 @@ pub struct Postprocess {
 }
 
 impl Postprocess {
-    pub fn new(size: UVec2) -> Result<Self> {
+    pub fn new(size: UVec2, reload_watcher: &ReloadWatcher) -> Result<Self> {
         let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width resize"); };
         let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height resize"); };
         let nonzero_one = NonZeroU32::new(1).unwrap();
@@ -45,20 +46,23 @@ impl Postprocess {
         texture.filter_mag(SampleMode::Linear)?;
         texture.reserve_memory()?;
 
-        let draw = ScreenDraw::load("assets/shaders/postprocess.frag.glsl")?;
-        let draw_texture = draw.uniform("frame");
-        let avg_luminance = draw.uniform("luminance_average");
-        let u_bloom_strength = draw.uniform("bloom_strength");
-        let u_bloom_tex = draw.uniform("bloom_tex");
-        let u_lens_flare_strength = draw.uniform("lens_flare_strength");
-        let u_lens_flare_threshold = draw.uniform("lens_flare_threshold");
-        let u_distortion_amt = draw.uniform("distortion_amt");
-        let u_ghost_spacing = draw.uniform("ghost_spacing");
-        let u_ghost_count = draw.uniform("ghost_count");
+        let draw = ScreenDraw::load("screen/postprocess.glsl", reload_watcher)?;
+        let postprocess_program = draw.program();
+        let draw_texture = postprocess_program.uniform("frame");
+        let avg_luminance = postprocess_program.uniform("luminance_average");
+        let u_bloom_strength = postprocess_program.uniform("bloom_strength");
+        let u_bloom_tex = postprocess_program.uniform("bloom_tex");
+        let u_lens_flare_strength = postprocess_program.uniform("lens_flare_strength");
+        let u_lens_flare_threshold = postprocess_program.uniform("lens_flare_threshold");
+        let u_distortion_amt = postprocess_program.uniform("distortion_amt");
+        let u_ghost_spacing = postprocess_program.uniform("ghost_spacing");
+        let u_ghost_count = postprocess_program.uniform("ghost_count");
+        drop(postprocess_program);
+
         Ok(Self {
             draw,
-            bloom: Blur::new(size, 5)?,
-            auto_exposure: AutoExposure::new(size)?,
+            bloom: Blur::new(size, 5, reload_watcher)?,
+            auto_exposure: AutoExposure::new(size, reload_watcher)?,
             u_texture: draw_texture,
             u_avg_luminance: avg_luminance,
             u_bloom_tex,
@@ -76,16 +80,18 @@ impl Postprocess {
 
     pub fn set_bloom_strength(&self, strength: f32) -> Result<()> {
         self.draw
+            .program()
             .set_uniform(self.u_bloom_strength, strength)?;
         Ok(())
     }
 
     pub fn set_lens_flare_parameters(&self, params: LensFlareParams) -> Result<()> {
-        self.draw.set_uniform(self.u_lens_flare_strength, params.strength)?;
-        self.draw.set_uniform(self.u_lens_flare_threshold, params.threshold)?;
-        self.draw.set_uniform(self.u_distortion_amt, params.distortion)?;
-        self.draw.set_uniform(self.u_ghost_spacing, params.ghost_spacing)?;
-        self.draw.set_uniform(self.u_ghost_count, params.ghost_count)?;
+        let program = self.draw.program();
+        program.set_uniform(self.u_lens_flare_strength, params.strength)?;
+        program.set_uniform(self.u_lens_flare_threshold, params.threshold)?;
+        program.set_uniform(self.u_distortion_amt, params.distortion)?;
+        program.set_uniform(self.u_ghost_spacing, params.ghost_spacing)?;
+        program.set_uniform(self.u_ghost_count, params.ghost_count)?;
         Ok(())
     }
 
@@ -114,15 +120,13 @@ impl Postprocess {
             .auto_exposure
             .process(input, lerp)
             .unwrap_or_else(|_| self.auto_exposure.average_luminance());
-        self.draw.set_uniform(
-            self.u_avg_luminance,
-            avg_luminance / self.luminance_bias,
-        )?;
-        let bloom = self.bloom.process(input, self.bloom_radius)?;
-        self.draw
-            .set_uniform(self.u_texture, input.as_uniform(0)?)?;
-        self.draw
-            .set_uniform(self.u_bloom_tex, bloom.as_uniform(1)?)?;
+        {
+            let program = self.draw.program();
+            program.set_uniform(self.u_avg_luminance, avg_luminance / self.luminance_bias)?;
+            let bloom = self.bloom.process(input, self.bloom_radius)?;
+            program.set_uniform(self.u_texture, input.as_uniform(0)?)?;
+            program.set_uniform(self.u_bloom_tex, bloom.as_uniform(1)?)?;
+        }
         Framebuffer::viewport(0, 0, width.get() as _, height.get() as _);
         self.draw.draw(frame)?;
         Ok(())

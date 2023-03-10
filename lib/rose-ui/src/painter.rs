@@ -58,7 +58,7 @@ pub struct UiImpl {
 impl UiImpl {
     pub fn new() -> Result<Self> {
         let program = Program::load(
-            "assets/shaders/ui.vert.glsl",
+            "../../../assets/shaders/ui/ui.vert.glsl",
             Some("assets/shaders/ui.frag.glsl"),
             None::<&'static str>,
         )?;

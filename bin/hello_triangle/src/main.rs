@@ -29,8 +29,8 @@ struct TriangleApp {
 
 impl Application for TriangleApp {
     fn new(size: PhysicalSize<f32>, _scale_factor: f64) -> Result<Self> {
-        let vert_shader = VertexShader::load("assets/shaders_old/triangle.vert.glsl")?;
-        let frag_shader = FragmentShader::load("assets/shaders_old/triangle.frag.glsl")?;
+        let vert_shader = VertexShader::load("../../../res/shaders/triangle.vert.glsl")?;
+        let frag_shader = FragmentShader::load("../../../res/shaders/triangle.frag.glsl")?;
         let mat_program = Program::new()
             .with_shader(vert_shader.id)
             .with_shader(frag_shader.id)

@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use std::path::Path;
 
 use eyre::Result;
 use float_ord::FloatOrd;
@@ -15,26 +16,23 @@ use gbuffers::GeometryBuffers;
 use material::Material;
 use postprocess::Postprocess;
 use rose_core::{
-    camera::Camera,
+    camera::{Camera, ViewUniform, ViewUniformBuffer},
     light::{GpuLight, Light, LightBuffer},
     transform::{Transformed, TransformExt},
-    utils::thread_guard::ThreadGuard,
+    utils::{reload_watcher::ReloadWatcher, thread_guard::ThreadGuard},
 };
-use rose_core::camera::{ViewUniform, ViewUniformBuffer};
 use violette::{
     Cull,
     framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer}, FrontFace,
 };
 
-use crate::env::Environment;
-use crate::material::MaterialInstance;
-use crate::postprocess::LensFlareParams;
+use crate::{env::Environment, material::MaterialInstance, postprocess::LensFlareParams};
 
+pub mod bones;
 pub mod env;
 pub mod gbuffers;
 pub mod material;
 pub mod postprocess;
-pub mod bones;
 
 pub type Mesh = rose_core::mesh::Mesh<material::Vertex>;
 
@@ -48,10 +46,7 @@ pub struct PostprocessInterface {
 impl PostprocessInterface {
     #[cfg(feature = "debug-ui")]
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        use egui::{
-            DragValue,
-            Grid,
-        };
+        use egui::{DragValue, Grid};
 
         ui.collapsing("Main", |ui| {
             Grid::new("pp-iface")
@@ -101,26 +96,31 @@ impl PostprocessInterface {
                 .show(ui, |ui| {
                     let strength_label = ui.label("Strength").id;
                     self.lens_flare.strength *= 100.;
-                    ui.add(DragValue::new(&mut self.lens_flare.strength).suffix(" %")).labelled_by(strength_label);
+                    ui.add(DragValue::new(&mut self.lens_flare.strength).suffix(" %"))
+                        .labelled_by(strength_label);
                     self.lens_flare.strength /= 100.;
                     ui.end_row();
 
                     let threshold_label = ui.label("Threshold").id;
                     self.lens_flare.threshold = self.lens_flare.threshold.log2();
-                    ui.add(DragValue::new(&mut self.lens_flare.threshold).suffix(" EV")).labelled_by(threshold_label);
+                    ui.add(DragValue::new(&mut self.lens_flare.threshold).suffix(" EV"))
+                        .labelled_by(threshold_label);
                     self.lens_flare.threshold = self.lens_flare.threshold.exp2();
                     ui.end_row();
 
                     let dist_label = ui.label("Distortion").id;
-                    ui.add(DragValue::new(&mut self.lens_flare.distortion)).labelled_by(dist_label);
+                    ui.add(DragValue::new(&mut self.lens_flare.distortion))
+                        .labelled_by(dist_label);
                     ui.end_row();
 
                     let ghost_spacing_label = ui.label("Ghost spacing").id;
-                    ui.add(DragValue::new(&mut self.lens_flare.ghost_spacing).speed(0.01)).labelled_by(ghost_spacing_label);
+                    ui.add(DragValue::new(&mut self.lens_flare.ghost_spacing).speed(0.01))
+                        .labelled_by(ghost_spacing_label);
                     ui.end_row();
 
                     let ghost_count_label = ui.label("Ghost count").id;
-                    ui.add(DragValue::new(&mut self.lens_flare.ghost_count)).labelled_by(ghost_count_label);
+                    ui.add(DragValue::new(&mut self.lens_flare.ghost_count))
+                        .labelled_by(ghost_count_label);
                 });
         });
     }
@@ -151,22 +151,27 @@ pub struct Renderer {
     last_render_duration: Option<Duration>,
     last_render_submitted: usize,
     last_render_rendered: usize,
+    reload_watcher: ReloadWatcher,
 }
 
 impl Renderer {}
 
 impl Renderer {
-    pub fn new(size: UVec2) -> Result<Self> {
+    pub fn new(size: UVec2, base_dir: impl AsRef<Path>) -> Result<Self> {
+        let reload_watcher = {
+            let base_dir = base_dir.as_ref().join("res/shaders");
+            ReloadWatcher::new(base_dir)
+        };
         let lights = LightBuffer::new();
-        let geom_pass = GeometryBuffers::new(size)?;
-        let post_process = Postprocess::new(size)?;
+        let geom_pass = GeometryBuffers::new(size, &reload_watcher)?;
+        let post_process = Postprocess::new(size, &reload_watcher)?;
         let view_uniform = ViewUniform::default();
         let camera_uniform = view_uniform.create_buffer()?;
 
         Ok(Self {
             lights,
             geom_pass: Rc::new(RefCell::new(geom_pass)),
-            material: Material::create(Some(&camera_uniform))?,
+            material: Material::create(Some(&camera_uniform), &reload_watcher)?,
             post_process,
             post_process_iface: PostprocessInterface {
                 exposure: 1.5f32.exp2(),
@@ -188,11 +193,16 @@ impl Renderer {
             last_render_submitted: 0,
             last_render_rendered: 0,
             debug_window_open: false,
+            reload_watcher,
         })
     }
 
     pub fn post_process_interface(&mut self) -> &mut PostprocessInterface {
         &mut self.post_process_iface
+    }
+
+    pub fn reload_watcher(&self) -> &ReloadWatcher {
+        &self.reload_watcher
     }
 
     #[tracing::instrument]
@@ -215,8 +225,8 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn set_environment<E: Environment>(&mut self, env: E) {
-        self.environment.replace(Box::new(env));
+    pub fn set_environment<E: Environment>(&mut self, env: impl FnOnce(&ReloadWatcher) -> E) {
+        self.environment.replace(Box::new(env(&self.reload_watcher)));
     }
 
     pub fn environment<E: Environment>(&self) -> Option<&E> {
@@ -249,7 +259,8 @@ impl Renderer {
         self.post_process.bloom_radius = self.post_process_iface.bloom.size;
         self.post_process
             .set_bloom_strength(self.post_process_iface.bloom.strength)?;
-        self.post_process.set_lens_flare_parameters(self.post_process_iface.lens_flare)?;
+        self.post_process
+            .set_lens_flare_parameters(self.post_process_iface.lens_flare)?;
 
         self.view_uniform.update_from_camera(camera);
         self.view_uniform

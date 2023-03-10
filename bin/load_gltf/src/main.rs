@@ -6,11 +6,7 @@ use glam::{UVec2, Vec2, Vec3};
 use rose_core::transform::Transform;
 use rose_ecs::{
     prelude::*,
-    systems::{
-        hierarchy::GlobalTransform,
-        hierarchy::HierarchicalSystem,
-        PanOrbitSystem,
-    },
+    systems::{hierarchy::GlobalTransform, hierarchy::HierarchicalSystem, PanOrbitSystem},
 };
 use rose_platform::{Application, events::WindowEvent, PhysicalSize, RenderContext};
 use rose_renderer::env::EnvironmentMap;
@@ -31,7 +27,13 @@ impl Application for App {
         core_systems
             .persistence
             .register_component::<GlobalTransform>();
-        core_systems.render.renderer.set_environment(EnvironmentMap::load("assets/textures/table_mountain_2_puresky_4k.exr")?);
+        core_systems
+            .render
+            .renderer
+            .set_environment(|reload_watcher| EnvironmentMap::load(
+                "assets/textures/derelict_highway_midday_1k.exr",
+                reload_watcher,
+            ).unwrap());
         let scene = if let Some(name) = std::env::args().nth(1) {
             let path = PathBuf::from(name);
             let mut scene: Scene = smol::block_on(load_gltf::load_gltf_scene(&path))?;

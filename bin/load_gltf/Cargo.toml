@@ -17,7 +17,7 @@ rose-core = { path = "../../lib/rose-core" }
 rose-ecs = { path = "../../lib/rose-ecs" }
 rose-platform = { path = "../../lib/rose-platform", features = ["tracy"] }
 rose-ui = { path = "../../lib/rose-ui" }
-rose-renderer = { path = "../../lib/rose-renderer" }
+rose-renderer = { path = "../../lib/rose-renderer", features = ["hot-reload"] }
 violette = { path = "../../lib/violette" }
 
 bytemuck.workspace = true

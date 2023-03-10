@@ -4,6 +4,7 @@ use eyre::Result;
 use glam::UVec2;
 
 use rose_core::screen_draw::ScreenDraw;
+use rose_core::utils::reload_watcher::ReloadWatcher;
 use violette::{
     framebuffer::{Blend, BlendFunction, Framebuffer},
     program::UniformLocation,
@@ -23,7 +24,7 @@ pub struct Blur {
 }
 
 impl Blur {
-    pub fn new(size: UVec2, mip_chain_len: usize) -> Result<Self> {
+    pub fn new(size: UVec2, mip_chain_len: usize, reload_watcher: &ReloadWatcher) -> Result<Self> {
         let sizef = size.as_vec2();
         let max_chain_len = sizef.x.min(sizef.y).log2().floor() as usize - 1;
         eyre::ensure!(mip_chain_len <= max_chain_len, "Cannot construct a chain longer than {} for  {}", max_chain_len, size);
@@ -43,17 +44,22 @@ impl Blur {
             Ok::<_, eyre::Report>(vec)
         })?;
 
-        let draw_downsample = ScreenDraw::load("assets/shaders/blur_downsample.frag.glsl")?;
-        let draw_upsample = ScreenDraw::load("assets/shaders/blur_upsample.frag.glsl")?;
+        let draw_downsample = ScreenDraw::load("screen/blur/downsample.glsl", reload_watcher)?;
+        let draw_upsample = ScreenDraw::load("screen/blur/upsample.glsl", reload_watcher)?;
         let fbo = Framebuffer::new();
         fbo.attach_color(0, &mip_chain[0])?;
         fbo.enable_buffers([0])?;
         fbo.assert_complete()?;
 
-        let uniform_down_tex = draw_downsample.uniform("in_texture");
-        let uniform_down_size = draw_downsample.uniform("screen_size");
-        let uniform_up_tex = draw_upsample.uniform("in_texture");
-        let uniform_up_radius = draw_upsample.uniform("filter_radius");
+        let downsample_pass = draw_downsample.program();
+        let upsample_pass = draw_upsample.program();
+        let uniform_down_tex = downsample_pass.uniform("in_texture");
+        let uniform_down_size = downsample_pass.uniform("screen_size");
+        let uniform_up_tex = upsample_pass.uniform("in_texture");
+        let uniform_up_radius = upsample_pass.uniform("filter_radius");
+        drop(downsample_pass);
+        drop(upsample_pass);
+
         let mut this = Self {
             mip_chain,
             fbo,
@@ -91,8 +97,10 @@ impl Blur {
         let (w, h) = texture.mipmap_size(0)?;
         let size = UVec2::new(w.get(), h.get()).as_vec2();
         self.draw_downsample
+            .program()
             .set_uniform(self.uniform_down_size, size)?;
         self.draw_downsample
+            .program()
             .set_uniform(self.uniform_down_tex, texture.as_uniform(0)?)?;
 
         let mut first_mip = true;
@@ -100,12 +108,14 @@ impl Blur {
             let size = mip.size_vec().truncate();
             Framebuffer::viewport(0, 0, size.x as _, size.y as _);
             self.fbo.attach_color(0, mip)?;
-            self.draw_downsample.set_uniform(self.draw_downsample.uniform("first_mip"), first_mip)?;
+            self.draw_downsample.program().set_uniform(self.draw_downsample.program().uniform("first_mip"), first_mip)?;
             self.draw_downsample.draw(&self.fbo)?;
 
             self.draw_downsample
+                .program()
                 .set_uniform(self.uniform_down_size, size.as_vec2())?;
             self.draw_downsample
+                .program()
                 .set_uniform(self.uniform_down_tex, mip.as_uniform(0)?)?;
             first_mip = false;
         }
@@ -114,6 +124,7 @@ impl Blur {
 
     fn render_upsample(&self, radius: f32) -> Result<()> {
         self.draw_upsample
+            .program()
             .set_uniform(self.uniform_up_radius, radius)?;
         Framebuffer::enable_blending(Blend::One, Blend::One);
         Framebuffer::blend_equation(BlendFunction::Add);
@@ -127,6 +138,7 @@ impl Blur {
             let size = next_mip.size_vec().truncate();
 
             self.draw_upsample
+                .program()
                 .set_uniform(self.uniform_up_tex, mip.as_uniform(0)?)?;
             Framebuffer::viewport(0, 0, size.x as _, size.y as _);
             self.fbo.attach_color(0, next_mip)?;
