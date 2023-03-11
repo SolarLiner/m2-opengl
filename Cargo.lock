@@ -571,7 +571,19 @@ version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c278839b831783b70278b14df4d45e1beb1aad306c07bb796637de9a0e323e8e"
 dependencies = [
- "crossbeam-utils",
+    "crossbeam-utils",
+]
+
+[[package]]
+name = "console"
+version = "0.15.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3d79fbe8970a77e3e34151cc13d3b3e248aa0faaecb9f6091fa07ebefe5ad60"
+dependencies = [
+    "encode_unicode",
+    "lazy_static",
+    "libc",
+    "windows-sys 0.42.0",
 ]
 
 [[package]]
@@ -580,8 +592,8 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "194a7a9e6de53fa55116934067c844d9d749312f75c6f6d0980e8c252f8c2146"
 dependencies = [
- "core-foundation-sys",
- "libc",
+    "core-foundation-sys",
+    "libc",
 ]
 
 [[package]]
@@ -1037,8 +1049,14 @@ version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5277249c8c3430e7127e4f2c40a77485e7baf11ae132ce9b3253a8ed710df0a0"
 dependencies = [
- "bytemuck",
+    "bytemuck",
 ]
+
+[[package]]
+name = "encode_unicode"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 
 [[package]]
 name = "enumflags2"
@@ -1046,8 +1064,8 @@ version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e75d4cd21b95383444831539909fbb14b9dc3fdceb2a6f5d36577329a1f55ccb"
 dependencies = [
- "enumflags2_derive",
- "serde",
+    "enumflags2_derive",
+    "serde",
 ]
 
 [[package]]
@@ -1505,8 +1523,16 @@ version = "0.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c61a4f46316d06bfa33a7ac22df6f0524c8be58e3db2d9ca99ccb1f357b62a65"
 dependencies = [
- "libc",
- "system-deps",
+    "libc",
+    "system-deps",
+]
+
+[[package]]
+name = "glsl-preprocessor"
+version = "0.1.0"
+dependencies = [
+    "insta",
+    "lazy-regex",
 ]
 
 [[package]]
@@ -1515,9 +1541,9 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd7703af6975def3b32573c60aaa5ebfebfab5d879da1e1315d87155ba57bcd"
 dependencies = [
- "base64",
- "byteorder",
- "gltf-json",
+    "base64",
+    "byteorder",
+    "gltf-json",
  "image",
  "lazy_static",
  "urlencoding",
@@ -1808,9 +1834,22 @@ dependencies = [
 name = "input"
 version = "0.1.0"
 dependencies = [
- "bitflags",
- "glam",
- "winit",
+    "bitflags",
+    "glam",
+    "winit",
+]
+
+[[package]]
+name = "insta"
+version = "1.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea5b3894afe466b4bcf0388630fc15e11938a6074af0cd637c825ba2ec8a099"
+dependencies = [
+    "console",
+    "lazy_static",
+    "linked-hash-map",
+    "similar",
+    "yaml-rust",
 ]
 
 [[package]]
@@ -1819,9 +1858,9 @@ version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
- "cfg-if",
- "js-sys",
- "wasm-bindgen",
+    "cfg-if",
+    "js-sys",
+    "wasm-bindgen",
  "web-sys",
 ]
 
@@ -1841,8 +1880,20 @@ version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1abeb7a0dd0f8181267ff8adc397075586500b81b28a73e8a0208b00fc170fb3"
 dependencies = [
- "libc",
- "windows-sys 0.45.0",
+    "libc",
+    "windows-sys 0.45.0",
+]
+
+[[package]]
+name = "irradiance_map"
+version = "0.1.0"
+dependencies = [
+    "eyre",
+    "rose-core",
+    "rose-ecs",
+    "rose-platform",
+    "tracing",
+    "violette",
 ]
 
 [[package]]
@@ -1911,8 +1962,31 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8367585489f01bc55dd27404dcf56b95e6da061a256a666ab23be9ba96a2e587"
 dependencies = [
- "bitflags",
- "libc",
+    "bitflags",
+    "libc",
+]
+
+[[package]]
+name = "lazy-regex"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff63c423c68ea6814b7da9e88ce585f793c87ddd9e78f646970891769c8235d4"
+dependencies = [
+    "lazy-regex-proc_macros",
+    "once_cell",
+    "regex",
+]
+
+[[package]]
+name = "lazy-regex-proc_macros"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8edfc11b8f56ce85e207e62ea21557cfa09bb24a8f6b04ae181b086ff8611c22"
+dependencies = [
+    "proc-macro2",
+    "quote",
+    "regex",
+    "syn",
 ]
 
 [[package]]
@@ -1921,7 +1995,7 @@ version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 dependencies = [
- "spin 0.5.2",
+    "spin 0.5.2",
 ]
 
 [[package]]
@@ -1942,9 +2016,15 @@ version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b67380fd3b2fbe7527a606e18729d21c6f3951633d0500574c4dc22d2d638b9f"
 dependencies = [
- "cfg-if",
- "winapi",
+    "cfg-if",
+    "winapi",
 ]
+
+[[package]]
+name = "linked-hash-map"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linux-raw-sys"
@@ -1956,12 +2036,10 @@ checksum = "f051f77a7c8e6957c0696eac88f26b0117e54f52d3fc682ab19397a8812846a4"
 name = "load_gltf"
 version = "0.1.0"
 dependencies = [
- "bytemuck",
  "color-eyre",
  "egui",
  "eyre",
  "glam",
- "gltf",
  "image",
  "rose-core",
  "rose-ecs",
@@ -2763,26 +2841,29 @@ dependencies = [
 name = "rose-ecs"
 version = "0.1.0"
 dependencies = [
- "assets_manager",
- "crossbeam-channel",
- "dashmap",
- "egui",
- "eyre",
- "glam",
- "hecs",
- "image",
- "input",
- "obj-rs",
- "rayon",
- "rose-core",
- "rose-platform",
- "rose-renderer",
- "serde",
- "serde_json",
- "serde_yaml",
- "toml 0.7.2",
- "tracing",
- "violette",
+    "assets_manager",
+    "bytemuck",
+    "crossbeam-channel",
+    "dashmap",
+    "egui",
+    "eyre",
+    "glam",
+    "gltf",
+    "hecs",
+    "image",
+    "input",
+    "obj-rs",
+    "rayon",
+    "rose-core",
+    "rose-platform",
+    "rose-renderer",
+    "serde",
+    "serde_json",
+    "serde_yaml",
+    "smol",
+    "toml 0.7.2",
+    "tracing",
+    "violette",
 ]
 
 [[package]]
@@ -3084,7 +3165,7 @@ version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
 dependencies = [
- "libc",
+    "libc",
 ]
 
 [[package]]
@@ -3094,12 +3175,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14a5df39617d7c8558154693a1bb8157a4aab8179209540cc0b10e5dc24e0b18"
 
 [[package]]
+name = "similar"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "420acb44afdae038210c99e69aae24109f32f15500aa708e81d46c9f29d55fcf"
+
+[[package]]
 name = "slab"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6528351c9bc8ab22353f9d776db39a20288e8d6c37ef8cfe3317cf875eecfc2d"
 dependencies = [
- "autocfg",
+    "autocfg",
 ]
 
 [[package]]
@@ -4195,7 +4282,7 @@ version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "463705a63313cd4301184381c5e8042f0a7e9b4bb63653f216311d4ae74690b7"
 dependencies = [
- "nom",
+    "nom",
 ]
 
 [[package]]
@@ -4205,14 +4292,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2d7d3948613f75c98fd9328cfdcc45acc4d360655289d0a7d4ec931392200a3"
 
 [[package]]
+name = "yaml-rust"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
+dependencies = [
+    "linked-hash-map",
+]
+
+[[package]]
 name = "zbus"
 version = "3.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f770930448dd412a4a7131dd968a8e6df0064db4d7916fbbd2d6c3f26b566938"
 dependencies = [
- "async-broadcast",
- "async-executor",
- "async-io",
+    "async-broadcast",
+    "async-executor",
+    "async-io",
  "async-lock",
  "async-recursion",
  "async-task",
