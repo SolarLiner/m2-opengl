@@ -76,16 +76,16 @@ impl GeometryBuffers {
         out_depth.reserve_memory()?;
 
         let deferred_fbo = Framebuffer::new();
-        deferred_fbo.attach_color(0, &pos)?;
-        deferred_fbo.attach_color(1, &albedo)?;
-        deferred_fbo.attach_color(2, &normal)?;
-        deferred_fbo.attach_color(3, &rough_metal)?;
+        deferred_fbo.attach_color(0, pos.mipmap(0).unwrap())?;
+        deferred_fbo.attach_color(1, albedo.mipmap(0).unwrap())?;
+        deferred_fbo.attach_color(2, normal.mipmap(0).unwrap())?;
+        deferred_fbo.attach_color(3, rough_metal.mipmap(0).unwrap())?;
         deferred_fbo.attach_depth(&out_depth)?;
         deferred_fbo.enable_buffers([0, 1, 2, 3])?;
         deferred_fbo.assert_complete()?;
 
         let output_fbo = Framebuffer::new();
-        output_fbo.attach_color(0, &out_color)?;
+        output_fbo.attach_color(0, out_color.mipmap(0).unwrap())?;
         output_fbo.assert_complete()?;
 
         let screen_pass = ScreenDraw::load("screen/deferred.glsl", reload_watcher)

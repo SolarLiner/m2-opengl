@@ -35,7 +35,7 @@ impl AutoExposure {
         target.filter_min(SampleMode::Linear)?;
         target.reserve_memory()?;
         let fbo = Framebuffer::new();
-        fbo.attach_color(0, &target)?;
+        fbo.attach_color(0, target.mipmap(0).unwrap())?;
         fbo.assert_complete()?;
         let uniform_in_texture = screen_draw.program().uniform("in_texture");
         Ok(Self {
@@ -77,8 +77,9 @@ impl AutoExposure {
         self.screen_draw.draw(&self.fbo)?;
         self.target.generate_mipmaps()?;
         let last_mipmap = self.target.num_mipmaps() - 1;
+        let mipmap = self.target.mipmap(last_mipmap).unwrap();
         tracing::debug!(message="Sampling last mipmap for average", mipmap=%last_mipmap);
-        let luminance_data = self.target.download(last_mipmap)?;
+        let luminance_data = mipmap.download()?;
         let mut luminance_data = luminance_data[0];
         if luminance_data.is_nan() {
             luminance_data = 1.;

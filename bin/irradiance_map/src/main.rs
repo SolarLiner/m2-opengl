@@ -34,7 +34,7 @@ impl IrradianceMapImpl {
         texture.filter_min(SampleMode::Linear)?;
         texture.filter_mag(SampleMode::Linear)?;
 
-        self.fbo.attach_color(0, &texture)?;
+        self.fbo.attach_color(0, texture.mipmap(0).unwrap())?;
         self.fbo.assert_complete()?;
 
         self.make_irradiance

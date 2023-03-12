@@ -240,7 +240,7 @@ impl EnvironmentMap {
         irradiance_texture.reserve_memory()?;
 
         let irradiance_fbo = Framebuffer::new();
-        irradiance_fbo.attach_color(0, &irradiance_texture)?;
+        irradiance_fbo.attach_color(0, irradiance_texture.mipmap(0).unwrap())?;
         irradiance_fbo.assert_complete()?;
 
         let make_irradiance = ScreenDraw::load("screen/env/irradiance.glsl", reload_watcher)?;

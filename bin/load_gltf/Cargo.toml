@@ -23,3 +23,8 @@ egui.workspace = true
 eyre.workspace = true
 glam.workspace = true
 tracing.workspace = true
+
+[profile.release]
+opt-level = 3
+debug = true
+strip = false

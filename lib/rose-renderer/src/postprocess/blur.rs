@@ -47,7 +47,7 @@ impl Blur {
         let draw_downsample = ScreenDraw::load("screen/blur/downsample.glsl", reload_watcher)?;
         let draw_upsample = ScreenDraw::load("screen/blur/upsample.glsl", reload_watcher)?;
         let fbo = Framebuffer::new();
-        fbo.attach_color(0, &mip_chain[0])?;
+        fbo.attach_color(0, mip_chain[0].mipmap(0).unwrap())?;
         fbo.enable_buffers([0])?;
         fbo.assert_complete()?;
 
@@ -107,7 +107,7 @@ impl Blur {
         for mip in &self.mip_chain {
             let size = mip.size_vec().truncate();
             Framebuffer::viewport(0, 0, size.x as _, size.y as _);
-            self.fbo.attach_color(0, mip)?;
+            self.fbo.attach_color(0, mip.mipmap(0).unwrap())?;
             self.draw_downsample.program().set_uniform(self.draw_downsample.program().uniform("first_mip"), first_mip)?;
             self.draw_downsample.draw(&self.fbo)?;
 
@@ -141,7 +141,7 @@ impl Blur {
                 .program()
                 .set_uniform(self.uniform_up_tex, mip.as_uniform(0)?)?;
             Framebuffer::viewport(0, 0, size.x as _, size.y as _);
-            self.fbo.attach_color(0, next_mip)?;
+            self.fbo.attach_color(0, next_mip.mipmap(0).unwrap())?;
             self.draw_upsample.draw(&self.fbo)?;
         }
         Ok(())
