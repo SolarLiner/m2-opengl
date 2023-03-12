@@ -20,6 +20,7 @@ out vec3 vs_normal;
 
 vec4 bone_transform_pos() {
     vec4 p = vec4(position, 1);
+    if (all(lessThan(bone_ix, ivec4(0)))) return p;
     return bones[0].transform * p * bone_w[0]
     + bones[1].transform * p * bone_w[1]
     + bones[2].transform * p * bone_w[2]
@@ -28,6 +29,7 @@ vec4 bone_transform_pos() {
 
 vec4 bone_transform_normal() {
     vec4 n = vec4(normal, 0);
+    if (all(lessThan(bone_ix, ivec4(0)))) return n;
     return bones[0].transform * n * bone_w[0]
     + bones[1].transform * n * bone_w[1]
     + bones[2].transform * n * bone_w[2]

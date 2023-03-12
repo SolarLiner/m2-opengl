@@ -41,15 +41,19 @@ impl Application for App {
 
     #[tracing::instrument(target = "App::new")]
     fn new(size: PhysicalSize<f32>, _scale_factor: f64) -> Result<Self> {
+        let base_dir = std::env::current_dir().unwrap();
         let _sizef = Vec2::from_array(size.into());
         let size = UVec2::from_array(size.cast::<u32>().into());
-        let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 64).upload()?;
-        let material = MaterialInstance::create(
+        let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 64).upload()?.into();
+        let mut material = MaterialInstance::create(
             Texture::load_rgb32f("assets/textures/moon_color.png")?,
-            Some(Texture::load_rgb32f("assets/textures/moon_normal.png")?),
-            [0.5, 0.],
-        )?
-            .with_normal_amount(0.1);
+            Texture::load_rgb32f("assets/textures/moon_normal.png")?,
+            None,
+        )?;
+        material.update_uniforms(|u| {
+            u.rough_metal_factor = [0.5, 0.].into();
+            u.normal_amount = 0.1;
+        })?;
         let lights = [
             Light::Directional {
                 dir: Vec3::X,
@@ -62,7 +66,7 @@ impl Application for App {
         ];
         let mut camera = Camera::default();
         let mut camera_controller = OrbitCameraController::default();
-        let mut renderer = Renderer::new(size)?;
+        let mut renderer = Renderer::new(size, base_dir)?;
         renderer.add_lights(lights)?;
         camera_controller.update(Duration::default(), &mut camera);
 

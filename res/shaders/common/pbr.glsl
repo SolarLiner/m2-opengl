@@ -83,6 +83,28 @@ float ggx_geom(float cos_theta, float roughness) {
     return num / denom;
 }
 
+vec3 ggx_importance_sample(vec2 xi, vec3 normal, float roughness) {
+    float a = roughness*roughness;
+
+    float phi = M_TAU * xi.x;
+    float cos_theta = sqrt((1.0 - xi.y) / (1.0 + (a*a - 1.0) * xi.y));
+    float sin_theta = sqrt(1.0 - cos_theta*cos_theta);
+
+    // from spherical coordinates to cartesian coordinates
+    vec3 H;
+    H.x = cos(phi) * sin_theta;
+    H.y = sin(phi) * sin_theta;
+    H.z = cos_theta;
+
+    // from tangent-space vector to world-space sample vector
+    vec3 up        = abs(normal.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent   = normalize(cross(up, normal));
+    vec3 bitangent = cross(normal, tangent);
+
+    vec3 sampleVec = tangent * H.x + bitangent * H.y + normal * H.z;
+    return normalize(sampleVec);
+}
+
 float smith(Lighting l) {
     float NdotV = max(l.NdotV, 0);
     float NdotL = max(l.NdotL, 0);
