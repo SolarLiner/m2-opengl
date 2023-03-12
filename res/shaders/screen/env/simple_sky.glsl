@@ -1,17 +1,7 @@
-#version 330 core
-
-const float M_PI = 3.1415926535;
+#include "../../common/math.glsl"
+#include "../../common/uniforms/view.glsl"
 
 in vec2 v_uv;
-
-layout(std140) uniform View {
-    mat4 mat_view;
-    mat4 mat_proj;
-    mat4 inv_view;
-    mat4 inv_proj;
-    vec4 viewport;
-    vec3 camera_pos;
-} view;
 
 uniform sampler2D albedo;
 uniform sampler2D normal_map;
@@ -21,7 +11,6 @@ uniform vec3 zenith_color;
 uniform bool is_illumination;
 
 out vec3 out_color;
-
 
 vec4 ndc2clip(vec4 ndc_pos) {
     vec4 clip_pos;

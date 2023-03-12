@@ -2,7 +2,7 @@ use std::sync::RwLock;
 
 use crevice::std140::AsStd140;
 use eyre::{Context, Result};
-use glam::{IVec4, UVec4, Vec2, Vec3};
+use glam::{IVec4, UVec4, Vec2, Vec3, Vec4};
 
 use rose_core::{
     camera::ViewUniformBuffer,
@@ -19,6 +19,7 @@ use violette::{
 };
 use violette_derive::VertexAttributes;
 
+use crate::bones::Std140GpuBone;
 use crate::Mesh;
 
 #[derive(Debug, Default, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, VertexAttributes)]
@@ -28,20 +29,23 @@ pub struct Vertex {
     pub normal: Vec3,
     pub uv: Vec2,
     pub bones_ix: IVec4,
+    pub bones_weights: Vec4,
 }
 
 impl Vertex {
-    pub fn new(position: Vec3, normal: Vec3, uv: Vec2) -> Self {
+    pub const fn new(position: Vec3, normal: Vec3, uv: Vec2) -> Self {
         Self {
             position,
             normal,
             uv,
             bones_ix: IVec4::splat(-1),
+            bones_weights: Vec4::ZERO,
         }
     }
 
-    pub fn attach_bones(mut self, bones_ix: UVec4) -> Self {
+    pub fn attach_bones(mut self, bones_ix: UVec4, weights: Vec4) -> Self {
         self.bones_ix = bones_ix.as_ivec4();
+        self.bones_weights = weights;
         self
     }
 }
@@ -65,6 +69,8 @@ pub struct Material {
     u_model: UniformLocation,
     u_uniforms: UniformBlockIndex,
     u_view: UniformBlockIndex,
+    u_bones: UniformBlockIndex,
+    bones_uniform: UniformBuffer<Std140GpuBone>,
     reload_watcher: ReloadFileProxy,
 }
 
@@ -115,6 +121,7 @@ impl Material {
         let u_uniforms = program.uniform_block("Uniforms");
         let u_model = program.uniform("model");
         let u_view = program.uniform_block("View");
+        let u_bones = program.uniform_block("Bones");
 
         if let Some(buf) = camera_uniform {
             program.bind_block(&buf.slice(0..=0), u_view, 0)?;
@@ -127,6 +134,8 @@ impl Material {
             u_model,
             u_uniforms,
             u_view,
+            u_bones,
+            bones_uniform: UniformBuffer::new(),
             reload_watcher: reload_watcher.proxy(
                 vert_files
                     .iter()
@@ -144,7 +153,7 @@ impl Material {
 
     #[tracing::instrument(skip(self, meshes), fields(meshes = meshes.len()))]
     pub fn draw_meshes<MC: std::ops::Deref<Target=Mesh>>(
-        &self,
+        &mut self,
         framebuffer: &Framebuffer,
         instance: &MaterialInstance,
         meshes: &[Transformed<MC>],
@@ -165,6 +174,7 @@ impl Material {
         }
         let program = self.program();
         program.bind_block(&instance.buffer.slice(0..=0), self.u_uniforms, 1)?;
+        program.bind_block(&self.bones_uniform.slice(..), self.u_bones, 2)?;
         if let Some(color) = instance.color.as_ref() {
             program.set_uniform(self.u_color, color.as_uniform(0)?)?;
         }
@@ -174,8 +184,13 @@ impl Material {
         if let Some(rough_metal) = &instance.roughness_metal {
             program.set_uniform(self.u_rough_metal, rough_metal.as_uniform(2)?)?;
         }
+        drop(program);
 
         for mesh in meshes {
+            if let Some(root_bone) = &mesh.root_bone {
+                root_bone.update_buffer(&mut self.bones_uniform)?;
+            }
+            let program = self.program();
             program.set_uniform(self.u_model, mesh.transform.matrix())?;
             mesh.draw(&program, framebuffer, false)?;
         }

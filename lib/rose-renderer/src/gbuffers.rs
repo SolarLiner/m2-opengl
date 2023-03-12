@@ -3,11 +3,13 @@ use std::num::NonZeroU32;
 use eyre::{Context, Result};
 use glam::UVec2;
 
-use rose_core::{light::LightBuffer, screen_draw::ScreenDraw};
-use rose_core::camera::ViewUniformBuffer;
-use rose_core::mesh::Mesh;
-use rose_core::transform::Transformed;
-use rose_core::utils::reload_watcher::ReloadWatcher;
+use rose_core::{
+    camera::ViewUniformBuffer,
+    light::LightBuffer,
+    screen_draw::ScreenDraw,
+    transform::Transformed,
+    utils::reload_watcher::ReloadWatcher,
+};
 use violette::{
     base::resource::Resource,
     framebuffer::{Blend, ClearBuffer, DepthTestFunction, Framebuffer},
@@ -15,8 +17,11 @@ use violette::{
     texture::{DepthStencil, Dimension, SampleMode, Texture},
 };
 
-use crate::env::{Environment, MaterialInfo};
-use crate::material::{Material, MaterialInstance, Vertex};
+use crate::{
+    env::{Environment, MaterialInfo},
+    material::{Material, MaterialInstance},
+    Mesh,
+};
 
 #[derive(Debug)]
 pub struct GeometryBuffers {
@@ -130,9 +135,9 @@ impl GeometryBuffers {
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn draw_meshes<MC: std::ops::Deref<Target = Mesh<Vertex>>>(
+    pub fn draw_meshes<MC: std::ops::Deref<Target=Mesh>>(
         &self,
-        material: &Material,
+        material: &mut Material,
         instance: &MaterialInstance,
         meshes: &[Transformed<MC>],
     ) -> Result<()> {

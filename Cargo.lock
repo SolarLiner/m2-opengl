@@ -369,6 +369,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bone-test"
+version = "0.1.0"
+dependencies = [
+ "eyre",
+ "glam",
+ "rose-core",
+ "rose-platform",
+ "rose-renderer",
+ "violette",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

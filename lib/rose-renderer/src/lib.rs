@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
+    ops,
     rc::{Rc, Weak},
     sync::Arc,
     time::{Duration, Instant},
@@ -26,6 +27,7 @@ use violette::{
 };
 
 use crate::{env::Environment, material::MaterialInstance, postprocess::LensFlareParams};
+use crate::bones::Bone;
 
 pub mod bones;
 pub mod env;
@@ -33,7 +35,42 @@ pub mod gbuffers;
 pub mod material;
 pub mod postprocess;
 
-pub type Mesh = rose_core::mesh::Mesh<material::Vertex>;
+pub type InnerMesh = rose_core::mesh::Mesh<material::Vertex>;
+
+#[derive(Debug)]
+pub struct Mesh {
+    inner: InnerMesh,
+    pub root_bone: Option<Rc<Bone>>,
+}
+
+impl From<InnerMesh> for Mesh {
+    fn from(value: InnerMesh) -> Self {
+        Self {
+            inner: value,
+            root_bone: None,
+        }
+    }
+}
+
+impl Mesh {
+    pub fn new(
+        vertices: impl IntoIterator<Item=material::Vertex>,
+        indices: impl IntoIterator<Item=u32>,
+    ) -> Result<Self> {
+        Ok(Self {
+            inner: InnerMesh::new(vertices, indices)?,
+            root_bone: None,
+        })
+    }
+}
+
+impl ops::Deref for Mesh {
+    type Target = InnerMesh;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct PostprocessInterface {
@@ -321,7 +358,7 @@ impl Renderer {
             };
 
             self.last_render_rendered += meshes.len();
-            geom_pass.draw_meshes(&self.material, instance.as_ref(), &meshes)?;
+            geom_pass.draw_meshes(&mut self.material, instance.as_ref(), &meshes)?;
         }
 
         Framebuffer::disable_depth_test();

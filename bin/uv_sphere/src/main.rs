@@ -43,7 +43,7 @@ impl Application for App {
     fn new(size: PhysicalSize<f32>, _scale_factor: f64) -> Result<Self> {
         let _sizef = Vec2::from_array(size.into());
         let size = UVec2::from_array(size.cast::<u32>().into());
-        let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 64)?;
+        let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 64).upload()?;
         let material = MaterialInstance::create(
             Texture::load_rgb32f("assets/textures/moon_color.png")?,
             Some(Texture::load_rgb32f("assets/textures/moon_normal.png")?),

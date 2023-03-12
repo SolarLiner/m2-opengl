@@ -32,6 +32,7 @@
       <sourceFolder url="file://$MODULE_DIR$/bin/irradiance_map/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/glsl-preprocessor/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/glsl-preprocessor/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/bone-test/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

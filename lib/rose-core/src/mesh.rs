@@ -1,15 +1,13 @@
 use std::marker::PhantomData;
 
 use bytemuck::Pod;
-
 use eyre::{Context, Result};
-use glam::{vec2, vec3, Vec2, Vec3};
+use glam::{vec2, Vec2, vec3, Vec3};
 
 use violette::{
     buffer::Buffer,
     vertex::{DrawMode, VertexArray, VertexAttributes},
 };
-
 use violette::{
     buffer::{ArrayBuffer, ElementBuffer},
     framebuffer::Framebuffer,
@@ -89,6 +87,17 @@ where
     }
 }
 
+pub struct CpuMesh<V, I> {
+    pub vertices: Vec<V>,
+    pub indices: Vec<I>,
+}
+
+impl<V: VertexAttributes> CpuMesh<V, u32> {
+    pub fn upload(self) -> Result<Mesh<V>> {
+        Mesh::new(self.vertices, self.indices)
+    }
+}
+
 pub struct MeshBuilder<Vertex, Ctor> {
     ctor: Ctor,
     __phantom: PhantomData<Vertex>,
@@ -107,7 +116,7 @@ impl<Vertex: Pod, Ctor: Fn(Vec3, Vec3, Vec2) -> Vertex> MeshBuilder<Vertex, Ctor
 where
     Vertex: VertexAttributes,
 {
-    pub fn uv_sphere(&self, radius: f32, nlon: usize, nlat: usize) -> Result<Mesh<Vertex>> {
+    pub fn uv_sphere(&self, radius: f32, nlon: usize, nlat: usize) -> CpuMesh<Vertex, u32> {
         use std::f32::consts::*;
         let mut vertices = Vec::with_capacity(nlon * nlat + 2);
         let num_triangles = nlon * nlat * 2;
@@ -158,6 +167,9 @@ where
             indices.extend([last_idx, bottom_row + i, bottom_row + i + 1]);
         }
 
-        Mesh::new(vertices, indices.into_iter().map(|i| i as u32))
+        CpuMesh {
+            vertices,
+            indices: indices.into_iter().map(|i| i as u32).collect(),
+        }
     }
 }
