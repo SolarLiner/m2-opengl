@@ -9,6 +9,7 @@ homepage.workspace = true
 either = "1.8.1"
 float-ord = "0.3.2"
 image = "0.24.5"
+
 violette = { path = "../violette" }
 violette-derive = { path = "../violette-derive" }
 rose-core = { path = "../rose-core" }

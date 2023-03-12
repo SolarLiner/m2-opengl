@@ -8,7 +8,6 @@ use std::{
 use std::path::Path;
 
 use eyre::Result;
-use float_ord::FloatOrd;
 use glam::{UVec2, vec2, Vec3, Vec4Swizzles};
 use tracing::span::EnteredSpan;
 
@@ -320,14 +319,6 @@ impl Renderer {
                 tracing::warn!("Dropped mesh object, cannot recover from weakref");
                 continue;
             };
-
-            meshes.sort_by_cached_key(|m| {
-                FloatOrd(
-                    m.transform
-                        .position
-                        .distance_squared(self.view_uniform.camera_pos),
-                )
-            });
 
             self.last_render_rendered += meshes.len();
             geom_pass.draw_meshes(&self.material, instance.as_ref(), &meshes)?;
