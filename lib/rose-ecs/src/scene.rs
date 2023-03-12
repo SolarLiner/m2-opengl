@@ -5,15 +5,16 @@ use std::{
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 
-use assets_manager::{AnyCache, AssetCache};
+use assets_manager::AssetCache;
+use assets_manager::source::{FileSystem, Source};
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use eyre::Result;
 use hecs::{CommandBuffer, World};
 
 use crate::systems::persistence::PersistenceSystem;
 
-pub struct Scene {
-    assets: &'static AssetCache,
+pub struct Scene<FS: 'static = FileSystem> {
+    assets: &'static AssetCache<FS>,
     world: World,
     scene_path: PathBuf,
     command_queue: (Sender<CommandBuffer>, Receiver<CommandBuffer>),
@@ -65,17 +66,15 @@ impl Scene {
     pub fn reload(&self, persistence: &mut PersistenceSystem) -> Result<Self> {
         Self::load(persistence, self.scene_path.as_path())
     }
+}
 
-    pub fn asset_cache(&self) -> AnyCache<'static> {
-        self.assets.as_any_cache()
+impl<FS> Scene<FS> {
+    pub fn asset_cache(&self) -> &'static AssetCache<FS> {
+        self.assets
     }
 
     pub fn path(&self) -> &Path {
         self.scene_path.as_path()
-    }
-
-    pub fn on_frame(&self) {
-        self.assets.hot_reload();
     }
 
     #[inline]
@@ -112,6 +111,12 @@ impl Scene {
             }
         }
     }
+}
+
+impl<FS: Sync + Source> Scene<FS> {
+    pub fn on_frame(&self) {
+        self.assets.hot_reload();
+    }
 
     pub fn save(&self, persistence: &mut PersistenceSystem) -> Result<()> {
         let writer = BufWriter::new(File::create(&self.scene_path)?);
@@ -120,106 +125,10 @@ impl Scene {
         let mut ser = serde_yaml::Serializer::new(writer);
         // let mut data = String::with_capacity(1024 * 1024);
         // let ser = toml::Serializer::new(&mut data);
-        persistence.serialize_world(self.asset_cache(), &mut ser, &self.world)?;
+        persistence.serialize_world(self.assets.as_any_cache(), &mut ser, &self.world)?;
         // let mut data = String::with_capacity(512);
         // let ser = serde_yaml::Serializer::new(&mut data);
         // persistence.serialize_world(ser, &self.world)?;
         Ok(())
-    }
-
-    #[cfg(never)]
-    fn load_scene(world: &mut World, cache: AnyCache<'static>, id: &str) -> Result<CameraBundle> {
-        let mut commands = CommandBuffer::new();
-        let handle = cache.load::<assets::Scene>(id)?;
-        let scene = handle.read();
-        let editor_camera = CameraBundle {
-            transform: scene.camera.transform,
-            params: scene.camera.value.clone(),
-            ..Default::default()
-        };
-        for light in &scene.lights {
-            commands.spawn(
-                EntityBuilder::new()
-                    .add_bundle((
-                        light.name.to_string(),
-                        LightBundle {
-                            transform: light.transform,
-                            light: light.value.value,
-                            ..Default::default()
-                        },
-                    ))
-                    .add(Active)
-                    .build(),
-            );
-        }
-        for object in &scene.objects {
-            // TODO: Replace with try block
-            let mut loader = || {
-                commands.spawn(
-                    EntityBuilder::new()
-                        .add(object.name.to_string())
-                        .add(NamedObject {
-                            object: object.name.clone(),
-                        })
-                        .add_bundle(ObjectBundle {
-                            transform: object.transform,
-                            mesh: cache.load(object.mesh.as_str())?,
-                            material: cache.load(object.material.as_str())?,
-                            active: Active,
-                        })
-                        .build(),
-                );
-                // commands.spawn(ObjectBundle {
-                //     transform: object.transform,
-                //     mesh: cache.load(object.mesh.as_str())?,
-                //     material: cache.load(object.material.as_str())?,
-                // });
-                Ok::<_, eyre::Report>(())
-            };
-            match loader() {
-                Ok(_) => {}
-                Err(err) => tracing::warn!("Cannot load object: {}", err),
-            }
-        }
-
-        commands.run_on(world);
-        Ok(editor_camera)
-    }
-
-    #[cfg(never)]
-    fn save_world_as_scene(world: &World, camera: Transformed<CameraParams>) -> Option<SceneDesc> {
-        let lights = world
-            .query::<(Option<&String>, &Transform, &Light)>()
-            .iter()
-            .map(|(_, (opt_name, transform, light))| Named {
-                name: opt_name
-                    .cloned()
-                    .unwrap_or_else(|| String::from("<Unnamed>"))
-                    .into(),
-                value: Transformed {
-                    transform: (*transform).into(),
-                    value: *light,
-                },
-            })
-            .collect();
-        let objects = world
-            .query::<(Option<&String>, &Transform, &NamedObject)>()
-            .iter()
-            .map(|(_, (opt_name, transform, named_obj))| Named {
-                name: opt_name
-                    .cloned()
-                    .unwrap_or_else(|| String::from("<Unnamed>"))
-                    .into(),
-                value: Transformed {
-                    transform: TransformDesc::from(*transform),
-                    value: named_obj.clone(),
-                },
-            })
-            .collect();
-        Some(SceneDesc {
-            camera,
-            lights,
-            objects,
-        })
     }
 }

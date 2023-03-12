@@ -1,0 +1,15 @@
+[package]
+name = "irradiance_map"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rose-core = { path = "../../lib/rose-core", features = ["hot-reload"] }
+rose-ecs = { path = "../../lib/rose-ecs" }
+rose-platform = { path = "../../lib/rose-platform" }
+violette = { path = "../../lib/violette" }
+
+eyre.workspace = true
+tracing.workspace = true

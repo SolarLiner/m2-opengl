@@ -106,7 +106,7 @@ impl Input {
         self.keyboard.begin_frame();
     }
 
-    pub fn apply_event(&mut self, event: WindowEvent) -> bool {
+    pub fn apply_event<'ev>(&mut self, event: WindowEvent<'ev>) -> Option<WindowEvent<'ev>> {
         match event {
             WindowEvent::MouseInput { state, button, .. } => match state {
                 ElementState::Pressed => self.mouse.state.set(button),
@@ -114,27 +114,27 @@ impl Input {
             },
             WindowEvent::KeyboardInput {
                 input:
-                    winit::event::KeyboardInput {
-                        state,
-                        virtual_keycode: Some(vk),
-                        ..
-                    },
+                winit::event::KeyboardInput {
+                    state,
+                    virtual_keycode: Some(vk),
+                    ..
+                },
                 ..
             } => match state {
                 ElementState::Pressed => self.keyboard.state.set(vk),
                 ElementState::Released => self.keyboard.state.clear(vk),
             },
-            WindowEvent::MouseWheel {delta, ..} => {
+            WindowEvent::MouseWheel { delta, .. } => {
                 self.mouse.pos.z += match delta {
                     MouseScrollDelta::LineDelta(_, y) => 10. * y,
                     MouseScrollDelta::PixelDelta(pos) => pos.y as _,
                 }
             }
-            WindowEvent::CursorMoved {position, ..} => {
+            WindowEvent::CursorMoved { position, .. } => {
                 self.mouse.pos = vec3(position.x as _, position.y as _, self.mouse.pos.z);
             }
-            _ => return false,
+            event => return Some(event),
         }
-        true
+        None
     }
 }

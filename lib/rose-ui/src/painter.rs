@@ -1,4 +1,5 @@
 use std::{collections::HashMap, num::NonZeroU32};
+use std::path::Path;
 
 use bytemuck::{offset_of, Pod, Zeroable};
 use egui::epaint::{self, Primitive};
@@ -8,8 +9,9 @@ use winit::dpi::PhysicalSize;
 
 use rose_core::{
     mesh::Mesh,
-    utils::thread_guard::ThreadGuard
+    utils::thread_guard::ThreadGuard,
 };
+use rose_core::utils::reload_watcher::{ReloadFileProxy, ReloadWatcher};
 use violette::{
     framebuffer::{Blend, Framebuffer},
     gl,
@@ -53,17 +55,14 @@ pub struct UiImpl {
     textures: HashMap<egui::TextureId, UiTexture>,
     tex_trash_bin: Vec<UiTexture>,
     current_fbo: Option<*const Framebuffer>,
+    reload_watcher: ReloadFileProxy,
 }
 
 impl UiImpl {
-    pub fn new() -> Result<Self> {
-        let program = Program::load(
-            "../../../assets/shaders/ui/ui.vert.glsl",
-            Some("assets/shaders/ui.frag.glsl"),
-            None::<&'static str>,
-        )?;
-        let uniform_screen_size = program.uniform("u_screen_size");
-        let uniform_sampler = program.uniform("u_sampler");
+    pub fn new(reload_watcher: &ReloadWatcher) -> Result<Self> {
+        let vert_shader_path = reload_watcher.base_path().join("ui/ui.vert.glsl");
+        let frag_shader_path = reload_watcher.base_path().join("ui/ui.frag.glsl");
+        let (program, uniform_screen_size, uniform_sampler) = Self::create_program(&vert_shader_path, &frag_shader_path)?;
         let mesh = Mesh::empty()?;
         Ok(Self {
             program,
@@ -73,7 +72,19 @@ impl UiImpl {
             textures: HashMap::new(),
             tex_trash_bin: Vec::default(),
             current_fbo: None,
+            reload_watcher: reload_watcher.proxy([vert_shader_path.as_path(), frag_shader_path.as_path()]),
         })
+    }
+
+    fn create_program(vert_shader_path: &Path, frag_shader_path: &Path) -> Result<(Program, UniformLocation, UniformLocation)> {
+        let program = Program::load(
+            &vert_shader_path,
+            Some(&frag_shader_path),
+            None::<&'static str>,
+        )?;
+        let uniform_screen_size = program.uniform("u_screen_size");
+        let uniform_sampler = program.uniform("u_sampler");
+        Ok((program, uniform_screen_size, uniform_sampler))
     }
 
     #[tracing::instrument(skip_all)]
@@ -85,6 +96,22 @@ impl UiImpl {
         primitives: &[egui::ClippedPrimitive],
     ) -> Result<()> {
         tracing::trace!(message="Egui draw", primitices=%primitives.len());
+        if self.reload_watcher.should_reload() {
+            let mut paths = self.reload_watcher.paths();
+            let vert_path = paths.next().unwrap();
+            let frag_path = paths.next().unwrap();
+            let result = Self::create_program(vert_path, frag_path);
+            match result {
+                Ok((new_program, u_screen_size, u_sampler)) => {
+                    self.program = new_program;
+                    self.uniform_screen_size = u_screen_size;
+                    self.uniform_sampler = u_sampler;
+                }
+                Err(err) => {
+                    tracing::warn!("Error while reloading UI shaders: {}", err);
+                }
+            }
+        }
         self.current_fbo.replace(frame);
         let _ = self.prepare_painting(size, ppp)?;
         let sizef = size.cast();

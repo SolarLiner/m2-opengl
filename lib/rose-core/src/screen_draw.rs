@@ -10,6 +10,7 @@ use violette::{
     vertex::{DrawMode, VertexArray},
 };
 use violette::framebuffer::Framebuffer;
+use violette::shader::{FragmentShader, VertexShader};
 
 use crate::utils::{
     reload_watcher::{ReloadFileProxy, ReloadWatcher},
@@ -32,9 +33,17 @@ pub struct ScreenDraw {
 }
 
 impl ScreenDraw {
-    pub fn new(shader_source: &str, reload_watcher: ReloadFileProxy) -> Result<Self> {
-        let program = Program::from_sources(SCREEN_VS, Some(shader_source), None)
-            .context("Could not compile OpenGL shader program")?;
+    pub fn new<'s>(
+        shader_sources: impl IntoIterator<Item=&'s str>,
+        reload_watcher: ReloadFileProxy,
+    ) -> Result<Self> {
+        let vert_shader = VertexShader::new(SCREEN_VS)?;
+        let frag_shader = FragmentShader::new_multiple(shader_sources)?;
+        let program = Program::new()
+            .with_shader(vert_shader.id)
+            .with_shader(frag_shader.id)
+            .link()?;
+        program.validate()?;
         Ok(Self {
             program: RefCell::new(program),
             reload_watcher,
@@ -42,18 +51,25 @@ impl ScreenDraw {
     }
 
     pub fn load(file: impl AsRef<Path>, reload_watcher: &ReloadWatcher) -> Result<Self> {
-        let file = file.as_ref();
         let filepath = reload_watcher.base_path().join(file);
+        let files = glsl_preprocessor::load_and_parse(&filepath)?;
         Self::new(
-            std::fs::read_to_string(&filepath)
-                .context(format!(
-                    "Cannot read shader from file {}",
-                    filepath.display()
-                ))?
-                .as_str(),
-            reload_watcher.proxy_single(filepath.as_path()),
+            files.iter().map(|(_, s)| s.as_str()),
+            reload_watcher.proxy(files.iter().map(|(p, _)| p.as_path())),
         )
             .with_context(|| format!("Loading shader {}", filepath.display()))
+            .with_context(|| {
+                format!(
+                    "File map:\n{}",
+                    files
+                        .iter()
+                        .map(|(p, _)| p.as_path())
+                        .enumerate()
+                        .map(|(ix, p)| format!("\t{} => {}", ix, p.display()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            })
     }
 
     pub fn program(&self) -> Ref<Program> {
@@ -67,10 +83,18 @@ impl ScreenDraw {
                 if self.reload_watcher.should_reload() {
                     let mut paths = self.reload_watcher.paths();
                     if let Some(frag_path) = paths.next() {
+                        let files = glsl_preprocessor::load_and_parse(frag_path)?;
                         tracing::info!(message="Reloading screen-space shader", path=%frag_path.display());
-                        let data = std::fs::read_to_string(frag_path).unwrap();
-                        let new_program_result =
-                            Program::from_sources(SCREEN_VS, Some(&*data), None);
+                        let new_program_result = (|| {
+                            let vs = VertexShader::new(SCREEN_VS)?;
+                            let fs = FragmentShader::new_multiple(files.iter().map(|(_, s)| s.as_str()))?;
+                            let program = Program::new()
+                                .with_shader(vs.id)
+                                .with_shader(fs.id)
+                                .link()?;
+                            program.validate()?;
+                            Ok::<_, eyre::Report>(program)
+                        })();
                         match new_program_result {
                             Ok(new_program) => {
                                 let _ = std::mem::replace(&mut *program, new_program);

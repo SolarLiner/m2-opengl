@@ -377,7 +377,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                             .collect::<HashSet<_>>()
                     });
                     ui.add_enabled_ui(false, |ui| {
-                        let mut enabled = cache.is_hot_reloaded();
+                        let mut enabled = cache.as_any_cache().is_hot_reloaded();
                         ui.checkbox(&mut enabled, "Hot reload");
                     });
                     scene.with_world(|_, cmd| {
@@ -419,7 +419,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                     ui.separator();
                                                 }
                                                 if ui.small_button("New entity with this object").clicked() {
-                                                    match ObjectBundle::from_asset_cache(cache, Transform::default(), id) {
+                                                    match ObjectBundle::from_asset_cache(cache.as_any_cache(), Transform::default(), id) {
                                                         Ok(bundle) => {
                                                             cmd.spawn(bundle);
                                                         }
@@ -434,7 +434,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                             transform: Transform::default(),
                                                             active: Active,
                                                             mesh: handle,
-                                                            material: self.renderer.default_material_handle(scene.asset_cache()),
+                                                            material: self.renderer.default_material_handle(scene.asset_cache().as_any_cache()),
                                                         }),
                                                         Err(err) => tracing::error!("Could not load {:?} as mesh: {}", id, err),
                                                     }
@@ -444,7 +444,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                         Ok(handle) => cmd.spawn(ObjectBundle {
                                                             transform: Transform::default(),
                                                             active: Active,
-                                                            mesh: self.renderer.primitive_sphere(scene.asset_cache()),
+                                                            mesh: self.renderer.primitive_sphere(scene.asset_cache().as_any_cache()),
                                                             material: handle,
                                                         }),
                                                         Err(err) => tracing::error!("Could not load {:?} as material: {}", id, err),

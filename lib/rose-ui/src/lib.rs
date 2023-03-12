@@ -4,8 +4,10 @@ use std::time::Duration;
 use egui::{epaint, os::OperatingSystem, Style, Visuals};
 use egui_winit::winit::event_loop::EventLoopWindowTarget;
 use eyre::Result;
-use violette::framebuffer::Framebuffer;
 use winit::window::Window;
+
+use rose_core::utils::reload_watcher::ReloadWatcher;
+use violette::framebuffer::Framebuffer;
 
 use self::painter::UiImpl;
 
@@ -20,8 +22,8 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new<E>(event_loop: &EventLoopWindowTarget<E>, window: &Window) -> Result<Self> {
-        let painter = UiImpl::new()?;
+    pub fn new<E>(event_loop: &EventLoopWindowTarget<E>, window: &Window, reload_watcher: &ReloadWatcher) -> Result<Self> {
+        let painter = UiImpl::new(reload_watcher)?;
         let ctx = egui::Context::default();
         let scale_factor = window.scale_factor() as _;
         OperatingSystem::from_target_os();

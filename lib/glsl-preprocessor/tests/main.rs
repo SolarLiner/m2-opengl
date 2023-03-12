@@ -1,12 +1,11 @@
 use std::path::PathBuf;
 
-use glsl_preprocessor::process_file;
-
-const TESTS_FILES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+use glsl_preprocessor::load_and_parse;
 
 #[test]
 fn test_process_file() {
-    let tests_files = PathBuf::from(TESTS_FILES);
-    let unwrapped = process_file(tests_files.join("shader.glsl"));
-    insta::assert_snapshot!(unwrapped);
+    let tests_files = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures");
+    eprintln!("test files: {}", tests_files.display());
+    let unwrapped = load_and_parse(tests_files.join("shader.glsl")).unwrap();
+    insta::assert_debug_snapshot!(unwrapped);
 }

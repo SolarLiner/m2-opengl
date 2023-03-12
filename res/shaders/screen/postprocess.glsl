@@ -1,4 +1,4 @@
-#version 330
+#include "../common/color.glsl"
 
 in vec2 v_uv;
 out vec4 out_color;
@@ -12,10 +12,6 @@ uniform float lens_flare_threshold = 20;
 uniform float distortion_amt = 2;
 uniform float ghost_spacing = 0.8;
 uniform int ghost_count = 5;
-
-float desaturate(vec3 col) {
-    return dot(col, vec3(0.2126, 0.7152, 0.0722));
-}
 
 vec3 reinhard(vec3 col) {
     return col / (1.0 + desaturate(col));

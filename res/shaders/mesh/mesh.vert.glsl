@@ -1,19 +1,10 @@
-#version 330
+#include "../common/uniforms/view.glsl"
 
 in vec3 position;
 in vec3 normal;
 in vec2 uv;
 
 uniform mat4 model;
-
-layout(std140) uniform View {
-    mat4 mat_view;
-    mat4 mat_proj;
-    mat4 inv_view;
-    mat4 inv_proj;
-    vec4 viewport;
-    vec3 camera_pos;
-} view;
 
 out vec3 vs_position;
 out vec2 vs_uv;

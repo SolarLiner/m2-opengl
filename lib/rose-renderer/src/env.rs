@@ -1,4 +1,5 @@
 use std::{any::Any, fmt, path::Path};
+use std::num::NonZeroU32;
 
 use eyre::{Context, Report, Result};
 use glam::{vec3, Vec3};
@@ -10,6 +11,7 @@ use violette::{
     program::{UniformBlockIndex, UniformLocation},
     texture::{SampleMode, Texture, TextureWrap},
 };
+use violette::texture::Dimension;
 
 #[derive(Debug, Copy, Clone)]
 pub struct MaterialInfo<'a> {
@@ -138,8 +140,10 @@ impl SimpleSky {
 #[derive(Debug)]
 pub struct EnvironmentMap {
     draw: ScreenDraw,
+    irradiance_texture: Texture<[f32; 3]>,
     map: Texture<[f32; 3]>,
     u_view: UniformBlockIndex,
+    u_irradiance: UniformLocation,
     u_sampler: UniformLocation,
     u_albedo: UniformLocation,
     u_normal: UniformLocation,
@@ -160,6 +164,7 @@ impl Environment for EnvironmentMap {
             draw.set_uniform(self.u_normal, mat_info.normal_coverage.as_uniform(1)?)?;
             draw.set_uniform(self.u_rough_metal, mat_info.roughness_metal.as_uniform(2)?)?;
             draw.set_uniform(self.u_sampler, self.map.as_uniform(3)?)?;
+            draw.set_uniform(self.u_irradiance, self.irradiance_texture.as_uniform(4)?)?;
         }
         self.draw.draw(frame)?;
         Ok(())
@@ -190,10 +195,18 @@ impl EnvironmentMap {
 
         let u_view = draw.uniform_block("View");
         let u_sampler = draw.uniform("env_map");
+        let u_irradiance = draw.uniform("irradiance_map");
         let u_albedo = draw.uniform("frame_albedo");
         let u_normal = draw.uniform("frame_normal");
         let u_rough_metal = draw.uniform("frame_rough_metal");
         drop(draw);
+
+        let irradiance_texture = Self::build_irradiance_texture(
+            &map,
+            reload_watcher,
+            NonZeroU32::new(256).unwrap(),
+            NonZeroU32::new(128).unwrap(),
+        )?;
 
         map.wrap_s(TextureWrap::Repeat)?;
         map.wrap_t(TextureWrap::Repeat)?;
@@ -203,12 +216,40 @@ impl EnvironmentMap {
         map.generate_mipmaps()?;
         Ok(Self {
             draw: screen_draw,
+            irradiance_texture,
             map,
             u_view,
             u_sampler,
+            u_irradiance,
             u_albedo,
             u_normal,
             u_rough_metal,
         })
+    }
+
+    fn build_irradiance_texture(
+        map: &Texture<[f32; 3]>,
+        reload_watcher: &ReloadWatcher,
+        width: NonZeroU32,
+        height: NonZeroU32,
+    ) -> Result<Texture<[f32; 3]>> {
+        let irradiance_texture =
+            Texture::new(width, height, NonZeroU32::new(1).unwrap(), Dimension::D2);
+        irradiance_texture.filter_min(SampleMode::Linear)?;
+        irradiance_texture.filter_mag(SampleMode::Linear)?;
+        irradiance_texture.reserve_memory()?;
+
+        let irradiance_fbo = Framebuffer::new();
+        irradiance_fbo.attach_color(0, &irradiance_texture)?;
+        irradiance_fbo.assert_complete()?;
+
+        let make_irradiance = ScreenDraw::load("screen/env/irradiance.glsl", reload_watcher)?;
+        make_irradiance.program().set_uniform(
+            make_irradiance.program().uniform("env_map"),
+            map.as_uniform(0)?,
+        )?;
+        Framebuffer::viewport(0, 0, width.get() as _, height.get() as _);
+        make_irradiance.draw(&irradiance_fbo)?;
+        Ok(irradiance_texture)
     }
 }

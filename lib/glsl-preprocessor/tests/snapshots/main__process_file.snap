@@ -2,16 +2,13 @@
 source: lib/glsl-preprocessor/tests/main.rs
 expression: unwrapped
 ---
-#version 330 core
-
-vec3 gen_color() {
-    return vec3(1,0,1);
-}
-
-
-out vec4 out_color;
-
-void main() {
-    out_color = vec4(gen_color(), 1);
-}
-
+[
+    (
+        "C:\\Users\\solar\\Documents\\Projets\\Univ\\m2-opengl\\lib\\glsl-preprocessor\\tests\\fixtures\\shader.glsl",
+        "#version 330 core\r\n\r\n#include \"common.glsl\")\r\n\r\nout vec4 out_color;\r\n\r\nvoid main() {\r\n    out_color = vec4(gen_color(), 1;\r\n}\r\n",
+    ),
+    (
+        "C:\\Users\\solar\\Documents\\Projets\\Univ\\m2-opengl\\lib\\glsl-preprocessor\\tests\\fixtures\\common.glsl",
+        "vec3 gen_color() {\r\n    return vec3(1, 0, 1);\r\n}\r\n",
+    ),
+]

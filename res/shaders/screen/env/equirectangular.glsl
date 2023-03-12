@@ -1,22 +1,13 @@
-#version 330 core
-
-const float M_PI = 3.1415926535;
+#include "../../common/pbr.glsl"
+#include "../../common/uniforms/view.glsl"
 
 in vec2 v_uv;
-
-layout(std140) uniform View {
-    mat4 mat_view;
-    mat4 mat_proj;
-    mat4 inv_view;
-    mat4 inv_proj;
-    vec4 viewport;
-    vec3 camera_pos;
-} view;
 
 uniform sampler2D frame_albedo;
 uniform sampler2D frame_normal;
 uniform sampler2D frame_rough_metal;
 uniform sampler2D env_map;
+uniform sampler2D irradiance_map;
 
 out vec4 out_color;
 
@@ -31,7 +22,7 @@ vec4 ndc2world(vec4 ndc) {
     return view.inv_view * ndc2clip(ndc);
 }
 
-vec2 spherical_to_polar(vec3 sph) {
+vec2 normal_to_polar(vec3 sph) {
     const vec2 inv_atan = vec2(0.1591, 0.3183);
     vec2 uv = vec2(atan(sph.z, sph.x), asin(sph.y));
     uv *= inv_atan;
@@ -49,7 +40,7 @@ vec3 get_ray_dir() {
 
 vec3 background() {
     vec3 ray = get_ray_dir();
-    vec2 uv = spherical_to_polar(ray);
+    vec2 uv = normal_to_polar(ray);
     return texture(env_map, uv).rgb;
 }
 
@@ -57,30 +48,17 @@ vec3 illuminate(vec3 normal) {
     vec3 albedo = texture(frame_albedo, v_uv).rgb;
     vec2 rough_metal = texture(frame_rough_metal, v_uv).rg;
 
-    vec3 reflected_ray = reflect(get_ray_dir(), normal);
-    vec2 uv = spherical_to_polar(reflected_ray);
-    return albedo * textureLod(env_map, uv, sqrt(rough_metal.r) * 15).rgb;
-}
+    vec3 view = get_ray_dir();
+    vec3 light = reflect(view, normal);
+    vec2 uv = normal_to_polar(light);
+    vec3 diffuse_color = texture(irradiance_map, uv).rgb;
 
+    LightSource light_source = create_light_source(light, diffuse_color, 1);
+    light_source.specular = texture(env_map, uv).rgb;
 
-vec3 irradiance(vec3 normal) {
-    vec3 up = vec3(0, 1, 0);
-    vec3 right = normalize(cross(up, normal));
-    up = normalize(cross(normal, right));
-    const float delta = 0.025;
-    float nr_samples = 0;
-    vec3 ret = vec3(0);
-
-    for (float phi = 0; phi < 2 * M_PI; phi += delta) {
-        for (float theta = 0; theta < 0.5 * M_PI; theta += delta) {
-            vec3 tangent = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
-            vec3 sample_vec = tangent.x * right + tangent.y * up + tangent.z * normal;
-            ret += texture(env_map, spherical_to_polar(sample_vec)).rgb * cos(theta) * sin(theta);
-            nr_samples++;
-        }
-    }
-
-    return ret;
+    LightingMaterial light_mat = create_material(rough_metal.r, rough_metal.g);
+    Lighting l = create_lighting(light_source, light_mat, view, normal, albedo);
+    return get_lighting(l);
 }
 
 void main() {
@@ -88,4 +66,3 @@ void main() {
     vec3 color = nc.a <= 0.5 ? background() : illuminate(nc.xyz);
     out_color = vec4(color, 1);
 }
-

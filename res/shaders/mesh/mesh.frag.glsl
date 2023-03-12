@@ -1,5 +1,3 @@
-#version 330
-
 in vec3 vs_position;
 in vec2 vs_uv;
 in vec3 vs_normal;

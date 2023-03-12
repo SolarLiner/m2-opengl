@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
+use std::path::PathBuf;
 use std::sync::RwLock;
 
 use eyre::{Context, eyre, Result};
@@ -29,6 +30,8 @@ pub use winit::dpi::{LogicalSize, PhysicalSize};
 pub use winit::event as events;
 use winit::window::Window;
 pub use winit::window::WindowBuilder;
+
+use rose_core::utils::reload_watcher::ReloadWatcher;
 
 use crate::circbuffer::CircBuffer;
 
@@ -213,7 +216,12 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
     let app = Arc::new(Mutex::new(app));
 
     #[cfg(feature = "ui")]
-    let mut ui = rose_ui::Ui::new(&event_loop, &window)?;
+        let (_reload_watcher, mut ui) = {
+        let base_path = std::env::var("CARGO_PROJECT_DIR").map(|s| PathBuf::from(s)).or_else(|_| std::env::current_dir()).unwrap();
+        let reload_watcher = ReloadWatcher::new(base_path.join("res/shaders"));
+        let ui = rose_ui::Ui::new(&event_loop, &window, &reload_watcher)?;
+        (reload_watcher, ui)
+    };
 
     let start = Instant::now();
     std::thread::spawn({

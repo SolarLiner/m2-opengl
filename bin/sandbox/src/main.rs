@@ -14,6 +14,7 @@ use rose_platform::{
     Application, events::WindowEvent, LogicalSize, PhysicalSize, RenderContext, UiContext,
     WindowBuilder,
 };
+use rose_renderer::env::EnvironmentMap;
 use violette::framebuffer::{ClearBuffer, Framebuffer};
 
 use crate::ui::EditorUiSystem;
@@ -139,7 +140,19 @@ impl Application for Sandbox {
     }
 
     fn interact(&mut self, event: WindowEvent) -> Result<()> {
-        self.core_systems.on_event(event);
+        if let Some(event) = self.core_systems.on_event(event) {
+            match event {
+                WindowEvent::DroppedFile(possible_env_map) => {
+                    match EnvironmentMap::load(possible_env_map, self.core_systems.render.renderer.reload_watcher()) {
+                        Ok(env) => self.core_systems.render.renderer.set_environment(|_| env),
+                        Err(err) => {
+                            tracing::error!("Cannot load environment map: {}", err);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         Ok(())
     }
 
@@ -218,14 +231,15 @@ impl Application for Sandbox {
                         ui.menu_button("Templates", |ui| {
                             if ui.small_button("Mesh").clicked() {
                                 scene.with_world(|_world, cmd| {
+                                    let cache = scene.asset_cache().as_any_cache();
                                     let mesh = self
                                         .core_systems
                                         .render
-                                        .primitive_cube(scene.asset_cache());
+                                        .primitive_cube(cache);
                                     let material = self
                                         .core_systems
                                         .render
-                                        .default_material_handle(scene.asset_cache());
+                                        .default_material_handle(cache);
                                     cmd.spawn(
                                         EntityBuilder::new()
                                             .add(String::from("Cube"))

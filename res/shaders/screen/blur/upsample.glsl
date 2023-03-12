@@ -1,5 +1,3 @@
-#version 330 core
-
 in vec2 v_uv;
 
 uniform sampler2D in_texture;

@@ -6,7 +6,7 @@ impl InputSystem {
         self.input.begin_frame();
     }
 
-    pub fn on_event(&mut self, event: WindowEvent) -> bool {
+    pub fn on_event<'ev>(&mut self, event: WindowEvent<'ev>) -> Option<WindowEvent<'ev>> {
         self.input.apply_event(event)
     }
 }

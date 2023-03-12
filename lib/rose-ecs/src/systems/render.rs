@@ -3,7 +3,6 @@ use std::{
     hash::{Hash, Hasher},
     rc::Rc,
 };
-use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -12,7 +11,6 @@ use dashmap::DashMap;
 use eyre::Result;
 use glam::{UVec2, Vec2, Vec3};
 use hecs::World;
-use image::GenericImageView;
 
 use rose_core::{
     camera::Camera,
@@ -23,7 +21,6 @@ use rose_core::{
 };
 use rose_platform::PhysicalSize;
 use rose_renderer::{material::MaterialInstance, Mesh, Renderer};
-use violette::texture::Texture;
 
 use crate::{
     assets::*,
@@ -61,6 +58,7 @@ impl RenderSystem {
         cache.get_or_insert(
             "prim:material:default",
             Material {
+                transparent: false,
                 color: None,
                 color_factor: Vec3::splat(0.5),
                 normal: None,
@@ -157,26 +155,17 @@ impl RenderSystem {
                 tracing::info!(message="Loading material", handle=%handle.id());
                 let mat = handle.read();
                 let color_slot = if let Some(color) = &mat.color {
-                    Some(Texture::from_image(color.to_rgb32f())?)
+                    Some(color.create_texture_rgb()?)
                 } else {
                     None
                 };
                 let normal_map = if let Some(normal) = &mat.normal {
-                    Some(Texture::from_image(normal.to_rgb32f())?)
+                    Some(normal.create_texture_rgb()?)
                 } else {
                     None
                 };
-                let rough_metal = if let Some(rough_metal) = &mat.normal {
-                    let (width, _height) = rough_metal.dimensions();
-                    let mut rough_metal = rough_metal.to_rgb32f();
-                    image::imageops::flip_vertical_in_place(&mut rough_metal);
-                    let image = rough_metal
-                        .into_raw()
-                        .chunks(3)
-                        .flat_map(|v| [v[0], v[1]])
-                        .collect::<Vec<_>>();
-                    let width = NonZeroU32::new(width).unwrap();
-                    Some(Texture::<[f32; 2]>::from_2d_pixels(width, &image)?)
+                let rough_metal = if let Some(rough_metal) = &mat.rough_metal {
+                    Some(rough_metal.create_texture_rg()?)
                 } else {
                     None
                 };

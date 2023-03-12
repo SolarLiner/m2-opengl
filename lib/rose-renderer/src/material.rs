@@ -1,7 +1,7 @@
 use std::sync::RwLock;
 
 use crevice::std140::AsStd140;
-use eyre::Result;
+use eyre::{Context, Result};
 use glam::{IVec4, UVec4, Vec2, Vec3};
 
 use rose_core::{
@@ -69,11 +69,42 @@ pub struct Material {
 }
 
 impl Material {
-    pub fn create(camera_uniform: Option<&ViewUniformBuffer>, reload_watcher: &ReloadWatcher) -> Result<Self> {
+    pub fn create(
+        camera_uniform: Option<&ViewUniformBuffer>,
+        reload_watcher: &ReloadWatcher,
+    ) -> Result<Self> {
         let vert_path = reload_watcher.base_path().join("mesh/mesh.vert.glsl");
         let frag_path = reload_watcher.base_path().join("mesh/mesh.frag.glsl");
-        let vert_shader = VertexShader::load(&vert_path)?;
-        let frag_shader = FragmentShader::load(&frag_path)?;
+        let vert_files = glsl_preprocessor::load_and_parse(&vert_path)
+            .with_context(|| "Parsing mesh vertex shader")?;
+        let frag_files = glsl_preprocessor::load_and_parse(&frag_path)
+            .with_context(|| "Parsing mesh fragment shader")?;
+        let vert_shader = VertexShader::new_multiple(vert_files.iter().map(|(_, s)| s.as_str()))
+            .with_context(|| {
+                format!(
+                    "File map:\n{}",
+                    vert_files
+                        .iter()
+                        .map(|(p, _)| p.as_path())
+                        .enumerate()
+                        .map(|(ix, p)| format!("\t{} => {}", ix, p.display()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            })?;
+        let frag_shader = FragmentShader::new_multiple(frag_files.iter().map(|(_, s)| s.as_str()))
+            .with_context(|| {
+                format!(
+                    "File map:\n{}",
+                    frag_files
+                        .iter()
+                        .map(|(p, _)| p.as_path())
+                        .enumerate()
+                        .map(|(ix, p)| format!("\t{} => {}", ix, p.display()))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            })?;
         let program = Program::new()
             .with_shader(vert_shader.id)
             .with_shader(frag_shader.id)
@@ -96,7 +127,12 @@ impl Material {
             u_model,
             u_uniforms,
             u_view,
-            reload_watcher: reload_watcher.proxy([vert_path.as_path(), frag_path.as_path()]),
+            reload_watcher: reload_watcher.proxy(
+                vert_files
+                    .iter()
+                    .map(|(p, _)| p.as_path())
+                    .chain(frag_files.iter().map(|(p, _)| p.as_path())),
+            ),
         })
     }
 
@@ -128,24 +164,19 @@ impl Material {
             }
         }
         let program = self.program();
-        program
-            .bind_block(&instance.buffer.slice(0..=0), self.u_uniforms, 1)?;
+        program.bind_block(&instance.buffer.slice(0..=0), self.u_uniforms, 1)?;
         if let Some(color) = instance.color.as_ref() {
-            program
-                .set_uniform(self.u_color, color.as_uniform(0)?)?;
+            program.set_uniform(self.u_color, color.as_uniform(0)?)?;
         }
         if let Some(normal) = &instance.normal_map {
-            program
-                .set_uniform(self.u_normal, normal.as_uniform(1)?)?;
+            program.set_uniform(self.u_normal, normal.as_uniform(1)?)?;
         }
         if let Some(rough_metal) = &instance.roughness_metal {
-            program
-                .set_uniform(self.u_rough_metal, rough_metal.as_uniform(2)?)?;
+            program.set_uniform(self.u_rough_metal, rough_metal.as_uniform(2)?)?;
         }
 
         for mesh in meshes {
-            program
-                .set_uniform(self.u_model, mesh.transform.matrix())?;
+            program.set_uniform(self.u_model, mesh.transform.matrix())?;
             mesh.draw(&program, framebuffer, false)?;
         }
         unsafe { gl::BindTexture(gl::TEXTURE_2D, 0) }

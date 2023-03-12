@@ -26,6 +26,7 @@ pub mod assets;
 pub mod components;
 pub mod scene;
 pub mod systems;
+pub mod load_gltf;
 
 pub struct CoreSystems {
     pub render: RenderSystem,
@@ -86,7 +87,7 @@ impl CoreSystems {
         Ok(())
     }
 
-    pub fn on_event(&mut self, event: WindowEvent) -> bool {
+    pub fn on_event<'ev>(&mut self, event: WindowEvent<'ev>) -> Option<WindowEvent<'ev>> {
         self.input.on_event(event)
     }
 
@@ -98,7 +99,7 @@ impl CoreSystems {
         let mut ser = serde_yaml::Serializer::new(BufWriter::new(File::create(scene.path())?));
         scene.with_world(|world, _| {
             self.persistence
-                .serialize_world(scene.asset_cache(), &mut ser, world)
+                .serialize_world(scene.asset_cache().as_any_cache(), &mut ser, world)
         })?;
         Ok(())
     }

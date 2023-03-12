@@ -29,6 +29,9 @@
       <sourceFolder url="file://$MODULE_DIR$/bin/transform_hierarchy/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib/rose-ecs/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/bin/load_gltf/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/bin/irradiance_map/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/glsl-preprocessor/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib/glsl-preprocessor/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

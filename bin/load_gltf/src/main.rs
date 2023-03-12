@@ -11,8 +11,6 @@ use rose_ecs::{
 use rose_platform::{Application, events::WindowEvent, PhysicalSize, RenderContext};
 use rose_renderer::env::EnvironmentMap;
 
-mod load_gltf;
-
 struct App {
     core_systems: CoreSystems,
     scene: Scene,
@@ -36,7 +34,7 @@ impl Application for App {
             ).unwrap());
         let scene = if let Some(name) = std::env::args().nth(1) {
             let path = PathBuf::from(name);
-            let mut scene: Scene = smol::block_on(load_gltf::load_gltf_scene(&path))?;
+            let mut scene: Scene = smol::block_on(rose_ecs::load_gltf::load_gltf_scene(&path))?;
             scene.with_world(|world, cmd| {
                 // cmd.spawn(LightBundle {
                 //     transform: Transform::translation(Vec3::ONE).looking_at(Vec3::ZERO),
@@ -79,7 +77,19 @@ impl Application for App {
 
     #[tracing::instrument(skip_all)]
     fn interact(&mut self, event: WindowEvent) -> Result<()> {
-        let _ = self.core_systems.on_event(event);
+        if let Some(event) = self.core_systems.on_event(event) {
+            match event {
+                WindowEvent::DroppedFile(path) => {
+                    match EnvironmentMap::load(path, self.core_systems.render.renderer.reload_watcher()) {
+                        Ok(env) => self.core_systems.render.renderer.set_environment(|_| env),
+                        Err(err) => {
+                            tracing::error!("Cannot load environment map: {}", err);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         Ok(())
     }
 
