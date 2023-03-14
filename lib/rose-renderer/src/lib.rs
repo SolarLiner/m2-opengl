@@ -18,7 +18,7 @@ use postprocess::Postprocess;
 use rose_core::{
     camera::{Camera, ViewUniform, ViewUniformBuffer},
     light::{GpuLight, Light, LightBuffer},
-    transform::{TransformExt, Transformed},
+    transform::{Transformed},
     utils::{reload_watcher::ReloadWatcher, thread_guard::ThreadGuard},
 };
 use violette::{

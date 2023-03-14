@@ -218,7 +218,7 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
 
     #[cfg(feature = "ui")]
         let (_reload_watcher, mut ui) = {
-        let base_path = std::env::var("CARGO_PROJECT_DIR").map(|s| PathBuf::from(s)).or_else(|_| std::env::current_dir()).unwrap();
+        let base_path = std::env::var("CARGO_PROJECT_DIR").map(PathBuf::from).or_else(|_| std::env::current_dir()).unwrap();
         let reload_watcher = ReloadWatcher::new(base_path.join("res/shaders"));
         let ui = rose_ui::Ui::new(&event_loop, &window, &reload_watcher)?;
         (reload_watcher, ui)

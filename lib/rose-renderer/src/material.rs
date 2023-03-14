@@ -1,4 +1,4 @@
-use std::{sync::RwLock, borrow::Borrow};
+use std::{sync::RwLock};
 
 use crevice::std140::AsStd140;
 use eyre::{Context, Result};
@@ -84,9 +84,9 @@ impl Material {
     ) -> Result<Self> {
         let vert_path = reload_watcher.base_path().join("mesh/mesh.vert.glsl");
         let frag_path = reload_watcher.base_path().join("mesh/mesh.frag.glsl");
-        let vert_files = glsl_preprocessor::load_and_parse(&vert_path)
+        let vert_files = glsl_preprocessor::load_and_parse(vert_path)
             .with_context(|| "Parsing mesh vertex shader")?;
-        let frag_files = glsl_preprocessor::load_and_parse(&frag_path)
+        let frag_files = glsl_preprocessor::load_and_parse(frag_path)
             .with_context(|| "Parsing mesh fragment shader")?;
         let vert_shader = VertexShader::new_multiple(vert_files.iter().map(|(_, s)| s.as_str()))
             .with_context(|| {
@@ -150,15 +150,15 @@ impl Material {
         })
     }
 
-    pub fn draw_meshes<'a>(&mut self, frame: &Framebuffer, view: &ViewUniformBuffer, instance: &MaterialInstance, meshes: impl IntoIterator<Item=Transformed<&'a Mesh>>) -> Result<()> {
+    pub fn draw_meshes<'a>(&mut self, frame: &Framebuffer, _view: &ViewUniformBuffer, instance: &MaterialInstance, meshes: impl IntoIterator<Item=Transformed<&'a Mesh>>) -> Result<()> {
         {
             if self.reload_watcher.should_reload() {
                 let mut paths = self.reload_watcher.paths();
                 let vert_path = paths.next().unwrap();
                 let frag_path = paths.next().unwrap();
                 tracing::debug!(message="Reloading material shader", vert=%vert_path.display(), frag=%frag_path.display());
-                let vert_shader = VertexShader::load(&vert_path)?;
-                let frag_shader = FragmentShader::load(&frag_path)?;
+                let vert_shader = VertexShader::load(vert_path)?;
+                let frag_shader = FragmentShader::load(frag_path)?;
                 *self.program.write().unwrap() = Program::new()
                     .with_shader(vert_shader.id)
                     .with_shader(frag_shader.id)

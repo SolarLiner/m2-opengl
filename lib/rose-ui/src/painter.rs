@@ -78,7 +78,7 @@ impl UiImpl {
 
     fn create_program(vert_shader_path: &Path, frag_shader_path: &Path) -> Result<(Program, UniformLocation, UniformLocation)> {
         let program = Program::load(
-            &vert_shader_path,
+            vert_shader_path,
             Some(&frag_shader_path),
             None::<&'static str>,
         )?;

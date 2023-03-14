@@ -97,7 +97,7 @@ impl RenderSystem {
 
     pub fn new(size: UVec2) -> Result<Self> {
         let base_dir = std::env::var("CARGO_PROJECT_DIR")
-            .map(|v| PathBuf::from(v))
+            .map(PathBuf::from)
             .or_else(|_| std::env::current_dir())
             .unwrap();
         tracing::info!("Base resources directory: {}", base_dir.display());
