@@ -247,7 +247,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                     response.dragged_by(PointerButton::Primary),
                                     response.dragged_by(PointerButton::Secondary),
                                 );
-                                self.state.mouse_delta = glam::vec2(drag.x, drag.y);
+                                self.state.mouse_delta = vec2(drag.x, drag.y);
                                 self.state.mouse_scroll = input.scroll_delta.y;
                             }
                         }

@@ -47,6 +47,7 @@ impl Bone {
 
     pub fn update_buffer(self: &Rc<Self>, buffer: &mut UniformBuffer<Std140GpuBone>) -> eyre::Result<()> {
         let gpu_data = self.traverse().map(|bone| bone.as_std140()).collect::<Vec<_>>();
+        tracing::debug!(message="Updating bone data", len=gpu_data.len());
         buffer.set(&gpu_data, BufferUsageHint::Stream)?;
         Ok(())
     }
@@ -55,7 +56,7 @@ impl Bone {
 impl Bone {
     pub fn global_transform(&self) -> Mat4 {
         if let Some(parent) = self.parent.borrow().upgrade() {
-            self.local_transform.get() * parent.global_transform()
+            parent.global_transform() * self.local_transform.get()
         } else {
             self.local_transform.get()
         }

@@ -10,8 +10,4 @@ homepage.workspace = true
 [dependencies]
 rose = { path = "../../lib/rose" }
 
-bytemuck.workspace = true
-egui.workspace = true
 eyre.workspace = true
-glam.workspace = true
-tracing.workspace = true

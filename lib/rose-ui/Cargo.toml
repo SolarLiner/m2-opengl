@@ -14,7 +14,6 @@ eyre = "0.6.8"
 glam = { version = "0.22.0", features = ["bytemuck", "rand", "num-traits"] }
 tracing = "0.1.33"
 violette = { path = "../violette" }
-violette-derive = { path = "../violette-derive" }
 rose-core = { path = "../rose-core" }
 winit = "0.27.5"
 

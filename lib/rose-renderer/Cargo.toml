@@ -7,7 +7,6 @@ homepage.workspace = true
 
 [dependencies]
 either = "1.8.1"
-float-ord = "0.3.2"
 image = "0.24.5"
 
 violette = { path = "../violette" }

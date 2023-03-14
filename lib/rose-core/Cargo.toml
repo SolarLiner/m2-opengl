@@ -24,7 +24,6 @@ violette = { path = "../violette", features = [
     "uniforms-glam",
     "vertex-glam",
 ] }
-violette-derive = { path = "../violette-derive" }
 
 bytemuck.workspace = true
 eyre.workspace = true

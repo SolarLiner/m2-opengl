@@ -99,7 +99,7 @@ impl MeshAsset {
                 let (sth, cth) = theta.sin_cos();
                 let normal = vec3(cphi * cth, sphi, cphi * sth);
                 let position = normal * radius;
-                let uv = vec2(i as f32 / nlon as f32, 1. - j as f32 / nlat as f32);
+                let uv = vec2(1. - i as f32 / nlon as f32, 1. - j as f32 / nlat as f32);
                 vertices.push(Vertex::new(position, normal, uv));
             }
         }

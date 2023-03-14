@@ -991,6 +991,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "earth"
+version = "0.1.0"
+dependencies = [
+ "crevice",
+ "eyre",
+ "glsl-preprocessor",
+ "rose",
+ "serde",
+ "violette",
+]
+
+[[package]]
 name = "ecolor"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1104,15 +1116,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "erased-serde"
-version = "0.3.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f2b0c2380453a92ea8b6c8e5f64ecaafccddde8ceab55ff7a8ac1029f894569"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1215,12 +1218,6 @@ dependencies = [
  "crc32fast",
  "miniz_oxide",
 ]
-
-[[package]]
-name = "float-ord"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ce81f49ae8a0482e4c55ea62ebbd7e5a686af544c00b9d090bba3ff9be97b3d"
 
 [[package]]
 name = "flume"
@@ -2846,7 +2843,6 @@ dependencies = [
  "serde",
  "tracing",
  "violette",
- "violette-derive",
 ]
 
 [[package]]
@@ -2873,7 +2869,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "smol",
- "toml 0.7.2",
  "tracing",
  "violette",
 ]
@@ -2910,7 +2905,6 @@ dependencies = [
  "egui",
  "either",
  "eyre",
- "float-ord",
  "glam",
  "glsl-preprocessor",
  "image",
@@ -2934,7 +2928,6 @@ dependencies = [
  "rose-core",
  "tracing",
  "violette",
- "violette-derive",
  "winit",
 ]
 
@@ -3015,9 +3008,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "toml 0.7.2",
  "toml_edit",
- "typetag",
  "violette",
 ]
 
@@ -3053,18 +3044,18 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.152"
+version = "1.0.156"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb7d1f0d3021d347a83e556fc4683dea2ea09d87bccdf88ff5c12545d89d5efb"
+checksum = "314b5b092c0ade17c00142951e50ced110ec27cea304b1037c6969246c2469a4"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.152"
+version = "1.0.156"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af487d118eecd09402d70a5d72551860e788df87b464af30e5ea6a38c75c541e"
+checksum = "d7e29c4601e36bcec74a223228dce795f4cd3616341a4af93520ca1a837c087d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3329,7 +3320,7 @@ dependencies = [
  "cfg-expr",
  "heck",
  "pkg-config",
- "toml 0.5.11",
+ "toml",
  "version-compare",
 ]
 
@@ -3455,18 +3446,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "toml"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7afcae9e3f0fe2c370fd4657108972cbb2fa9db1b9f84849cefd80741b01cb6"
-dependencies = [
- "serde",
- "serde_spanned",
- "toml_datetime",
- "toml_edit",
 ]
 
 [[package]]
@@ -3611,12 +3590,8 @@ dependencies = [
 name = "transform_hierarchy"
 version = "0.1.0"
 dependencies = [
- "bytemuck",
- "egui",
  "eyre",
- "glam",
  "rose",
- "tracing",
 ]
 
 [[package]]
@@ -3630,30 +3605,6 @@ name = "typenum"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "497961ef93d974e23eb6f433eb5fe1b7930b659f06d12dec6fc44a8f554c0bba"
-
-[[package]]
-name = "typetag"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69bf9bd14fed1815295233a0eee76a963283b53ebcbd674d463f697d3bfcae0c"
-dependencies = [
- "erased-serde",
- "inventory",
- "once_cell",
- "serde",
- "typetag-impl",
-]
-
-[[package]]
-name = "typetag-impl"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf9f5f225956dc2254c6c27500deac9390a066b2e8a1a571300627a7c4400a33"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "uds_windows"
@@ -3767,7 +3718,6 @@ dependencies = [
 name = "violette-derive"
 version = "0.1.0"
 dependencies = [
- "bytemuck",
  "darling 0.14.3",
  "proc-macro2",
  "quote",

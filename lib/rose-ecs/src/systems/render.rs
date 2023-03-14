@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use assets_manager::{AnyCache, Handle, SharedString};
+use assets_manager::{AnyCache, BoxedError, Compound, Handle, SharedString};
 use dashmap::DashMap;
 use eyre::Result;
 use glam::{UVec2, Vec2, Vec3};
@@ -24,6 +24,18 @@ use rose_renderer::{material::MaterialInstance, DrawMaterial, Mesh, Renderer};
 use crate::{systems::hierarchy::GlobalTransform, assets::*, components::{Light as LightComponent, *}};
 
 pub struct CustomMaterial<M>(ThreadGuard<Rc<M>>);
+
+impl<M> CustomMaterial<M> {
+    pub fn new(inner: M) -> Self {
+        Self(ThreadGuard::new(Rc::new(inner)))
+    }
+}
+
+impl<M: 'static> Compound for CustomMaterial<M> {
+    fn load(_cache: AnyCache, _id: &SharedString) -> std::result::Result<Self, BoxedError> {
+        Err(eyre::eyre!("Cannot load a CustomMaterial from assets, it must be provided").into())
+    }
+}
 
 pub struct RenderSystem {
     pub clear_color: Vec3,

@@ -1,0 +1,4 @@
+color = "textures.earth_color"
+normal = "textures.earth_normal"
+rough_metal = "textures.earth_roughness"
+emission = "textures.earth_emissive"

@@ -67,7 +67,6 @@ impl KeyboardInput {
 pub struct MouseInput {
     pub state: State<MouseButton>,
     pub pos: Vec3,
-    frame_start: Instant,
     prev_pos: Vec3,
 }
 
@@ -76,7 +75,6 @@ impl Default for MouseInput {
         Self {
             state: State::default(),
             pos: Vec3::ZERO,
-            frame_start: Instant::now(),
             prev_pos: Vec3::ZERO,
         }
     }
@@ -84,12 +82,11 @@ impl Default for MouseInput {
 
 impl MouseInput {
     pub fn delta(&self) -> Vec3 {
-        (self.pos - self.prev_pos) * self.frame_start.elapsed().as_secs_f32()
+        self.pos - self.prev_pos
     }
 
     pub fn begin_frame(&mut self) {
         self.state.begin_frame();
-        self.frame_start = Instant::now();
         self.prev_pos = self.pos;
     }
 }

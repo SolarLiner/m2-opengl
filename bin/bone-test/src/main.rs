@@ -62,7 +62,7 @@ impl Application for BoneTestApp {
         let (sin, cos) = ctx.elapsed.as_secs_f32().sin_cos();
         // root_bone.update_transform(|_| Transform::translation(Vec3::Y * sin).matrix());
         bone_l.update_transform(|_| Transform::translation(vec3(sin, 1., cos)).matrix());
-        // bone_r.update_transform(|_| Transform::translation(vec3(cos, -1., sin)).matrix());
+        bone_r.update_transform(|_| Transform::translation(vec3(cos, -1., sin)).matrix());
 
         // Render
         let size = ctx.window.inner_size().cast();

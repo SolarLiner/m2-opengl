@@ -29,4 +29,4 @@ strip = false
 inherits = "release"
 debug = false
 strip = true
-lto = "full"
+lto = "fat"

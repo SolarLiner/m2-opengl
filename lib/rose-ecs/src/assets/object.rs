@@ -94,10 +94,10 @@ impl Compound for Object {
 }
 
 #[derive(Debug, Clone, Bundle)]
-pub struct ObjectBundle {
+pub struct ObjectBundle<M: 'static = Material> {
     pub transform: Transform,
     pub mesh: Handle<'static, MeshAsset>,
-    pub material: Handle<'static, Material>,
+    pub material: Handle<'static, M>,
     pub active: Active,
 }
 

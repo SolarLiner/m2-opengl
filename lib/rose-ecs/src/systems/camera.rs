@@ -19,8 +19,8 @@ pub struct PanOrbitSystem {
 impl PanOrbitSystem {
     pub fn new(size: LogicalSize<f32>) -> Self {
         Self {
-            mouse_sensitivity: 100.,
-            scroll_sensitivity: 10.,
+            mouse_sensitivity: 10.,
+            scroll_sensitivity: 0.1,
             logical_window_size: Vec2::from_array(size.into()),
         }
     }
@@ -83,11 +83,11 @@ impl PanOrbitSystem {
         cam_transform: &mut Transform,
     ) {
         if left {
-            controller.target_rotation += delta * controller.radius;
+            controller.target_rotation += delta;
         }
         if right {
             let pos = (delta.xy() * vec2(1., -1.)).extend(0.) * controller.radius;
-            controller.focus += pos;
+            controller.focus += pos * controller.radius;
         }
 
         // Clamping
@@ -106,6 +106,6 @@ impl PanOrbitSystem {
         // );
         cam_transform.rotation = Quat::from_rotation_x(controller.target_rotation.y) * Quat::from_rotation_y(controller.target_rotation.x);
         cam_transform.position = controller.focus - controller.radius * Vec3::Z;
-        *cam_transform = cam_transform.looking_at(controller.focus);
+        // *cam_transform = cam_transform.looking_at(controller.focus);
     }
 }

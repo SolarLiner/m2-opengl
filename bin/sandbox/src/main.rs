@@ -115,7 +115,7 @@ impl Application for Sandbox {
             editor_scene,
             active_scene: None,
             editor_cam_controller: PanOrbitCamera::default(),
-            core_systems: core_systems,
+            core_systems,
             pan_orbit_system: PanOrbitSystem::new(logical_size),
             ui_system,
         })
