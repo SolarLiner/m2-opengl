@@ -1,6 +1,10 @@
-use std::{cell::RefCell, collections::HashSet, marker::PhantomData};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::{
+    cell::RefCell,
+    collections::HashSet,
+    marker::PhantomData,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use egui::{
     Align, Color32, Context, DragValue, Grid, Layout, PointerButton, Sense, TextEdit, Ui,
@@ -8,15 +12,11 @@ use egui::{
 };
 use egui_dock::{NodeIndex, TabViewer, Tree};
 use egui_gizmo::{Gizmo, GizmoMode};
-use glam::{Mat4, Vec2};
 
-use rose_core::transform::Transform;
-use rose_ecs::assets::{Material, MeshAsset, NamedObject, ObjectBundle};
-use rose_ecs::CoreSystems;
-use rose_ecs::prelude::*;
-use rose_ecs::prelude::asset::DirLoadable;
-use rose_ecs::systems::{RenderSystem, UiSystem};
-use rose_renderer::env::{EnvironmentMap, SimpleSky, SimpleSkyParams};
+use rose::{
+    ecs::{assets::Material, components::Light},
+    prelude::*,
+};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Tabs {
@@ -232,7 +232,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                 false
                                             }
                                         })
-                                            .inner
+                                        .inner
                                     } else {
                                         false
                                     }
@@ -370,7 +370,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                             .map(|(_, h)| h.id().clone())
                             .chain(
                                 world
-                                    .query::<&Handle<Material>>()
+                                    .query::<&Handle<assets::Material>>()
                                     .iter()
                                     .map(|(_, h)| h.id().clone()),
                             )
@@ -411,7 +411,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                         }
                                                     }
                                                     if ui.small_button("Add material component").clicked() {
-                                                        match cache.load::<Material>(id) {
+                                                        match cache.load::<assets::Material>(id) {
                                                             Ok(mat) => cmd.insert_one(entity, mat),
                                                             Err(err) => tracing::error!("Could not load {:?} as material: {}", id, err),
                                                         }
@@ -440,7 +440,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                     }
                                                 }
                                                 if ui.small_button("New entity with this material").clicked() {
-                                                    match cache.load::<Material>(id) {
+                                                    match cache.load::<assets::Material>(id) {
                                                         Ok(handle) => cmd.spawn(ObjectBundle {
                                                             transform: Transform::default(),
                                                             active: Active,
@@ -489,7 +489,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                 }
                             }
                         })
-                            .response;
+                        .response;
                         ui.end_row();
                     } else {
                         if ui.button("Open").clicked() {
@@ -531,7 +531,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                     .suffix(" rad")
                                     .speed(0.1),
                             )
-                                .labelled_by(fov_label);
+                            .labelled_by(fov_label);
                         });
                     ui.monospace(format!("{:#?}", camera.transform));
                     ui.monospace(format!("{:#?}", camera.projection));

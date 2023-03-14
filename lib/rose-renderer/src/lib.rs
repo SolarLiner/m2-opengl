@@ -1,15 +1,15 @@
+use std::path::Path;
 use std::{
+    any::Any,
     cell::RefCell,
     collections::HashMap,
-    ops,
-    rc::{Rc, Weak},
-    sync::Arc,
+    fmt, ops,
+    rc::{Rc},
     time::{Duration, Instant},
 };
-use std::path::Path;
 
 use eyre::Result;
-use glam::{UVec2, vec2, Vec3, Vec4Swizzles};
+use glam::{vec2, UVec2, Vec3, Vec4Swizzles};
 use tracing::span::EnteredSpan;
 
 use gbuffers::GeometryBuffers;
@@ -18,22 +18,24 @@ use postprocess::Postprocess;
 use rose_core::{
     camera::{Camera, ViewUniform, ViewUniformBuffer},
     light::{GpuLight, Light, LightBuffer},
-    transform::{Transformed, TransformExt},
+    transform::{TransformExt, Transformed},
     utils::{reload_watcher::ReloadWatcher, thread_guard::ThreadGuard},
 };
 use violette::{
-    Cull,
-    framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer}, FrontFace,
+    framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer},
+    Cull, FrontFace,
 };
 
-use crate::{env::Environment, material::MaterialInstance, postprocess::LensFlareParams};
 use crate::bones::Bone;
+use crate::{env::Environment, material::MaterialInstance};
+pub use crate::postprocess::LensFlareParams;
 
 pub mod bones;
 pub mod env;
 pub mod gbuffers;
 pub mod material;
 pub mod postprocess;
+pub mod prelude;
 
 pub type InnerMesh = rose_core::mesh::Mesh<material::Vertex>;
 
@@ -54,8 +56,8 @@ impl From<InnerMesh> for Mesh {
 
 impl Mesh {
     pub fn new(
-        vertices: impl IntoIterator<Item=material::Vertex>,
-        indices: impl IntoIterator<Item=u32>,
+        vertices: impl IntoIterator<Item = material::Vertex>,
+        indices: impl IntoIterator<Item = u32>,
     ) -> Result<Self> {
         Ok(Self {
             inner: InnerMesh::new(vertices, indices)?,
@@ -99,7 +101,7 @@ impl PostprocessInterface {
                             .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev)))
                             .text("Exposure"),
                     )
-                        .labelled_by(exposure_label.id);
+                    .labelled_by(exposure_label.id);
                     ui.end_row();
 
                     let bloom_size_label = ui.label("Bloom size:");
@@ -109,7 +111,7 @@ impl PostprocessInterface {
                             .clamp_to_range(false)
                             .show_value(true),
                     )
-                        .labelled_by(bloom_size_label.id);
+                    .labelled_by(bloom_size_label.id);
                     ui.end_row();
 
                     let bloom_strength_label = ui.label("Bloom strength:");
@@ -122,7 +124,7 @@ impl PostprocessInterface {
                             .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.))
                             .text("Bloom strength"),
                     )
-                        .labelled_by(bloom_strength_label.id);
+                    .labelled_by(bloom_strength_label.id);
                     ui.end_row();
                 });
         });
@@ -172,14 +174,14 @@ pub struct BloomInterface {
 pub struct Renderer {
     lights: LightBuffer,
     geom_pass: Rc<RefCell<GeometryBuffers>>,
-    material: Material,
+    material: Rc<RefCell<Material>>,
     post_process: Postprocess,
     post_process_iface: PostprocessInterface,
     environment: Option<Box<dyn Environment>>,
     view_uniform: ViewUniform,
     camera_uniform: ThreadGuard<ViewUniformBuffer>,
-    queued_materials: Vec<Weak<MaterialInstance>>,
-    queued_meshes: HashMap<usize, Vec<Transformed<Weak<Mesh>>>>,
+    queued_materials: Vec<Rc<dyn DrawMaterial>>,
+    queued_meshes: HashMap<usize, Vec<Transformed<Rc<Mesh>>>>,
     render_span: ThreadGuard<Option<EnteredSpan>>,
     debug_window_open: bool,
     begin_scene_at: Option<Instant>,
@@ -189,8 +191,6 @@ pub struct Renderer {
     last_render_rendered: usize,
     reload_watcher: ReloadWatcher,
 }
-
-impl Renderer {}
 
 impl Renderer {
     pub fn new(size: UVec2, base_dir: impl AsRef<Path>) -> Result<Self> {
@@ -207,7 +207,10 @@ impl Renderer {
         Ok(Self {
             lights,
             geom_pass: Rc::new(RefCell::new(geom_pass)),
-            material: Material::create(Some(&camera_uniform), &reload_watcher)?,
+            material: Rc::new(RefCell::new(Material::create(
+                Some(&camera_uniform),
+                &reload_watcher,
+            )?)),
             post_process,
             post_process_iface: PostprocessInterface {
                 exposure: 1.5f32.exp2(),
@@ -262,7 +265,8 @@ impl Renderer {
     }
 
     pub fn set_environment<E: Environment>(&mut self, env: impl FnOnce(&ReloadWatcher) -> E) {
-        self.environment.replace(Box::new(env(&self.reload_watcher)));
+        self.environment
+            .replace(Box::new(env(&self.reload_watcher)));
     }
 
     pub fn environment<E: Environment>(&self) -> Option<&E> {
@@ -304,17 +308,23 @@ impl Renderer {
         Ok(())
     }
 
+    pub fn submit_mesh_standard(&mut self, material: Rc<MaterialInstance>, mesh: Transformed<Rc<Mesh>>) {
+        self.submit_mesh(Rc::new(StandardDrawMaterial { material: self.material.clone(), instance: material}), mesh);
+    }
+
     #[tracing::instrument(skip_all)]
-    pub fn submit_mesh(&mut self, material: Weak<MaterialInstance>, mesh: Transformed<Weak<Mesh>>) {
-        let mesh_ptr = Weak::as_ptr(&mesh) as usize;
-        let material_ptr = Weak::as_ptr(&material) as usize;
+    pub fn submit_mesh<M: DrawMaterial>(&mut self, material: Rc<M>, mesh: Transformed<Rc<Mesh>>) {
+        let mesh_ptr = Rc::as_ptr(&mesh) as usize;
+        let material_ptr = Rc::as_ptr(&material) as usize;
         self.last_render_submitted += 1;
-        tracing::debug!(message="Submitting mesh", %mesh_ptr, %material_ptr);
-        let mat_ix = if let Some(ix) = self
-            .queued_materials
-            .iter()
-            .position(|mat| mat.ptr_eq(&material))
-        {
+        tracing::debug!(message="Submitting mesh", %mesh_ptr, %material_ptr, mat_name=std::any::type_name::<M>());
+        let mat_ix = if let Some(ix) = self.queued_materials.iter().position(|mat| {
+            if let Some(std_draw_mat) = mat.as_any().downcast_ref::<M>() {
+                std_draw_mat.eq_key() == material.eq_key()
+            } else {
+                false
+            }
+        }) {
             ix
         } else {
             let ix = self.queued_materials.len();
@@ -346,19 +356,17 @@ impl Renderer {
             .do_clear(ClearBuffer::COLOR | ClearBuffer::DEPTH);
 
         let geom_pass = self.geom_pass.borrow();
-        self.material.set_camera_uniform(&self.camera_uniform)?;
+        self.material
+            .borrow_mut()
+            .set_camera_uniform(&self.camera_uniform)?;
         for (mat_ix, meshes) in self.queued_meshes.drain() {
-            let Some(instance) = self.queued_materials[mat_ix].upgrade() else {
-                tracing::warn!("Dropped materials value, cannot recover from weakref");
-                continue;
-            };
-            let Some(mut meshes) = meshes.into_iter().map(|w| w.upgrade().map(|v| v.transformed(w.transform))).collect::<Option<Vec<_>>>() else {
-                tracing::warn!("Dropped mesh object, cannot recover from weakref");
-                continue;
-            };
+            let mat = self.queued_materials[mat_ix].clone();
 
             self.last_render_rendered += meshes.len();
-            geom_pass.draw_meshes(&mut self.material, instance.as_ref(), &meshes)?;
+            let mut meshes = meshes
+                .into_iter()
+                .map(|m| m.map(|m| unsafe { &*Rc::as_ptr(&m) }));
+            mat.draw(geom_pass.framebuffer(), &self.camera_uniform, &mut meshes)?;
         }
 
         Framebuffer::disable_depth_test();
@@ -428,6 +436,8 @@ impl Renderer {
 
     #[cfg(feature = "debug-ui")]
     pub fn ui_debug_panel(&self, ui: &mut egui::Ui) {
+        use std::sync::Arc;
+
         const GET_NAME: fn(usize) -> &'static str = |ix| match ix {
             0 => "Position",
             1 => "Albedo",
@@ -477,7 +487,7 @@ impl Renderer {
                         4 => geom_pass.debug_emission(ui.framebuffer()),
                         _ => Ok(()),
                     }
-                        .is_ok();
+                    .is_ok();
                 })),
             });
         });
@@ -490,6 +500,8 @@ fn make_texture_frame(
     name: &str,
     draw: impl 'static + Fn(&Framebuffer) + Send + Sync,
 ) -> egui::Response {
+    use std::sync::Arc;
+
     ui.group(|ui| {
         let label = ui.label(name);
         let (rect, response) = ui.allocate_at_least(
@@ -507,4 +519,44 @@ fn make_texture_frame(
         });
     })
     .response
+}
+
+pub trait DrawMaterial: 'static + fmt::Debug {
+    fn draw<'a>(
+        &self,
+        frame: &Framebuffer,
+        view: &ViewUniformBuffer,
+        meshes: &mut dyn Iterator<Item = Transformed<&'a Mesh>>,
+    ) -> Result<()>;
+
+    fn eq_key(&self) -> usize;
+
+    fn as_any(&self) -> &dyn Any;
+}
+
+#[derive(Debug)]
+struct StandardDrawMaterial {
+    material: Rc<RefCell<Material>>,
+    instance: Rc<MaterialInstance>,
+}
+
+impl DrawMaterial for StandardDrawMaterial {
+    fn draw<'a>(
+        &self,
+        frame: &Framebuffer,
+        view: &ViewUniformBuffer,
+        meshes: &mut dyn Iterator<Item = Transformed<&'a Mesh>>,
+    ) -> Result<()> {
+        self.material
+            .borrow_mut()
+            .draw_meshes(frame, view, &self.instance, meshes)
+    }
+
+    fn eq_key(&self) -> usize {
+        Rc::as_ptr(&self.instance) as usize
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }

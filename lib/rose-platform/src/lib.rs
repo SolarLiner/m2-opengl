@@ -36,6 +36,7 @@ use rose_core::utils::reload_watcher::ReloadWatcher;
 use crate::circbuffer::CircBuffer;
 
 pub mod circbuffer;
+pub mod prelude;
 mod tracing_hook;
 
 #[derive(Debug, Copy, Clone)]

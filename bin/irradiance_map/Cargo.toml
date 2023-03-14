@@ -6,9 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rose-core = { path = "../../lib/rose-core", features = ["hot-reload"] }
-rose-ecs = { path = "../../lib/rose-ecs" }
-rose-platform = { path = "../../lib/rose-platform" }
+rose = { path = "../../lib/rose" }
 violette = { path = "../../lib/violette" }
 
 eyre.workspace = true

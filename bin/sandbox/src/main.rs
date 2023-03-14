@@ -1,20 +1,9 @@
 use std::path::Path;
 
 use egui_gizmo::GizmoMode;
-use eyre::Result;
-use glam::{Vec2, Vec3};
 use rfd::FileDialog;
 
-use rose_core::transform::Transform;
-use rose_ecs::assets::ObjectBundle;
-use rose_ecs::CoreSystems;
-use rose_ecs::prelude::*;
-use rose_ecs::systems::PanOrbitSystem;
-use rose_platform::{
-    Application, events::WindowEvent, LogicalSize, PhysicalSize, RenderContext, UiContext,
-    WindowBuilder,
-};
-use rose_renderer::env::EnvironmentMap;
+use rose::prelude::*;
 use violette::framebuffer::{ClearBuffer, Framebuffer};
 
 use crate::ui::EditorUiSystem;
@@ -302,5 +291,5 @@ impl Application for Sandbox {
 }
 
 fn main() -> Result<()> {
-    rose_platform::run::<Sandbox>("Sandbox")
+    run::<Sandbox>("Sandbox")
 }

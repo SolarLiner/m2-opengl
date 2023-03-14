@@ -1,14 +1,14 @@
-use std::num::NonZeroU32;
-use std::path::{Path, PathBuf};
+use std::{
+    num::NonZeroU32,
+    path::{Path, PathBuf},
+};
 
-use rose_core::screen_draw::ScreenDraw;
-use rose_core::utils::reload_watcher::ReloadWatcher;
-use rose_core::utils::thread_guard::ThreadGuard;
-use rose_platform::{Application, LogicalSize, PhysicalSize, RenderContext, WindowBuilder};
-use rose_platform::events::WindowEvent;
-use violette::framebuffer::{ClearBuffer, Framebuffer};
-use violette::program::UniformLocation;
-use violette::texture::{Dimension, SampleMode, Texture};
+use rose::{core::utils::reload_watcher::ReloadWatcher, prelude::*};
+use violette::{
+    framebuffer::{ClearBuffer, Framebuffer},
+    program::UniformLocation,
+    texture::{Dimension, SampleMode, Texture},
+};
 
 struct IrradianceMapImpl {
     fbo: Framebuffer,
@@ -112,7 +112,10 @@ impl Application for IrradianceMap {
     #[cfg(never)]
     fn render(&mut self, ctx: RenderContext) -> eyre::Result<()> {
         if let Some(envmap) = &self.0.environment_map {
-            self.0.make_irradiance.program().set_uniform(self.0.u_irradiance_env_map, envmap.as_uniform(0)?)?;
+            self.0
+                .make_irradiance
+                .program()
+                .set_uniform(self.0.u_irradiance_env_map, envmap.as_uniform(0)?)?;
             self.0.make_irradiance.draw(&Framebuffer::backbuffer())?;
         } else {
             Framebuffer::clear_color([0., 0., 0., 1.]);
@@ -123,5 +126,5 @@ impl Application for IrradianceMap {
 }
 
 fn main() -> eyre::Result<()> {
-    rose_platform::run::<IrradianceMap>("Irradiance map calc")
+    run::<IrradianceMap>("Irradiance map calc")
 }

@@ -1,4 +1,4 @@
-use std::sync::RwLock;
+use std::{sync::RwLock, borrow::Borrow};
 
 use crevice::std140::AsStd140;
 use eyre::{Context, Result};
@@ -19,7 +19,7 @@ use violette::{
 };
 use violette_derive::VertexAttributes;
 
-use crate::bones::Std140GpuBone;
+use crate::{bones::Std140GpuBone, DrawMaterial};
 use crate::Mesh;
 
 #[derive(Debug, Default, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, VertexAttributes)]
@@ -150,19 +150,7 @@ impl Material {
         })
     }
 
-    pub fn set_camera_uniform(&self, buffer: &ViewUniformBuffer) -> Result<()> {
-        self.program()
-            .bind_block(&buffer.slice(0..=0), self.u_view, 0)?;
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self, meshes), fields(meshes = meshes.len()))]
-    pub fn draw_meshes<MC: std::ops::Deref<Target=Mesh>>(
-        &mut self,
-        framebuffer: &Framebuffer,
-        instance: &MaterialInstance,
-        meshes: &[Transformed<MC>],
-    ) -> Result<()> {
+    pub fn draw_meshes<'a>(&mut self, frame: &Framebuffer, view: &ViewUniformBuffer, instance: &MaterialInstance, meshes: impl IntoIterator<Item=Transformed<&'a Mesh>>) -> Result<()> {
         {
             if self.reload_watcher.should_reload() {
                 let mut paths = self.reload_watcher.paths();
@@ -200,9 +188,15 @@ impl Material {
             }
             let program = self.program();
             program.set_uniform(self.u_model, mesh.transform.matrix())?;
-            mesh.draw(&program, framebuffer, false)?;
+            mesh.draw(&program, frame, false)?;
         }
         unsafe { gl::BindTexture(gl::TEXTURE_2D, 0) }
+        Ok(())
+    }
+
+    pub fn set_camera_uniform(&self, buffer: &ViewUniformBuffer) -> Result<()> {
+        self.program()
+            .bind_block(&buffer.slice(0..=0), self.u_view, 0)?;
         Ok(())
     }
 
@@ -240,7 +234,7 @@ impl MaterialInstance {
             has_rough_metal: roughness_metal.is_some(),
             rough_metal_factor: Vec2::ONE,
             has_emission: emission.is_some(),
-            emission_factor: Vec3::ONE,
+            emission_factor: Vec3::ZERO,
         };
         let buffer = UniformBuffer::with_data(&[uniforms.as_std140()])?;
         Ok(Self {

@@ -1,23 +1,8 @@
-use std::rc::Rc;
-use std::time::Duration;
+use std::{rc::Rc, time::Duration};
 
-use eyre::Result;
-use glam::{UVec2, Vec2, vec3, Vec3};
+use rose::{prelude::*, core::light::Light, renderer::{Renderer, Mesh}};
 
 use camera_controller::OrbitCameraController;
-use rose_core::{
-    light::Light,
-    mesh::MeshBuilder,
-    transform::{Transform, TransformExt},
-};
-use rose_core::camera::Camera;
-use rose_core::utils::thread_guard::ThreadGuard;
-use rose_platform::{
-    Application,
-    events::{ElementState, ModifiersState, MouseButton, MouseScrollDelta, WindowEvent}, PhysicalSize, RenderContext, TickContext, UiContext, WindowBuilder,
-};
-use rose_renderer::{Mesh, Renderer};
-use rose_renderer::material::{MaterialInstance, Vertex};
 use violette::texture::Texture;
 
 mod camera_controller;
@@ -48,6 +33,7 @@ impl Application for App {
         let mut material = MaterialInstance::create(
             Texture::load_rgb32f("assets/textures/moon_color.png")?,
             Texture::load_rgb32f("assets/textures/moon_normal.png")?,
+            None,
             None,
         )?;
         material.update_uniforms(|u| {
@@ -98,10 +84,10 @@ impl Application for App {
                 match self.dragging {
                     Some(MouseButton::Left) => self
                         .camera_controller
-                        .orbit(&mut self.camera, position - self.last_mouse_pos),
+                        .orbit(&self.camera, position - self.last_mouse_pos),
                     Some(MouseButton::Right) => self
                         .camera_controller
-                        .pan(&mut self.camera, position - self.last_mouse_pos),
+                        .pan(&self.camera, position - self.last_mouse_pos),
                     _ => {}
                 }
                 self.last_mouse_pos = position;
@@ -121,11 +107,11 @@ impl Application for App {
             }
             WindowEvent::MouseWheel { delta, .. } => match delta {
                 MouseScrollDelta::LineDelta(_, y) => {
-                    self.camera_controller.scroll(&mut self.camera, y)
+                    self.camera_controller.scroll(&self.camera, y)
                 }
                 MouseScrollDelta::PixelDelta(delta) => self
                     .camera_controller
-                    .scroll(&mut self.camera, delta.y as _),
+                    .scroll(&self.camera, delta.y as _),
             },
             WindowEvent::ModifiersChanged(state) => {
                 self.ctrl_pressed = state.contains(ModifiersState::CTRL)
@@ -143,9 +129,9 @@ impl Application for App {
     #[tracing::instrument(target = "App::render", skip_all)]
     fn render(&mut self, ctx: RenderContext) -> Result<()> {
         self.renderer.begin_render(&self.camera)?;
-        self.renderer.submit_mesh(
-            Rc::downgrade(&self.material),
-            Rc::downgrade(&self.mesh).transformed(self.transform),
+        self.renderer.submit_mesh_standard(
+            Rc::clone(&self.material),
+            Rc::clone(&self.mesh).transformed(self.transform),
         );
         self.renderer.flush(ctx.dt, Vec3::ZERO)?;
         Ok(())
@@ -227,5 +213,5 @@ impl Application for App {
 }
 
 fn main() -> Result<()> {
-    rose_platform::run::<App>("UV Sphere")
+    run::<App>("UV Sphere")
 }

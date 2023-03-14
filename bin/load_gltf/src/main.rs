@@ -1,15 +1,6 @@
 use std::path::PathBuf;
 
-use eyre::Result;
-use glam::{UVec2, Vec2, Vec3};
-
-use rose_core::transform::Transform;
-use rose_ecs::{
-    prelude::*,
-    systems::{hierarchy::GlobalTransform, hierarchy::HierarchicalSystem, PanOrbitSystem},
-};
-use rose_platform::{Application, events::WindowEvent, PhysicalSize, RenderContext};
-use rose_renderer::env::EnvironmentMap;
+use rose::prelude::*;
 
 struct App {
     core_systems: CoreSystems,
@@ -34,16 +25,8 @@ impl Application for App {
             ).unwrap());
         let scene = if let Some(name) = std::env::args().nth(1) {
             let path = PathBuf::from(name);
-            let mut scene: Scene = smol::block_on(rose_ecs::load_gltf::load_gltf_scene(&path))?;
+            let mut scene: Scene = smol::block_on(rose::ecs::load_gltf::load_gltf_scene(&path))?;
             scene.with_world(|world, cmd| {
-                // cmd.spawn(LightBundle {
-                //     transform: Transform::translation(Vec3::ONE).looking_at(Vec3::ZERO),
-                //     light: Light {
-                //         kind: LightKind::Directional,
-                //         ..Default::default()
-                //     },
-                //     ..Default::default()
-                // });
                 cmd.spawn(PanOrbitCameraBundle {
                     pan_orbit: PanOrbitCamera {
                         focus: Vec3::ZERO,
@@ -110,5 +93,5 @@ impl Application for App {
 }
 
 fn main() -> Result<()> {
-    rose_platform::run::<App>("Load GLTF")
+    run::<App>("Load GLTF")
 }

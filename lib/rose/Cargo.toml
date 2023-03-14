@@ -1,0 +1,26 @@
+[package]
+name = "rose"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["dylib"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+input = { path = "../input" }
+rose-core = { path = "../rose-core" }
+rose-ecs = { path = "../rose-ecs", features = ["ui"] }
+rose-platform = { path = "../rose-platform" }
+rose-renderer = { path = "../rose-renderer" }
+rose-ui = { path = "../rose-ui", optional = true }
+
+eyre.workspace = true
+glam.workspace = true
+tracing.workspace = true
+
+[features]
+ui = ["rose-ui", "rose-platform/ui", "rose-renderer/debug-ui"]
+tracy = ["rose-platform/tracy"]
+hot-reload = ["rose-renderer/hot-reload"]

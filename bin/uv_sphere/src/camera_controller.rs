@@ -3,8 +3,7 @@ use std::{
     time::Duration,
 };
 
-use glam::{vec2, Mat3, Quat, Vec2, Vec3};
-use rose_core::camera::Camera;
+use rose::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct OrbitCameraController {

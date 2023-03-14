@@ -1,11 +1,4 @@
-use eyre::Result;
-use glam::{EulerRot, Quat, UVec2, vec3, Vec3};
-
-use rose_core::transform::Transform;
-use rose_ecs::{assets::ObjectBundle, prelude::*};
-use rose_ecs::systems::hierarchy::{GlobalTransform, HierarchicalSystem};
-use rose_platform::{Application, events::WindowEvent, PhysicalSize, RenderContext};
-use rose_platform::events::VirtualKeyCode;
+use rose::prelude::*;
 
 struct App {
     core_systems: CoreSystems,
@@ -26,27 +19,28 @@ impl Application for App {
         let sizeu = UVec2::from_array(size.cast::<u32>().into());
         let mut core_systems = CoreSystems::new(sizeu)?;
         core_systems.persistence.register_component::<GlobalTransform>();
-        // core_systems.render.renderer.set_environment(EnvironmentMap::load("assets/textures/table_mountain_2_puresky_4k.exr")?);
+        core_systems.render.renderer.set_environment(|rw| EnvironmentMap::load("assets/textures/derelict_highway_midday_1k.exr", rw).unwrap());
         let mut scene = Scene::new("assets")?;
-        let cache = scene.asset_cache();
+        let cache = scene.asset_cache().as_any_cache();
         let (global_camera, local_camera) = scene.with_world_mut(|world| {
-            world.spawn(LightBundle {
-                transform: Transform::translation(Vec3::ONE).looking_at(Vec3::ZERO),
-                light: Light {
-                    kind: LightKind::Directional,
-                    color: Vec3::ONE,
-                    power: 10.,
-                },
-                ..Default::default()
-            });
+            // world.spawn(LightBundle {
+            //     transform: Transform::translation(Vec3::ONE).looking_at(Vec3::ZERO),
+            //     light: components::Light {
+            //         kind: LightKind::Directional,
+            //         color: Vec3::ONE,
+            //         power: 10.,
+            //     },
+            //     ..Default::default()
+            // });
             // Create a grid of cubes to better see translation
+            let material = core_systems.render.default_material_handle(cache);
             for i in -5..5 {
                 for j in -5..5 {
                     world.spawn(ObjectBundle {
                         transform: Transform::translation(vec3(i as _, 0., j as _))
                             .scaled(Vec3::splat(0.1)),
                         mesh: core_systems.render.primitive_cube(cache),
-                        material: core_systems.render.default_material_handle(cache),
+                        material,
                         active: Active,
                     });
                 }
@@ -56,7 +50,7 @@ impl Application for App {
                     .add_bundle(ObjectBundle {
                         transform: Transform::rotation(Quat::from_rotation_x(20f32.to_radians())),
                         mesh: core_systems.render.primitive_sphere(cache),
-                        material: cache.load("materials.square_floor")?,
+                        material,
                         active: Active,
                     })
                     .add(Rotate(vec3(0., 0.1, 0.)))
@@ -128,14 +122,14 @@ impl Application for App {
         })
     }
 
-    fn resize(&mut self, size: PhysicalSize<u32>, scale_factor: f64) -> Result<()> {
+    fn resize(&mut self, size: PhysicalSize<u32>, _scale_factor: f64) -> Result<()> {
         self.core_systems.resize(size)?;
         Ok(())
     }
 
     #[tracing::instrument(skip_all)]
     fn interact(&mut self, event: WindowEvent) -> Result<()> {
-        if !self.core_systems.on_event(event) {
+        if self.core_systems.on_event(event).is_some() {
             let keyboard = &self.core_systems.input.input.keyboard;
             if keyboard.state.just_pressed(&VirtualKeyCode::G) {
                 self.scene.with_world(|_, cmd| {
@@ -167,5 +161,5 @@ impl Application for App {
 }
 
 fn main() -> Result<()> {
-    rose_platform::run::<App>("Transform hierarchy")
+    run::<App>("Transform hierarchy")
 }

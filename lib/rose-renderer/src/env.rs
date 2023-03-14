@@ -1,17 +1,17 @@
-use std::{any::Any, fmt, path::Path};
 use std::num::NonZeroU32;
+use std::{any::Any, fmt, path::Path};
 
 use eyre::{Context, Report, Result};
 use glam::{vec3, Vec3};
 
-use rose_core::{camera::ViewUniformBuffer, screen_draw::ScreenDraw};
 use rose_core::utils::reload_watcher::ReloadWatcher;
+use rose_core::{camera::ViewUniformBuffer, screen_draw::ScreenDraw};
+use violette::texture::Dimension;
 use violette::{
     framebuffer::Framebuffer,
     program::{UniformBlockIndex, UniformLocation},
     texture::{SampleMode, Texture, TextureWrap},
 };
-use violette::texture::Dimension;
 
 #[derive(Debug, Copy, Clone)]
 pub struct MaterialInfo<'a> {
@@ -92,13 +92,15 @@ impl Environment for SimpleSky {
         camera: &ViewUniformBuffer,
         mat_info: MaterialInfo,
     ) -> Result<()> {
-        let draw = self.draw.program();
-        draw.bind_block(&camera.slice(0..=0), self.u_view, 0)?;
-        draw.set_uniform(self.u_horizon_color, self.params.horizon_color)?;
-        draw.set_uniform(self.u_ground_color, self.params.ground_color)?;
-        draw.set_uniform(self.u_zenith_color, self.params.zenith_color)?;
-        draw.set_uniform(self.u_albedo, mat_info.albedo.as_uniform(0)?)?;
-        draw.set_uniform(self.u_normal, mat_info.normal_coverage.as_uniform(1)?)?;
+        {
+            let draw = self.draw.program();
+            draw.bind_block(&camera.slice(0..=0), self.u_view, 0)?;
+            draw.set_uniform(self.u_horizon_color, self.params.horizon_color)?;
+            draw.set_uniform(self.u_ground_color, self.params.ground_color)?;
+            draw.set_uniform(self.u_zenith_color, self.params.zenith_color)?;
+            draw.set_uniform(self.u_albedo, mat_info.albedo.as_uniform(0)?)?;
+            draw.set_uniform(self.u_normal, mat_info.normal_coverage.as_uniform(1)?)?;
+        }
         self.draw.draw(frame)?;
         Ok(())
     }
@@ -278,7 +280,9 @@ impl EnvironmentMap {
 
         let specibl_fbo = Framebuffer::new();
         let draw = ScreenDraw::load(
-            reload_watcher.base_path().join("screen/env/specular_ibl.glsl"),
+            reload_watcher
+                .base_path()
+                .join("screen/env/specular_ibl.glsl"),
             reload_watcher,
         )?;
         let u_env_map = draw.program().uniform("env_map");
@@ -292,8 +296,7 @@ impl EnvironmentMap {
             Framebuffer::viewport(0, 0, mw.get() as _, mh.get() as _);
             let roughness = mip as f32 / (mipmaps as f32 - 1.);
             draw.program().set_uniform(u_roughness, roughness)?;
-            draw.program()
-                .set_uniform(u_env_map, map.as_uniform(0)?)?;
+            draw.program().set_uniform(u_env_map, map.as_uniform(0)?)?;
             draw.draw(&specibl_fbo)?;
         }
 

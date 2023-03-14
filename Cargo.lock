@@ -372,11 +372,7 @@ dependencies = [
 name = "bone-test"
 version = "0.1.0"
 dependencies = [
- "eyre",
- "glam",
- "rose-core",
- "rose-platform",
- "rose-renderer",
+ "rose",
  "violette",
 ]
 
@@ -1901,9 +1897,7 @@ name = "irradiance_map"
 version = "0.1.0"
 dependencies = [
  "eyre",
- "rose-core",
- "rose-ecs",
- "rose-platform",
+ "rose",
  "tracing",
  "violette",
 ]
@@ -2048,19 +2042,9 @@ checksum = "f051f77a7c8e6957c0696eac88f26b0117e54f52d3fc682ab19397a8812846a4"
 name = "load_gltf"
 version = "0.1.0"
 dependencies = [
- "color-eyre",
- "egui",
  "eyre",
- "glam",
- "image",
- "rose-core",
- "rose-ecs",
- "rose-platform",
- "rose-renderer",
- "rose-ui",
+ "rose",
  "smol",
- "tracing",
- "violette",
 ]
 
 [[package]]
@@ -2828,6 +2812,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rose"
+version = "0.1.0"
+dependencies = [
+ "eyre",
+ "glam",
+ "input",
+ "rose-core",
+ "rose-ecs",
+ "rose-platform",
+ "rose-renderer",
+ "rose-ui",
+ "tracing",
+]
+
+[[package]]
 name = "rose-core"
 version = "0.1.0"
 dependencies = [
@@ -3009,21 +3008,15 @@ dependencies = [
  "egui",
  "egui-gizmo",
  "egui_dock",
- "eyre",
  "glam",
- "input",
  "rayon",
  "rfd",
- "rose-core",
- "rose-ecs",
- "rose-platform",
- "rose-renderer",
+ "rose",
  "serde",
  "serde_json",
  "serde_yaml",
  "toml 0.7.2",
  "toml_edit",
- "tracing",
  "typetag",
  "violette",
 ]
@@ -3354,21 +3347,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test_mvp"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "color-eyre",
- "eyre",
- "glam",
- "rose-core",
- "rose-platform",
- "tracing",
- "violette",
- "violette-derive",
-]
-
-[[package]]
 name = "tests"
 version = "0.1.0"
 dependencies = [
@@ -3637,13 +3615,8 @@ dependencies = [
  "egui",
  "eyre",
  "glam",
- "rose-core",
- "rose-ecs",
- "rose-platform",
- "rose-renderer",
- "rose-ui",
+ "rose",
  "tracing",
- "violette",
 ]
 
 [[package]]
@@ -3740,15 +3713,9 @@ checksum = "e8db7427f936968176eaa7cdf81b7f98b980b18495ec28f1b5791ac3bfe3eea9"
 name = "uv_sphere"
 version = "0.1.0"
 dependencies = [
- "bytemuck",
  "egui",
  "eyre",
- "glam",
- "rose-core",
- "rose-platform",
- "rose-renderer",
- "rose-ui",
- "tracing",
+ "rose",
  "violette",
 ]
 

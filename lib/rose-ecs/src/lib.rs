@@ -27,6 +27,7 @@ pub mod components;
 pub mod scene;
 pub mod systems;
 pub mod load_gltf;
+pub mod prelude;
 
 pub struct CoreSystems {
     pub render: RenderSystem,
@@ -103,25 +104,6 @@ impl CoreSystems {
         })?;
         Ok(())
     }
-}
-
-pub mod prelude {
-    pub use assets_manager::{
-        *,
-        asset::{Asset, Compound},
-        source::Source,
-    };
-    pub use hecs::*;
-
-    pub use crate::{
-        components::*,
-        CoreSystems,
-        scene::Scene,
-        systems::{
-            hierarchy::{MakeChild, MakeChildren},
-            persistence::SerializableComponent,
-        },
-    };
 }
 
 pub trait NamedComponent: Component {

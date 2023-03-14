@@ -5,13 +5,9 @@ use eyre::{Context, Result};
 use glam::{vec2, Vec2, vec3, Vec3};
 
 use violette::{
-    buffer::Buffer,
-    vertex::{DrawMode, VertexArray, VertexAttributes},
-};
-use violette::{
-    buffer::{ArrayBuffer, ElementBuffer},
+    buffer::{ArrayBuffer, ElementBuffer, Buffer},
     framebuffer::Framebuffer,
-    program::Program,
+    program::Program, vertex::{DrawMode, VertexArray, VertexAttributes},
 };
 
 #[derive(Debug)]

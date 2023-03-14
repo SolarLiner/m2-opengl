@@ -1,10 +1,10 @@
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    path::PathBuf,
     rc::Rc,
+    time::Duration,
 };
-use std::path::PathBuf;
-use std::time::Duration;
 
 use assets_manager::{AnyCache, Handle, SharedString};
 use dashmap::DashMap;
@@ -14,19 +14,16 @@ use hecs::World;
 
 use rose_core::{
     camera::Camera,
-    light::GpuLight,
-    light::Light,
+    light::{GpuLight, Light},
     transform::{Transform, TransformExt},
     utils::thread_guard::ThreadGuard,
 };
 use rose_platform::PhysicalSize;
-use rose_renderer::{material::MaterialInstance, Mesh, Renderer};
+use rose_renderer::{material::MaterialInstance, DrawMaterial, Mesh, Renderer};
 
-use crate::{
-    assets::*,
-    components::{*, Light as LightComponent},
-};
-use crate::systems::hierarchy::GlobalTransform;
+use crate::{systems::hierarchy::GlobalTransform, assets::*, components::{Light as LightComponent, *}};
+
+pub struct CustomMaterial<M>(ThreadGuard<Rc<M>>);
 
 pub struct RenderSystem {
     pub clear_color: Vec3,
@@ -34,6 +31,7 @@ pub struct RenderSystem {
     pub renderer: ThreadGuard<Renderer>,
     meshes_map: DashMap<SharedString, ThreadGuard<Rc<Mesh>>>,
     materials_map: DashMap<SharedString, ThreadGuard<Rc<MaterialInstance>>>,
+    custom_materials_query: Vec<&'static (dyn Send + Sync + Fn(&mut Self, &World))>,
     lights_hash: u64,
 }
 
@@ -51,9 +49,7 @@ impl RenderSystem {
         self.camera.projection.fovy = camera.fovy;
         self.camera.transform = tr.into();
     }
-}
 
-impl RenderSystem {
     pub fn default_material_handle(&self, cache: AnyCache<'static>) -> Handle<'static, Material> {
         cache.get_or_insert(
             "prim:material:default",
@@ -70,9 +66,7 @@ impl RenderSystem {
             },
         )
     }
-}
 
-impl RenderSystem {
     pub fn primitive_cube(&self, cache: AnyCache<'static>) -> Handle<'static, MeshAsset> {
         cache.get_or_insert("prim:cube", MeshAsset::cube())
     }
@@ -80,9 +74,7 @@ impl RenderSystem {
     pub fn primitive_sphere(&self, cache: AnyCache<'static>) -> Handle<'static, MeshAsset> {
         cache.get_or_insert("prim:sphere", MeshAsset::uv_sphere(1., 24, 48))
     }
-}
 
-impl RenderSystem {
     pub fn resize(&mut self, size: PhysicalSize<u32>) -> Result<()> {
         let sizef = size.cast();
         self.camera.projection.width = sizef.width;
@@ -90,11 +82,12 @@ impl RenderSystem {
         self.renderer.resize(UVec2::from_array(size.into()))?;
         Ok(())
     }
-}
 
-impl RenderSystem {
     pub fn new(size: UVec2) -> Result<Self> {
-        let base_dir = std::env::var("CARGO_PROJECT_DIR").map(|v| PathBuf::from(v)).or_else(|_| std::env::current_dir()).unwrap();
+        let base_dir = std::env::var("CARGO_PROJECT_DIR")
+            .map(|v| PathBuf::from(v))
+            .or_else(|_| std::env::current_dir())
+            .unwrap();
         tracing::info!("Base resources directory: {}", base_dir.display());
         let renderer = Renderer::new(size, &base_dir)?;
         Ok(Self {
@@ -103,8 +96,15 @@ impl RenderSystem {
             renderer: ThreadGuard::new(renderer),
             meshes_map: DashMap::new(),
             materials_map: DashMap::new(),
+            custom_materials_query: vec![],
             lights_hash: DefaultHasher::new().finish(),
         })
+    }
+
+    pub fn register_custom_material<M: 'static + DrawMaterial>(&mut self) -> &mut Self {
+        self.custom_materials_query
+            .push(&Self::submit_meshes_custom::<M>);
+        self
     }
 
     pub fn on_frame(&mut self, dt: Duration, world: &World) -> Result<()> {
@@ -114,6 +114,9 @@ impl RenderSystem {
 
         self.renderer.begin_render(&self.camera)?;
         self.submit_meshes(world);
+        for custom in self.custom_materials_query.clone() {
+            (custom)(self, world);
+        }
         self.renderer.flush(dt, self.clear_color)?;
         Ok(())
     }
@@ -127,10 +130,28 @@ impl RenderSystem {
             tracing::trace!(message="Submitting mesh", mesh=%mesh_handle.id(), material=%material_handle.id());
             let mesh = self.meshes_map.get(mesh_handle.id()).unwrap();
             let material = self.materials_map.get(material_handle.id()).unwrap();
-            self.renderer.submit_mesh(
-                Rc::downgrade(&*material),
-                Rc::downgrade(&*mesh).transformed(transform),
+            self.renderer.submit_mesh_standard(
+                Rc::clone(&material),
+                Rc::clone(&mesh).transformed(transform),
             );
+        }
+    }
+
+    fn submit_meshes_custom<M: DrawMaterial>(&mut self, world: &World) {
+        for (_, (transform, material_handle, mesh_handle)) in world
+            .query::<(
+                &GlobalTransform,
+                &Handle<CustomMaterial<M>>,
+                &Handle<MeshAsset>,
+            )>()
+            .iter()
+        {
+            let transform = transform.into();
+            tracing::trace!(message="Submitting mesh (custom material)", mesh=%mesh_handle.id(), material=%material_handle.id(), mat_name=%std::any::type_name::<M>());
+            let material = Rc::clone(&material_handle.read().0);
+            let mesh = self.meshes_map.get(mesh_handle.id()).unwrap();
+            self.renderer
+                .submit_mesh(material, Rc::clone(&mesh).transformed(transform));
         }
     }
 
@@ -176,7 +197,8 @@ impl RenderSystem {
                 } else {
                     None
                 };
-                let mut inst = MaterialInstance::create(color_slot, normal_map, rough_metal, emission)?;
+                let mut inst =
+                    MaterialInstance::create(color_slot, normal_map, rough_metal, emission)?;
                 inst.update_uniforms(|uniforms| {
                     uniforms.color_factor = mat.color_factor;
                     uniforms.normal_amount = mat.normal_amount;

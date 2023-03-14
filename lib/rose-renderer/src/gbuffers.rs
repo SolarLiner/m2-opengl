@@ -4,24 +4,17 @@ use eyre::{Context, Result};
 use glam::UVec2;
 
 use rose_core::{
-    camera::ViewUniformBuffer,
-    light::LightBuffer,
-    screen_draw::ScreenDraw,
-    transform::Transformed,
+    camera::ViewUniformBuffer, light::LightBuffer, screen_draw::ScreenDraw,
     utils::reload_watcher::ReloadWatcher,
 };
 use violette::{
     base::resource::Resource,
-    framebuffer::{Blend, ClearBuffer, DepthTestFunction, Framebuffer},
+    framebuffer::{Blend, ClearBuffer, Framebuffer},
     program::{UniformBlockIndex, UniformLocation},
     texture::{DepthStencil, Dimension, SampleMode, Texture},
 };
 
-use crate::{
-    env::{Environment, MaterialInfo},
-    material::{Material, MaterialInstance},
-    Mesh,
-};
+use crate::env::{Environment, MaterialInfo};
 
 #[derive(Debug)]
 pub struct GeometryBuffers {
@@ -103,8 +96,8 @@ impl GeometryBuffers {
 
         let screen_pass = ScreenDraw::load("screen/deferred.glsl", reload_watcher)
             .context("Cannot load screen shader pass")?;
-        let blit = ScreenDraw::load("blit.glsl", reload_watcher)
-            .context("Cannot load blit program")?;
+        let blit =
+            ScreenDraw::load("blit.glsl", reload_watcher).context("Cannot load blit program")?;
         let debug_uniform_in_texture = blit.program().uniform("in_texture");
 
         let pass_program = screen_pass.program();
@@ -145,8 +138,9 @@ impl GeometryBuffers {
         &self.deferred_fbo
     }
 
+    #[cfg(never)]
     #[tracing::instrument(skip_all)]
-    pub fn draw_meshes<MC: std::ops::Deref<Target=Mesh>>(
+    pub fn draw_meshes<MC: std::ops::Deref<Target = Mesh>>(
         &self,
         material: &mut Material,
         instance: &MaterialInstance,
@@ -204,7 +198,6 @@ impl GeometryBuffers {
         self.blit.draw(frame)?;
         Ok(())
     }
-
 
     pub fn size(&self) -> UVec2 {
         self.size

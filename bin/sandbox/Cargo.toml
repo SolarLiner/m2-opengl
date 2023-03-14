@@ -20,14 +20,8 @@ toml = "0.7.2"
 toml_edit = "0.19.4"
 typetag = "0.2.5"
 
-input = { path = "../../lib/input" }
-rose-core = { path = "../../lib/rose-core", features = ["serialize"] }
-rose-ecs = { path = "../../lib/rose-ecs", features = ["ui"] }
-rose-platform = { path = "../../lib/rose-platform", features = ["ui"] }
-rose-renderer = { path = "../../lib/rose-renderer", features = ["debug-ui"] }
+rose = { path = "../../lib/rose", features = ["ui", "hot-reload"] }
 violette = { path = "../../lib/violette" }
 
 egui.workspace = true
-eyre.workspace = true
 glam = { workspace = true, features = ["serde"] }
-tracing.workspace = true
