@@ -1,0 +1,15 @@
+[package]
+name = "earth"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+glsl-preprocessor = { path = "../../lib/glsl-preprocessor" }
+rose = { path = "../../lib/rose", features = ["hot-reload"] }
+violette = { path = "../../lib/violette" }
+serde = { version = "1.0.156", features = ["derive"] }
+
+crevice.workspace = true
+eyre.workspace = true
