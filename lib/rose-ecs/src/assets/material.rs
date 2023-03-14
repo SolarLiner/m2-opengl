@@ -2,8 +2,8 @@ use std::ops;
 use std::sync::Arc;
 
 use assets_manager::{
-    AnyCache,
-    Asset, BoxedError, Compound, loader::{ImageLoader, LoadFrom, TomlLoader}, SharedString,
+    loader::{ImageLoader, LoadFrom, TomlLoader},
+    AnyCache, Asset, BoxedError, Compound, SharedString,
 };
 use glam::{Vec2, Vec3};
 use serde::{Deserialize, Serialize};
@@ -74,6 +74,10 @@ const fn default_color_factor() -> Vec3 {
     Vec3::ONE
 }
 
+const fn default_emission_factor() -> Vec3 {
+    Vec3::ZERO
+}
+
 const fn default_rough_metal() -> Vec2 {
     Vec2::ONE
 }
@@ -91,6 +95,9 @@ pub struct MaterialDesc {
     pub rough_metal: Option<SharedString>,
     #[serde(default = "default_rough_metal")]
     pub rough_metal_factor: Vec2,
+    pub emission: Option<SharedString>,
+    #[serde(default = "default_emission_factor")]
+    pub emission_factor: Vec3,
 }
 
 impl Asset for MaterialDesc {
@@ -108,6 +115,8 @@ pub struct Material {
     pub normal_amount: f32,
     pub rough_metal: Option<Image>,
     pub rough_metal_factor: Vec2,
+    pub emission: Option<Image>,
+    pub emission_factor: Vec3,
 }
 
 impl Compound for Material {
@@ -124,8 +133,16 @@ impl Compound for Material {
                 None
             },
             normal_amount: desc.normal_amount,
-            rough_metal: desc.rough_metal.map(|id| cache.load_owned(id.as_str()).unwrap()),
+            rough_metal: desc
+                .rough_metal
+                .map(|id| cache.load_owned(id.as_str()).unwrap()),
             rough_metal_factor: desc.rough_metal_factor,
+            emission: if let Some(path) = desc.emission {
+                Some(cache.load(&path)?.cloned())
+            } else {
+                None
+            },
+            emission_factor: desc.emission_factor,
         })
     }
 }

@@ -58,6 +58,8 @@ pub struct MaterialUniforms {
     pub normal_amount: f32,
     pub has_rough_metal: bool,
     pub rough_metal_factor: Vec2,
+    pub has_emission: bool,
+    pub emission_factor: Vec3,
 }
 
 #[derive(Debug)]
@@ -72,6 +74,7 @@ pub struct Material {
     u_bones: UniformBlockIndex,
     bones_uniform: UniformBuffer<Std140GpuBone>,
     reload_watcher: ReloadFileProxy,
+    u_emission: UniformLocation,
 }
 
 impl Material {
@@ -118,6 +121,7 @@ impl Material {
         let u_color = program.uniform("map_color");
         let u_normal = program.uniform("map_normal");
         let u_rough_metal = program.uniform("map_rough_metal");
+        let u_emission = program.uniform("map_emission");
         let u_uniforms = program.uniform_block("Uniforms");
         let u_model = program.uniform("model");
         let u_view = program.uniform_block("View");
@@ -131,6 +135,7 @@ impl Material {
             u_color,
             u_normal,
             u_rough_metal,
+            u_emission,
             u_model,
             u_uniforms,
             u_view,
@@ -184,6 +189,9 @@ impl Material {
         if let Some(rough_metal) = &instance.roughness_metal {
             program.set_uniform(self.u_rough_metal, rough_metal.as_uniform(2)?)?;
         }
+        if let Some(emission) = &instance.emission {
+            program.set_uniform(self.u_emission, emission.as_uniform(3)?)?;
+        }
         drop(program);
 
         for mesh in meshes {
@@ -208,6 +216,7 @@ pub struct MaterialInstance {
     pub color: Option<Texture<[f32; 3]>>,
     pub normal_map: Option<Texture<[f32; 3]>>,
     pub roughness_metal: Option<Texture<[f32; 2]>>,
+    pub emission: Option<Texture<[f32; 3]>>,
     uniforms: MaterialUniforms,
     buffer: UniformBuffer<Std140MaterialUniforms>,
 }
@@ -217,10 +226,12 @@ impl MaterialInstance {
         color_slot: impl Into<Option<Texture<[f32; 3]>>>,
         normal_map: impl Into<Option<Texture<[f32; 3]>>>,
         rough_metal: impl Into<Option<Texture<[f32; 2]>>>,
+        emission: impl Into<Option<Texture<[f32; 3]>>>,
     ) -> Result<Self> {
         let color = color_slot.into();
         let normal_map = normal_map.into();
         let roughness_metal = rough_metal.into();
+        let emission = emission.into();
         let uniforms = MaterialUniforms {
             has_color: color.is_some(),
             color_factor: Vec3::ONE,
@@ -228,12 +239,15 @@ impl MaterialInstance {
             normal_amount: 1.,
             has_rough_metal: roughness_metal.is_some(),
             rough_metal_factor: Vec2::ONE,
+            has_emission: emission.is_some(),
+            emission_factor: Vec3::ONE,
         };
         let buffer = UniformBuffer::with_data(&[uniforms.as_std140()])?;
         Ok(Self {
             color,
             normal_map,
             roughness_metal,
+            emission,
             uniforms,
             buffer,
         })

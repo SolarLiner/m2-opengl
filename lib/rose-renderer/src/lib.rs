@@ -433,6 +433,7 @@ impl Renderer {
             1 => "Albedo",
             2 => "Normal",
             3 => "Roughness/Metal",
+            4 => "Emission",
             _ => "<None>",
         };
         thread_local! {
@@ -473,6 +474,7 @@ impl Renderer {
                         1 => geom_pass.debug_albedo(ui.framebuffer()),
                         2 => geom_pass.debug_normal(ui.framebuffer()),
                         3 => geom_pass.debug_rough_metal(ui.framebuffer()),
+                        4 => geom_pass.debug_emission(ui.framebuffer()),
                         _ => Ok(()),
                     }
                         .is_ok();

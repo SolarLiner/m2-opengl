@@ -26,7 +26,7 @@ use crate::{
 #[derive(Debug)]
 pub struct GeometryBuffers {
     screen_pass: ScreenDraw,
-    debug_texture: ScreenDraw,
+    blit: ScreenDraw,
     deferred_fbo: Framebuffer,
     output_fbo: Framebuffer,
     size: UVec2,
@@ -34,15 +34,17 @@ pub struct GeometryBuffers {
     albedo: Texture<[f32; 3]>,
     normal_coverage: Texture<[f32; 4]>,
     rough_metal: Texture<[f32; 2]>,
+    emission: Texture<[f32; 3]>,
     out_color: Texture<[f32; 3]>,
     out_depth: Texture<DepthStencil<f32, ()>>,
     uniform_frame_pos: UniformLocation,
     uniform_frame_albedo: UniformLocation,
     uniform_frame_normal: UniformLocation,
     uniform_frame_rough_metal: UniformLocation,
+    uniform_frame_emission: UniformLocation,
     uniform_block_light: UniformBlockIndex,
     uniform_block_view: UniformBlockIndex,
-    debug_uniform_in_texture: UniformLocation,
+    uniform_blit_source: UniformLocation,
 }
 
 impl GeometryBuffers {
@@ -60,15 +62,20 @@ impl GeometryBuffers {
         albedo.filter_mag(SampleMode::Linear)?;
         albedo.reserve_memory()?;
 
-        let normal = Texture::new(width, height, nonzero_one, Dimension::D2);
-        normal.filter_min(SampleMode::Linear)?;
-        normal.filter_mag(SampleMode::Linear)?;
-        normal.reserve_memory()?;
+        let normal_coverage = Texture::new(width, height, nonzero_one, Dimension::D2);
+        normal_coverage.filter_min(SampleMode::Linear)?;
+        normal_coverage.filter_mag(SampleMode::Linear)?;
+        normal_coverage.reserve_memory()?;
 
         let rough_metal = Texture::new(width, height, nonzero_one, Dimension::D2);
         rough_metal.filter_min(SampleMode::Linear)?;
         rough_metal.filter_mag(SampleMode::Linear)?;
         rough_metal.reserve_memory()?;
+
+        let emission = Texture::new(width, height, nonzero_one, Dimension::D2);
+        emission.filter_min(SampleMode::Linear)?;
+        emission.filter_mag(SampleMode::Linear)?;
+        emission.reserve_memory()?;
 
         let out_color = Texture::new(width, height, nonzero_one, Dimension::D2);
         out_color.filter_min(SampleMode::Linear)?;
@@ -83,10 +90,11 @@ impl GeometryBuffers {
         let deferred_fbo = Framebuffer::new();
         deferred_fbo.attach_color(0, pos.mipmap(0).unwrap())?;
         deferred_fbo.attach_color(1, albedo.mipmap(0).unwrap())?;
-        deferred_fbo.attach_color(2, normal.mipmap(0).unwrap())?;
+        deferred_fbo.attach_color(2, normal_coverage.mipmap(0).unwrap())?;
         deferred_fbo.attach_color(3, rough_metal.mipmap(0).unwrap())?;
+        deferred_fbo.attach_color(4, emission.mipmap(0).unwrap())?;
         deferred_fbo.attach_depth(&out_depth)?;
-        deferred_fbo.enable_buffers([0, 1, 2, 3])?;
+        deferred_fbo.enable_buffers([0, 1, 2, 3, 4])?;
         deferred_fbo.assert_complete()?;
 
         let output_fbo = Framebuffer::new();
@@ -95,15 +103,16 @@ impl GeometryBuffers {
 
         let screen_pass = ScreenDraw::load("screen/deferred.glsl", reload_watcher)
             .context("Cannot load screen shader pass")?;
-        let debug_texture = ScreenDraw::load("blit.glsl", reload_watcher)
+        let blit = ScreenDraw::load("blit.glsl", reload_watcher)
             .context("Cannot load blit program")?;
-        let debug_uniform_in_texture = debug_texture.program().uniform("in_texture");
+        let debug_uniform_in_texture = blit.program().uniform("in_texture");
 
         let pass_program = screen_pass.program();
         let uniform_frame_pos = pass_program.uniform("frame_position");
         let uniform_frame_albedo = pass_program.uniform("frame_albedo");
         let uniform_frame_normal = pass_program.uniform("frame_normal");
         let uniform_frame_rough_metal = pass_program.uniform("frame_rough_metal");
+        let uniform_frame_emission = pass_program.uniform("frame_emission");
         let uniform_block_light = pass_program.uniform_block("Light");
         let uniform_block_view = pass_program.uniform_block("View");
         drop(pass_program);
@@ -114,19 +123,21 @@ impl GeometryBuffers {
             size,
             pos,
             albedo,
-            normal_coverage: normal,
+            normal_coverage,
             rough_metal,
+            emission,
             out_color,
             out_depth,
-            debug_uniform_in_texture,
+            uniform_blit_source: debug_uniform_in_texture,
             uniform_frame_pos,
             uniform_frame_albedo,
             uniform_frame_normal,
             uniform_frame_rough_metal,
+            uniform_frame_emission,
             uniform_block_light,
             uniform_block_view,
             screen_pass,
-            debug_texture,
+            blit,
         })
     }
 
@@ -151,39 +162,49 @@ impl GeometryBuffers {
 
     pub fn debug_position(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.pos.as_uniform(0)?;
-        self.debug_texture
+        self.blit
             .program()
-            .set_uniform(self.debug_uniform_in_texture, unit)?;
-        self.debug_texture.draw(frame)?;
+            .set_uniform(self.uniform_blit_source, unit)?;
+        self.blit.draw(frame)?;
         Ok(())
     }
 
     pub fn debug_albedo(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.albedo.as_uniform(0)?;
-        self.debug_texture
+        self.blit
             .program()
-            .set_uniform(self.debug_uniform_in_texture, unit)?;
-        self.debug_texture.draw(frame)?;
+            .set_uniform(self.uniform_blit_source, unit)?;
+        self.blit.draw(frame)?;
         Ok(())
     }
 
     pub fn debug_normal(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.normal_coverage.as_uniform(0)?;
-        self.debug_texture
+        self.blit
             .program()
-            .set_uniform(self.debug_uniform_in_texture, unit)?;
-        self.debug_texture.draw(frame)?;
+            .set_uniform(self.uniform_blit_source, unit)?;
+        self.blit.draw(frame)?;
         Ok(())
     }
 
     pub fn debug_rough_metal(&self, frame: &Framebuffer) -> Result<()> {
         let unit = self.rough_metal.as_uniform(0)?;
-        self.debug_texture
+        self.blit
             .program()
-            .set_uniform(self.debug_uniform_in_texture, unit)?;
-        self.debug_texture.draw(frame)?;
+            .set_uniform(self.uniform_blit_source, unit)?;
+        self.blit.draw(frame)?;
         Ok(())
     }
+
+    pub fn debug_emission(&self, frame: &Framebuffer) -> Result<()> {
+        let unit = self.emission.as_uniform(0)?;
+        self.blit
+            .program()
+            .set_uniform(self.uniform_blit_source, unit)?;
+        self.blit.draw(frame)?;
+        Ok(())
+    }
+
 
     pub fn size(&self) -> UVec2 {
         self.size
@@ -196,9 +217,15 @@ impl GeometryBuffers {
         lights: &LightBuffer,
         mut env: Option<&mut dyn Environment>,
     ) -> Result<&Texture<[f32; 3]>> {
-        Framebuffer::disable_blending();
+        Framebuffer::enable_blending(Blend::One, Blend::One);
         Framebuffer::clear_color([0., 0., 0., 1.]);
         self.output_fbo.do_clear(ClearBuffer::COLOR);
+
+        {
+            let program = self.blit.program();
+            program.set_uniform(self.uniform_blit_source, self.emission.as_uniform(3)?)?;
+        }
+        self.blit.draw(&self.output_fbo)?;
         if let Some(env) = &mut env {
             let mat_info = MaterialInfo {
                 position: &self.pos,
@@ -217,14 +244,16 @@ impl GeometryBuffers {
         let unit_albedo = self.albedo.as_uniform(1)?;
         let unit_normal = self.normal_coverage.as_uniform(2)?;
         let unit_rough_metal = self.rough_metal.as_uniform(3)?;
+        let unit_emission = self.emission.as_uniform(3)?;
         {
             let pass_program = self.screen_pass.program();
             pass_program.set_uniform(self.uniform_frame_pos, unit_pos)?;
             pass_program.set_uniform(self.uniform_frame_albedo, unit_albedo)?;
             pass_program.set_uniform(self.uniform_frame_normal, unit_normal)?;
             pass_program.set_uniform(self.uniform_frame_rough_metal, unit_rough_metal)?;
+            pass_program.set_uniform(self.uniform_frame_emission, unit_emission)?;
         }
-        Framebuffer::enable_blending(Blend::One, Blend::One);
+
         for light_ix in 0..lights.len() {
             self.screen_pass.program().bind_block(
                 &lights.slice(light_ix..=light_ix),
@@ -247,6 +276,7 @@ impl GeometryBuffers {
         self.normal_coverage
             .clear_resize(width, height, nonzero_one)?;
         self.rough_metal.clear_resize(width, height, nonzero_one)?;
+        self.emission.clear_resize(width, height, nonzero_one)?;
         self.out_color.clear_resize(width, height, nonzero_one)?;
         self.out_depth.clear_resize(width, height, nonzero_one)?;
         Ok(())

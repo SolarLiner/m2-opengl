@@ -8,6 +8,7 @@ uniform sampler2D frame_position;
 uniform sampler2D frame_albedo;
 uniform sampler2D frame_normal;
 uniform sampler2D frame_rough_metal;
+uniform sampler2D frame_emission;
 
 out vec4 out_color;
 
@@ -40,6 +41,6 @@ void main() {
     LightingMaterial mat = create_material(metallic, roughness);
     Lighting l = create_lighting(src, mat, normalize(view.camera_pos - position), normal, albedo);
 
-    vec3 reflectance = get_lighting(l);
+    vec3 reflectance = get_lighting(l) + texture(frame_emission, v_uv).rgb;
     out_color = vec4(reflectance, 1.0);
 }

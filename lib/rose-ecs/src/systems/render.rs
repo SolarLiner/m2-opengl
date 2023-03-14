@@ -65,6 +65,8 @@ impl RenderSystem {
                 normal_amount: 1.,
                 rough_metal: None,
                 rough_metal_factor: Vec2::ONE,
+                emission: None,
+                emission_factor: Vec3::ZERO,
             },
         )
     }
@@ -169,11 +171,17 @@ impl RenderSystem {
                 } else {
                     None
                 };
-                let mut inst = MaterialInstance::create(color_slot, normal_map, rough_metal)?;
+                let emission = if let Some(emission) = &mat.emission {
+                    Some(emission.create_texture_rgb()?)
+                } else {
+                    None
+                };
+                let mut inst = MaterialInstance::create(color_slot, normal_map, rough_metal, emission)?;
                 inst.update_uniforms(|uniforms| {
                     uniforms.color_factor = mat.color_factor;
                     uniforms.normal_amount = mat.normal_amount;
                     uniforms.rough_metal_factor = mat.rough_metal_factor;
+                    uniforms.emission_factor = mat.emission_factor;
                 })?;
                 self.materials_map
                     .insert(handle.id().clone(), ThreadGuard::new(Rc::new(inst)));

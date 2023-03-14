@@ -6,6 +6,7 @@ layout(location=0) out vec3 frame_position;
 layout(location=1) out vec3 frame_albedo;
 layout(location=2) out vec4 frame_normal;
 layout(location=3) out vec2 frame_rough_metal;
+layout(location=4) out vec3 frame_emission;
 
 layout(std140) uniform Uniforms {
     bool has_color;
@@ -14,11 +15,14 @@ layout(std140) uniform Uniforms {
     float normal_amount;
     bool has_rough_metal;
     vec2 rough_metal_factor;
+    bool has_emission;
+    vec3 emission_factor;
 } uniforms;
 
 uniform sampler2D map_color;
 uniform sampler2D map_normal;
 uniform sampler2D map_rough_metal;
+uniform sampler2D map_emission;
 
 mat3 cotangent_frame(vec3 pos, vec3 normal, vec2 uv) {
     vec3 dp1 = dFdx(pos);
@@ -49,6 +53,10 @@ void main() {
     } else {
         out_normal = vs_normal;
     }
+
+    frame_emission = uniforms.emission_factor * 10;
+    if(uniforms.has_emission)
+        frame_emission *= texture(map_emission, vs_uv).rgb;
 
     frame_normal = vec4(out_normal, 1);
 

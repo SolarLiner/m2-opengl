@@ -197,6 +197,18 @@ fn load_node_mesh(
                     (tex.scale(), Some(image))
                 })
                 .unwrap_or((0., None));
+            let emission = prim.material().emissive_texture().map(|tex| {
+                let texture = &images[tex.texture().source().index()];
+                let sampler = tex.texture().sampler();
+                let image = image2image(texture);
+                Image {
+                    image: Arc::new(image),
+                    wrap_u: wrap2wrap(sampler.wrap_s()),
+                    wrap_v: wrap2wrap(sampler.wrap_t()),
+                    sample_min: filter_min2sample(sampler.min_filter()),
+                    sample_mag: filter_mag2sample(sampler.mag_filter()),
+                }
+            });
             let material = Material {
                 transparent: prim.material().alpha_mode() != AlphaMode::Opaque,
                 color,
@@ -205,6 +217,8 @@ fn load_node_mesh(
                 normal_amount,
                 rough_metal,
                 rough_metal_factor: vec2(pbr.roughness_factor(), pbr.metallic_factor()),
+                emission,
+                emission_factor: prim.material().emissive_factor().into(),
             };
             child_entity
                 .add(cache.get_or_insert(&format!("prim.{:03}.material", prim.index()), material));
