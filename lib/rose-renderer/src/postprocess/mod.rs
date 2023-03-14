@@ -1,16 +1,16 @@
-use std::num::NonZeroU32;
-use std::time::Duration;
+use std::{num::NonZeroU32, time::Duration};
 
 use eyre::Result;
 use glam::UVec2;
 
-use rose_core::screen_draw::ScreenDraw;
-use rose_core::utils::reload_watcher::ReloadWatcher;
-use violette::{framebuffer::Framebuffer, program::UniformLocation, texture::Texture};
-use violette::texture::{SampleMode, TextureWrap};
+use rose_core::{screen_draw::ScreenDraw, utils::reload_watcher::ReloadWatcher};
+use violette::{
+    framebuffer::Framebuffer,
+    program::UniformLocation,
+    texture::{SampleMode, Texture, TextureWrap},
+};
 
-use crate::postprocess::autoexposure::AutoExposure;
-use crate::postprocess::blur::Blur;
+use crate::postprocess::{autoexposure::AutoExposure, blur::Blur};
 
 mod autoexposure;
 mod blur;
@@ -61,7 +61,10 @@ impl Postprocess {
 
         Ok(Self {
             draw,
-            bloom: Blur::new(size, 5, reload_watcher)?,
+            #[cfg(not(feature = "fast"))]
+            bloom: Blur::new(size, 6, reload_watcher)?,
+            #[cfg(feature = "fast")]
+            bloom: Blur::new(size, 2, reload_watcher)?,
             auto_exposure: AutoExposure::new(size, reload_watcher)?,
             u_texture: draw_texture,
             u_avg_luminance: avg_luminance,
@@ -110,6 +113,7 @@ impl Postprocess {
         &mut self,
         frame: &Framebuffer,
         input: &Texture<[f32; 3]>,
+        bypass_bloom: bool,
         dt: Duration,
     ) -> Result<()> {
         let (width, height) = input.mipmap_size(0).unwrap();
@@ -123,7 +127,7 @@ impl Postprocess {
         {
             let program = self.draw.program();
             program.set_uniform(self.u_avg_luminance, avg_luminance / self.luminance_bias)?;
-            let bloom = self.bloom.process(input, self.bloom_radius)?;
+            let bloom = self.bloom.process(input, self.bloom_radius, bypass_bloom)?;
             program.set_uniform(self.u_texture, input.as_uniform(0)?)?;
             program.set_uniform(self.u_bloom_tex, bloom.as_uniform(1)?)?;
         }

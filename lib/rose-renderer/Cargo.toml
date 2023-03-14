@@ -9,6 +9,7 @@ homepage.workspace = true
 either = "1.8.1"
 float-ord = "0.3.2"
 image = "0.24.5"
+rand = "0.8.5"
 
 violette = { path = "../violette" }
 violette-derive = { path = "../violette-derive" }
@@ -26,3 +27,4 @@ tracing.workspace = true
 [features]
 debug-ui = ["egui", "rose-ui"]
 hot-reload = ["rose-core/hot-reload"]
+fast = []

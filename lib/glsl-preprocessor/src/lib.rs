@@ -1,10 +1,10 @@
+use eyre::{Context, Result};
 use std::{
-    io,
+    collections::HashSet,
     path::{Path, PathBuf},
 };
-use std::collections::HashSet;
 
-use lazy_regex::{Lazy, lazy_regex, Regex};
+use lazy_regex::{lazy_regex, Lazy, Regex};
 
 fn parse_imports(source: &str) -> (String, Vec<PathBuf>) {
     static IMPORT_PRAGMA: Lazy<Regex> = lazy_regex!(r#"#include\s+[<"'](.*)[>"']"#);
@@ -22,18 +22,22 @@ fn parse_imports(source: &str) -> (String, Vec<PathBuf>) {
     (source, paths)
 }
 
-pub fn load_and_parse(path: impl AsRef<Path>) -> io::Result<Vec<(PathBuf, String)>> {
-    let contents = std::fs::read_to_string(path.as_ref())?;
-    let dirname = path.as_ref().parent().unwrap();
+pub fn load_and_parse(path: impl AsRef<Path>) -> Result<Vec<(PathBuf, String)>> {
+    let path = path.as_ref();
+    let contents = std::fs::read_to_string(path)?;
+    let dirname = path.parent().unwrap();
     let mut paths = HashSet::new();
     let (contents, imports) = parse_imports(&contents);
-    Ok(imports.into_iter()
+    Ok(imports
+        .into_iter()
         .map(|p| dirname.join(p))
-        .map(load_and_parse)
+        .map(|p| {
+            load_and_parse(&p).with_context(|| format!("Including {}", p.display()))
+        })
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .flatten()
         .filter(|(p, _)| paths.insert(p.clone()))
-        .chain(std::iter::once((path.as_ref().to_path_buf(), contents)))
+        .chain(std::iter::once((path.to_path_buf(), contents)))
         .collect())
 }

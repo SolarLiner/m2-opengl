@@ -1,3 +1,5 @@
+use std::num::NonZeroU32;
+use std::path::Path;
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -6,10 +8,9 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use std::path::Path;
 
 use eyre::Result;
-use glam::{UVec2, vec2, Vec3, Vec4Swizzles};
+use glam::{vec2, UVec2, Vec3, Vec4Swizzles};
 use tracing::span::EnteredSpan;
 
 use gbuffers::GeometryBuffers;
@@ -18,22 +19,23 @@ use postprocess::Postprocess;
 use rose_core::{
     camera::{Camera, ViewUniform, ViewUniformBuffer},
     light::{GpuLight, Light, LightBuffer},
-    transform::{Transformed, TransformExt},
+    transform::{TransformExt, Transformed},
     utils::{reload_watcher::ReloadWatcher, thread_guard::ThreadGuard},
 };
 use violette::{
-    Cull,
-    framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer}, FrontFace,
+    framebuffer::{ClearBuffer, DepthTestFunction, Framebuffer},
+    Cull, FrontFace,
 };
 
-use crate::{env::Environment, material::MaterialInstance, postprocess::LensFlareParams};
 use crate::bones::Bone;
+use crate::{env::Environment, material::MaterialInstance, postprocess::LensFlareParams};
 
 pub mod bones;
 pub mod env;
 pub mod gbuffers;
 pub mod material;
 pub mod postprocess;
+mod ssao;
 
 pub type InnerMesh = rose_core::mesh::Mesh<material::Vertex>;
 
@@ -54,8 +56,8 @@ impl From<InnerMesh> for Mesh {
 
 impl Mesh {
     pub fn new(
-        vertices: impl IntoIterator<Item=material::Vertex>,
-        indices: impl IntoIterator<Item=u32>,
+        vertices: impl IntoIterator<Item = material::Vertex>,
+        indices: impl IntoIterator<Item = u32>,
     ) -> Result<Self> {
         Ok(Self {
             inner: InnerMesh::new(vertices, indices)?,
@@ -73,10 +75,17 @@ impl ops::Deref for Mesh {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct SsaoInterface {
+    pub kernel_size: i32,
+    pub radius: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct PostprocessInterface {
     pub exposure: f32,
     pub bloom: BloomInterface,
     pub lens_flare: LensFlareParams,
+    pub ssao: SsaoInterface,
 }
 
 impl PostprocessInterface {
@@ -99,9 +108,14 @@ impl PostprocessInterface {
                             .custom_parser(|s| s.parse().ok().map(|ev| 2f64.powf(ev)))
                             .text("Exposure"),
                     )
-                        .labelled_by(exposure_label.id);
+                    .labelled_by(exposure_label.id);
                     ui.end_row();
-
+                });
+        });
+        ui.collapsing("Bloom", |ui| {
+            egui::Grid::new("pp-iface-bloom")
+                .num_columns(2)
+                .show(ui, |ui| {
                     let bloom_size_label = ui.label("Bloom size:");
                     ui.add(
                         egui::Slider::new(&mut self.bloom.size, 0f32..=0.5)
@@ -109,7 +123,7 @@ impl PostprocessInterface {
                             .clamp_to_range(false)
                             .show_value(true),
                     )
-                        .labelled_by(bloom_size_label.id);
+                    .labelled_by(bloom_size_label.id);
                     ui.end_row();
 
                     let bloom_strength_label = ui.label("Bloom strength:");
@@ -122,7 +136,7 @@ impl PostprocessInterface {
                             .custom_parser(|s| s.parse().ok().map(|x: f64| x / 100.))
                             .text("Bloom strength"),
                     )
-                        .labelled_by(bloom_strength_label.id);
+                    .labelled_by(bloom_strength_label.id);
                     ui.end_row();
                 });
         });
@@ -159,6 +173,20 @@ impl PostprocessInterface {
                         .labelled_by(ghost_count_label);
                 });
         });
+        ui.collapsing("SSAO", |ui| {
+            egui::Grid::new("pp-iface-ssao")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    let ks_label = ui.label("Kernel size").id;
+                    ui.add(DragValue::new(&mut self.ssao.kernel_size).clamp_range(0..=64))
+                        .labelled_by(ks_label);
+                    ui.end_row();
+
+                    let r_label = ui.label("Radius").id;
+                    ui.add(DragValue::new(&mut self.ssao.radius).speed(1e-2).clamp_range(0f32..=1f32))
+                        .labelled_by(r_label);
+                });
+        });
     }
 }
 
@@ -168,11 +196,18 @@ pub struct BloomInterface {
     pub strength: f32,
 }
 
+impl BloomInterface {
+    pub fn should_bypass(&self) -> bool {
+        self.strength <= 1e-3
+    }
+}
+
 #[derive(Debug)]
 pub struct Renderer {
     lights: LightBuffer,
     geom_pass: Rc<RefCell<GeometryBuffers>>,
     material: Material,
+    ssao: ssao::Ssao,
     post_process: Postprocess,
     post_process_iface: PostprocessInterface,
     environment: Option<Box<dyn Environment>>,
@@ -190,10 +225,11 @@ pub struct Renderer {
     reload_watcher: ReloadWatcher,
 }
 
-impl Renderer {}
-
 impl Renderer {
     pub fn new(size: UVec2, base_dir: impl AsRef<Path>) -> Result<Self> {
+        let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width");};
+        let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height");};
+
         let reload_watcher = {
             let base_dir = base_dir.as_ref().join("res/shaders");
             ReloadWatcher::new(base_dir)
@@ -208,7 +244,9 @@ impl Renderer {
             lights,
             geom_pass: Rc::new(RefCell::new(geom_pass)),
             material: Material::create(Some(&camera_uniform), &reload_watcher)?,
+            ssao: ssao::Ssao::new(width, height, &reload_watcher)?,
             post_process,
+            #[cfg(not(feature = "fast"))]
             post_process_iface: PostprocessInterface {
                 exposure: 1.5f32.exp2(),
                 bloom: BloomInterface {
@@ -216,6 +254,23 @@ impl Renderer {
                     strength: 4e-2,
                 },
                 lens_flare: LensFlareParams::default(),
+                ssao: SsaoInterface {
+                    kernel_size: 64,
+                    radius: 0.25,
+                },
+            },
+            #[cfg(feature = "fast")]
+            post_process_iface: PostprocessInterface {
+                exposure: 1.5f32.exp2(),
+                bloom: BloomInterface {
+                    size: 1e-3,
+                    strength: 4e-2,
+                },
+                lens_flare: LensFlareParams::default(),
+                ssao: SsaoInterface {
+                    kernel_size: 4,
+                    radius: 0.2,
+                },
             },
             environment: None,
             view_uniform,
@@ -243,9 +298,13 @@ impl Renderer {
 
     #[tracing::instrument]
     pub fn resize(&mut self, size: UVec2) -> Result<()> {
+        let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero width");};
+        let Some(height) = NonZeroU32::new(size.y) else { eyre::bail!("Zero height");};
+
         Framebuffer::viewport(0, 0, size.x as _, size.y as _);
         self.geom_pass.borrow_mut().resize(size)?;
         self.post_process.resize(size)?;
+        self.ssao.resize(width, height)?;
         Ok(())
     }
 
@@ -262,7 +321,8 @@ impl Renderer {
     }
 
     pub fn set_environment<E: Environment>(&mut self, env: impl FnOnce(&ReloadWatcher) -> E) {
-        self.environment.replace(Box::new(env(&self.reload_watcher)));
+        self.environment
+            .replace(Box::new(env(&self.reload_watcher)));
     }
 
     pub fn environment<E: Environment>(&self) -> Option<&E> {
@@ -365,13 +425,22 @@ impl Renderer {
         Framebuffer::clear_color(clear_color.extend(1.).to_array());
         let backbuffer = Framebuffer::backbuffer();
         backbuffer.do_clear(ClearBuffer::COLOR);
+        self.ssao.set_kernel_size(self.post_process_iface.ssao.kernel_size)?;
+        self.ssao.set_radius(self.post_process_iface.ssao.radius)?;
+        let ssao = if geom_pass.needs_ssao() { self.ssao.process(&self.camera_uniform, &geom_pass.pos, &geom_pass.albedo, &geom_pass.normal_coverage)? } else { self.ssao.render_target() };
         let shaded_tex = geom_pass.process(
             &self.camera_uniform,
             &self.lights,
+            ssao,
             self.environment.as_deref_mut(),
         )?;
         Framebuffer::disable_blending();
-        self.post_process.draw(&backbuffer, shaded_tex, dt)?;
+        self.post_process.draw(
+            &backbuffer,
+            shaded_tex,
+            self.post_process_iface.bloom.should_bypass(),
+            dt,
+        )?;
         self.last_render_duration.replace(render_start.elapsed());
         self.last_scene_duration
             .replace(self.begin_scene_at.take().unwrap().elapsed());
@@ -475,7 +544,7 @@ impl Renderer {
                         3 => geom_pass.debug_rough_metal(ui.framebuffer()),
                         _ => Ok(()),
                     }
-                        .is_ok();
+                    .is_ok();
                 })),
             });
         });

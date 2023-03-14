@@ -30,12 +30,12 @@ pub struct GeometryBuffers {
     deferred_fbo: Framebuffer,
     output_fbo: Framebuffer,
     size: UVec2,
-    pos: Texture<[f32; 3]>,
-    albedo: Texture<[f32; 3]>,
-    normal_coverage: Texture<[f32; 4]>,
-    rough_metal: Texture<[f32; 2]>,
+    pub(crate) pos: Texture<[f32; 3]>,
+    pub(crate) albedo: Texture<[f32; 3]>,
+    pub(crate) normal_coverage: Texture<[f32; 4]>,
+    pub(crate) rough_metal: Texture<[f32; 2]>,
     out_color: Texture<[f32; 3]>,
-    out_depth: Texture<DepthStencil<f32, ()>>,
+    pub(crate) out_depth: Texture<DepthStencil<f32, ()>>,
     uniform_frame_pos: UniformLocation,
     uniform_frame_albedo: UniformLocation,
     uniform_frame_normal: UniformLocation,
@@ -43,6 +43,7 @@ pub struct GeometryBuffers {
     uniform_block_light: UniformBlockIndex,
     uniform_block_view: UniformBlockIndex,
     debug_uniform_in_texture: UniformLocation,
+    uniform_frame_ssao: UniformLocation,
 }
 
 impl GeometryBuffers {
@@ -104,6 +105,7 @@ impl GeometryBuffers {
         let uniform_frame_albedo = pass_program.uniform("frame_albedo");
         let uniform_frame_normal = pass_program.uniform("frame_normal");
         let uniform_frame_rough_metal = pass_program.uniform("frame_rough_metal");
+        let uniform_frame_ssao = pass_program.uniform("frame_ssao");
         let uniform_block_light = pass_program.uniform_block("Light");
         let uniform_block_view = pass_program.uniform_block("View");
         drop(pass_program);
@@ -125,6 +127,7 @@ impl GeometryBuffers {
             uniform_frame_rough_metal,
             uniform_block_light,
             uniform_block_view,
+            uniform_frame_ssao,
             screen_pass,
             debug_texture,
         })
@@ -147,6 +150,10 @@ impl GeometryBuffers {
         material.draw_meshes(&self.deferred_fbo, instance, meshes)?;
 
         Ok(())
+    }
+
+    pub fn needs_ssao(&self) -> bool {
+        self.uniform_frame_ssao.is_used()
     }
 
     pub fn debug_position(&self, frame: &Framebuffer) -> Result<()> {
@@ -194,6 +201,7 @@ impl GeometryBuffers {
         &self,
         cam_uniform: &ViewUniformBuffer,
         lights: &LightBuffer,
+        ssao: &Texture<f32>,
         mut env: Option<&mut dyn Environment>,
     ) -> Result<&Texture<[f32; 3]>> {
         Framebuffer::disable_blending();
@@ -205,6 +213,7 @@ impl GeometryBuffers {
                 albedo: &self.albedo,
                 normal_coverage: &self.normal_coverage,
                 roughness_metal: &self.rough_metal,
+                ssao,
             };
             env.draw(&self.output_fbo, cam_uniform, mat_info)?;
         }
@@ -217,12 +226,15 @@ impl GeometryBuffers {
         let unit_albedo = self.albedo.as_uniform(1)?;
         let unit_normal = self.normal_coverage.as_uniform(2)?;
         let unit_rough_metal = self.rough_metal.as_uniform(3)?;
+        let unit_ssao = ssao.as_uniform(4)?;
         {
             let pass_program = self.screen_pass.program();
+            pass_program.bind_block(&cam_uniform.slice(0..=0), self.uniform_block_view, 0)?;
             pass_program.set_uniform(self.uniform_frame_pos, unit_pos)?;
             pass_program.set_uniform(self.uniform_frame_albedo, unit_albedo)?;
             pass_program.set_uniform(self.uniform_frame_normal, unit_normal)?;
             pass_program.set_uniform(self.uniform_frame_rough_metal, unit_rough_metal)?;
+            pass_program.set_uniform(self.uniform_frame_ssao, unit_ssao)?;
         }
         Framebuffer::enable_blending(Blend::One, Blend::One);
         for light_ix in 0..lights.len() {

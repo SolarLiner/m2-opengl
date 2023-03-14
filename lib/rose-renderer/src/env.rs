@@ -1,17 +1,17 @@
-use std::{any::Any, fmt, path::Path};
 use std::num::NonZeroU32;
+use std::{any::Any, fmt, path::Path};
 
 use eyre::{Context, Report, Result};
 use glam::{vec3, Vec3};
 
-use rose_core::{camera::ViewUniformBuffer, screen_draw::ScreenDraw};
 use rose_core::utils::reload_watcher::ReloadWatcher;
+use rose_core::{camera::ViewUniformBuffer, screen_draw::ScreenDraw};
+use violette::texture::Dimension;
 use violette::{
     framebuffer::Framebuffer,
     program::{UniformBlockIndex, UniformLocation},
     texture::{SampleMode, Texture, TextureWrap},
 };
-use violette::texture::Dimension;
 
 #[derive(Debug, Copy, Clone)]
 pub struct MaterialInfo<'a> {
@@ -19,6 +19,7 @@ pub struct MaterialInfo<'a> {
     pub albedo: &'a Texture<[f32; 3]>,
     pub normal_coverage: &'a Texture<[f32; 4]>,
     pub roughness_metal: &'a Texture<[f32; 2]>,
+    pub ssao: &'a Texture<f32>,
 }
 
 pub trait Environment: fmt::Debug + Any {
@@ -149,6 +150,7 @@ pub struct EnvironmentMap {
     u_albedo: UniformLocation,
     u_normal: UniformLocation,
     u_rough_metal: UniformLocation,
+    u_ssao: UniformLocation,
     u_specular: UniformLocation,
 }
 
@@ -168,6 +170,7 @@ impl Environment for EnvironmentMap {
             draw.set_uniform(self.u_sampler, self.map.as_uniform(3)?)?;
             draw.set_uniform(self.u_irradiance, self.irradiance_texture.as_uniform(4)?)?;
             draw.set_uniform(self.u_specular, self.specular_ibl.as_uniform(5)?)?;
+            draw.set_uniform(self.u_ssao, mat_info.ssao.as_uniform(2)?)?;
         }
         self.draw.draw(frame)?;
         Ok(())
@@ -203,21 +206,19 @@ impl EnvironmentMap {
         let u_normal = draw.uniform("frame_normal");
         let u_rough_metal = draw.uniform("frame_rough_metal");
         let u_specular = draw.uniform("specular_map");
+        let u_ssao = draw.uniform("frame_ssao");
+        #[cfg(feature = "fast")]
+        draw.set_uniform(draw.uniform("anglular_delta"), 2e-2)?;
         drop(draw);
 
-        let irradiance_texture = Self::build_irradiance_texture(
-            &map,
-            reload_watcher,
-            NonZeroU32::new(256).unwrap(),
-            NonZeroU32::new(128).unwrap(),
-        )?;
+        #[cfg(not(feature = "fast"))]
+        let (w, h) = (NonZeroU32::new(256).unwrap(), NonZeroU32::new(128).unwrap());
+        #[cfg(feature = "fast")]
+        let (w, h) = (NonZeroU32::new(128).unwrap(), NonZeroU32::new(64).unwrap());
 
-        let specular_ibl = Self::build_specular_ibl(
-            &map,
-            reload_watcher,
-            NonZeroU32::new(256).unwrap(),
-            NonZeroU32::new(128).unwrap(),
-        )?;
+        let irradiance_texture = Self::build_irradiance_texture(&map, reload_watcher, w, h)?;
+
+        let specular_ibl = Self::build_specular_ibl(&map, reload_watcher, w, h)?;
 
         map.wrap_s(TextureWrap::Repeat)?;
         map.wrap_t(TextureWrap::Repeat)?;
@@ -235,6 +236,7 @@ impl EnvironmentMap {
             u_normal,
             u_rough_metal,
             u_specular,
+            u_ssao,
         })
     }
 
@@ -278,7 +280,9 @@ impl EnvironmentMap {
 
         let specibl_fbo = Framebuffer::new();
         let draw = ScreenDraw::load(
-            reload_watcher.base_path().join("screen/env/specular_ibl.glsl"),
+            reload_watcher
+                .base_path()
+                .join("screen/env/specular_ibl.glsl"),
             reload_watcher,
         )?;
         let u_env_map = draw.program().uniform("env_map");
@@ -292,8 +296,7 @@ impl EnvironmentMap {
             Framebuffer::viewport(0, 0, mw.get() as _, mh.get() as _);
             let roughness = mip as f32 / (mipmaps as f32 - 1.);
             draw.program().set_uniform(u_roughness, roughness)?;
-            draw.program()
-                .set_uniform(u_env_map, map.as_uniform(0)?)?;
+            draw.program().set_uniform(u_env_map, map.as_uniform(0)?)?;
             draw.draw(&specibl_fbo)?;
         }
 

@@ -1,0 +1,42 @@
+4294967296:
+  alloc::string::String: Point light
+  rose_core::transform::Transform:
+    position:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    scale:
+    - 1.0
+    - 1.0
+    - 1.0
+  rose_ecs::components::Light:
+    color:
+    - 1.0
+    - 1.0
+    - 1.0
+    kind: Directional
+    power: 1.0
+  rose_ecs::components::Active: null
+4294967297:
+  rose_core::transform::Transform:
+    position:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    scale:
+    - 1.0
+    - 1.0
+    - 1.0
+  rose_ecs::components::Active: null
+  rose_ecs::assets::material::Material: materials.white_shiny
+  rose_ecs::assets::mesh::MeshAsset: models.suzanne

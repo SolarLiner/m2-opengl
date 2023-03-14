@@ -1,202 +1,68 @@
-4294967297:
-  rose_ecs::components::Active: null
-  rose_core::transform::Transform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
-  rose_ecs::systems::hierarchy::Parent: 4294967296
-  rose_ecs::systems::hierarchy::GlobalTransform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
-  alloc::string::String: prim#000
-  rose_ecs::assets::material::Material: prim.000.material
-  rose_ecs::assets::mesh::MeshAsset: mesh.000.000
-4294967300:
-  rose_ecs::components::Active: null
-  rose_core::transform::Transform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
-  rose_ecs::systems::hierarchy::Parent: 4294967296
-  rose_ecs::systems::hierarchy::GlobalTransform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
-  alloc::string::String: prim#003
-  rose_ecs::assets::material::Material: prim.003.material
-  rose_ecs::assets::mesh::MeshAsset: mesh.000.003
-4294967298:
-  rose_ecs::components::Active: null
-  rose_core::transform::Transform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
-  rose_ecs::systems::hierarchy::Parent: 4294967296
-  rose_ecs::systems::hierarchy::GlobalTransform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
-  alloc::string::String: prim#001
-  rose_ecs::assets::material::Material: prim.001.material
-  rose_ecs::assets::mesh::MeshAsset: mesh.000.001
-4294967301:
-  rose_ecs::components::Active: null
-  rose_core::transform::Transform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
-  rose_ecs::systems::hierarchy::Parent: 4294967296
-  rose_ecs::systems::hierarchy::GlobalTransform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
-  alloc::string::String: prim#004
-  rose_ecs::assets::material::Material: prim.004.material
-4294967299:
-  rose_ecs::components::Active: null
-  rose_core::transform::Transform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
-  rose_ecs::systems::hierarchy::Parent: 4294967296
-  rose_ecs::systems::hierarchy::GlobalTransform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
-  alloc::string::String: prim#002
-  rose_ecs::assets::material::Material: prim.002.material
 4294967296:
-  rose_core::transform::Transform:
-    position:
-      - 0.0
-      - 0.0
-      - 0.0
-    rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
-    scale:
-      - 1.0
-      - 1.0
-      - 1.0
   rose_ecs::systems::hierarchy::GlobalTransform:
     position:
-      - 0.0
-      - 0.0
-      - 0.0
+    - 0.0
+    - 0.028335653245449066
+    - 0.0
     rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
     scale:
-      - 1.0
-      - 1.0
-      - 1.0
-4294967302:
+    - 1.0
+    - 1.0
+    - 1.0
+  alloc::string::String: marble_bust_01
+  rose_core::transform::Transform:
+    position:
+    - 0.0
+    - 0.028335653245449066
+    - 0.0
+    rotation:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    scale:
+    - 1.0
+    - 1.0
+    - 1.0
+4294967297:
+  rose_ecs::systems::hierarchy::Parent: 4294967296
+  rose_ecs::systems::hierarchy::GlobalTransform:
+    position:
+    - 0.0
+    - 0.028335653245449066
+    - 0.0
+    rotation:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    scale:
+    - 1.0
+    - 1.0
+    - 1.0
+  alloc::string::String: prim#000
+  rose_core::transform::Transform:
+    position:
+    - 0.0
+    - 0.0
+    - 0.0
+    rotation:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
+    scale:
+    - 1.0
+    - 1.0
+    - 1.0
   rose_ecs::components::Active: null
+  rose_ecs::assets::mesh::MeshAsset: marble_bust_01.000
+  rose_ecs::assets::material::Material: prim.000.material
+4294967298:
   rose_ecs::components::CameraParams:
     fovy: 45.0
     zrange:
@@ -204,24 +70,25 @@
       start: 0.0010000000474974513
   rose_core::transform::Transform:
     position:
-      - 0.0
-      - 0.0
-      - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
     rotation:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 1.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 1.0
     scale:
-      - 1.0
-      - 1.0
-      - 1.0
+    - 1.0
+    - 1.0
+    - 1.0
+  rose_ecs::components::Active: null
   rose_ecs::components::PanOrbitCamera:
     focus:
-      - 0.0
-      - 0.0
-      - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
     radius: 3.0
     target_rotation:
-      - 0.0
-      - 0.0
+    - 0.0
+    - 0.0

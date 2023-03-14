@@ -27,7 +27,12 @@ impl Blur {
     pub fn new(size: UVec2, mip_chain_len: usize, reload_watcher: &ReloadWatcher) -> Result<Self> {
         let sizef = size.as_vec2();
         let max_chain_len = sizef.x.min(sizef.y).log2().floor() as usize - 1;
-        eyre::ensure!(mip_chain_len <= max_chain_len, "Cannot construct a chain longer than {} for  {}", max_chain_len, size);
+        eyre::ensure!(
+            mip_chain_len <= max_chain_len,
+            "Cannot construct a chain longer than {} for  {}",
+            max_chain_len,
+            size
+        );
         let Some(width) = NonZeroU32::new(size.x) else { eyre::bail!("Zero size"); };
         let Some(height) = NonZeroU32::new(size.x) else { eyre::bail!("Zero size"); };
         let depth = NonZeroU32::new(1).unwrap();
@@ -74,11 +79,13 @@ impl Blur {
         Ok(this)
     }
 
-    pub fn process(&self, texture: &Texture<[f32; 3]>, radius: f32) -> Result<&Texture<[f32; 3]>> {
-        Framebuffer::disable_depth_test();
-        Framebuffer::disable_blending();
-        self.render_downsample(texture)?;
-        self.render_upsample(radius)?;
+    pub fn process(&self, texture: &Texture<[f32; 3]>, radius: f32, bypass: bool) -> Result<&Texture<[f32; 3]>> {
+        if radius >= 1e-4 && !bypass {
+            Framebuffer::disable_depth_test();
+            Framebuffer::disable_blending();
+            self.render_downsample(texture)?;
+            self.render_upsample(radius)?;
+        }
         Ok(self.mip_chain.first().unwrap())
     }
 
@@ -108,7 +115,10 @@ impl Blur {
             let size = mip.size_vec().truncate();
             Framebuffer::viewport(0, 0, size.x as _, size.y as _);
             self.fbo.attach_color(0, mip.mipmap(0).unwrap())?;
-            self.draw_downsample.program().set_uniform(self.draw_downsample.program().uniform("first_mip"), first_mip)?;
+            self.draw_downsample.program().set_uniform(
+                self.draw_downsample.program().uniform("first_mip"),
+                first_mip,
+            )?;
             self.draw_downsample.draw(&self.fbo)?;
 
             self.draw_downsample

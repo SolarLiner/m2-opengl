@@ -7,6 +7,7 @@ in vec2 v_uv;
 uniform sampler2D frame_albedo;
 uniform sampler2D frame_normal;
 uniform sampler2D frame_rough_metal;
+uniform sampler2D frame_ssao;
 uniform sampler2D env_map;
 uniform sampler2D irradiance_map;
 uniform sampler2D specular_map;
@@ -30,13 +31,14 @@ vec3 background() {
 vec3 illuminate(vec3 normal) {
     vec3 albedo = texture(frame_albedo, v_uv).rgb;
     vec2 rough_metal = texture(frame_rough_metal, v_uv).rg;
+    float occlusion = texture(frame_ssao, v_uv).r;
 
     vec3 view = get_ray_dir();
     vec3 light = reflect(view, normal);
     vec3 diffuse_color = texture(irradiance_map, normal_to_polar(normal)).rgb;
     vec3 specular_color = textureLod(specular_map, normal_to_polar(light), (rough_metal.r)*10).rgb;
 
-    return albedo * ((1 - rough_metal.g)*diffuse_color + specular_color);
+    return occlusion * albedo * ((1 - rough_metal.g)*diffuse_color + specular_color);
 }
 
 void main() {

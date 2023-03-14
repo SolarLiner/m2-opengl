@@ -1543,6 +1543,7 @@ dependencies = [
 name = "glsl-preprocessor"
 version = "0.1.0"
 dependencies = [
+ "eyre",
  "insta",
  "lazy-regex",
 ]
@@ -2915,6 +2916,7 @@ dependencies = [
  "glam",
  "glsl-preprocessor",
  "image",
+ "rand",
  "rose-core",
  "rose-ui",
  "tracing",
