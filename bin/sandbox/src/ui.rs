@@ -8,8 +8,8 @@ use std::{
 
 use color_eyre::owo_colors::OwoColorize;
 use egui::{
-    Align, Color32, Context, DragValue, Grid,
-    Layout, PointerButton, RichText, Sense, TextEdit, Ui, WidgetText,
+    Align, Color32, Context, DragValue, Grid, Layout, PointerButton, RichText, Sense, TextEdit, Ui,
+    WidgetText,
 };
 use egui_dock::{NodeIndex, TabViewer, Tree};
 use egui_gizmo::{Gizmo, GizmoMode};
@@ -236,14 +236,15 @@ fn scene_hierarchy_node(
                 let mut q = world.query::<&String>();
                 let mut search = search_key.borrow_mut();
                 ui.text_edit_singleline(&mut *search);
-                egui::ScrollArea::new([false, true])
-                    .show(ui, |ui| {
-                        for (potential_parent, name) in q.iter() {
-                            if (search.is_empty() || name.contains(search.as_str())) && ui.small_button(name.as_str()).clicked() {
-                                cmd.insert_one(entity.entity(), Parent(potential_parent));
-                            }
+                egui::ScrollArea::new([false, true]).show(ui, |ui| {
+                    for (potential_parent, name) in q.iter() {
+                        if (search.is_empty() || name.contains(search.as_str()))
+                            && ui.small_button(name.as_str()).clicked()
+                        {
+                            cmd.insert_one(entity.entity(), Parent(potential_parent));
                         }
-                    });
+                    }
+                });
             });
         });
         if ui.small_button("Add child entity").clicked() {

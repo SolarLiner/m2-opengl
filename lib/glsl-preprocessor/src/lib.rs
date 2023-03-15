@@ -1,10 +1,10 @@
+use std::collections::HashSet;
 use std::{
     io,
     path::{Path, PathBuf},
 };
-use std::collections::HashSet;
 
-use lazy_regex::{Lazy, lazy_regex, Regex};
+use lazy_regex::{lazy_regex, Lazy, Regex};
 
 fn parse_imports(source: &str) -> (String, Vec<PathBuf>) {
     static IMPORT_PRAGMA: Lazy<Regex> = lazy_regex!(r#"#include\s+[<"'](.*)[>"']"#);
@@ -27,7 +27,8 @@ pub fn load_and_parse(path: impl AsRef<Path>) -> io::Result<Vec<(PathBuf, String
     let dirname = path.as_ref().parent().unwrap();
     let mut paths = HashSet::new();
     let (contents, imports) = parse_imports(&contents);
-    Ok(imports.into_iter()
+    Ok(imports
+        .into_iter()
         .map(|p| dirname.join(p))
         .map(load_and_parse)
         .collect::<Result<Vec<_>, _>>()?

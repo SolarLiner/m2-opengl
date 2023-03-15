@@ -34,10 +34,15 @@ impl Bone {
         self.children.borrow_mut().push(child);
     }
 
-    pub fn traverse<'rc>(self: &'rc Rc<Self>) -> Box<dyn 'rc + Iterator<Item=Rc<Self>>> {
+    pub fn traverse<'rc>(self: &'rc Rc<Self>) -> Box<dyn 'rc + Iterator<Item = Rc<Self>>> {
         Box::new(
-            std::iter::once(self.clone())
-                .chain(self.children.borrow().iter().flat_map(|child| child.traverse()).collect::<Vec<_>>()),
+            std::iter::once(self.clone()).chain(
+                self.children
+                    .borrow()
+                    .iter()
+                    .flat_map(|child| child.traverse())
+                    .collect::<Vec<_>>(),
+            ),
         )
     }
 
@@ -45,9 +50,15 @@ impl Bone {
         self.local_transform.set(update(self.local_transform.get()));
     }
 
-    pub fn update_buffer(self: &Rc<Self>, buffer: &mut UniformBuffer<Std140GpuBone>) -> eyre::Result<()> {
-        let gpu_data = self.traverse().map(|bone| bone.as_std140()).collect::<Vec<_>>();
-        tracing::debug!(message="Updating bone data", len=gpu_data.len());
+    pub fn update_buffer(
+        self: &Rc<Self>,
+        buffer: &mut UniformBuffer<Std140GpuBone>,
+    ) -> eyre::Result<()> {
+        let gpu_data = self
+            .traverse()
+            .map(|bone| bone.as_std140())
+            .collect::<Vec<_>>();
+        tracing::debug!(message = "Updating bone data", len = gpu_data.len());
         buffer.set(&gpu_data, BufferUsageHint::Stream)?;
         Ok(())
     }

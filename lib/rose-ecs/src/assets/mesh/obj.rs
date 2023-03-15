@@ -1,6 +1,6 @@
 use std::{borrow::Cow, io::Cursor};
 
-use assets_manager::{BoxedError, loader::Loader};
+use assets_manager::{loader::Loader, BoxedError};
 use glam::Vec3;
 
 use rose_renderer::material::Vertex;
@@ -76,7 +76,13 @@ impl Loader<ObjMesh> for WavefrontLoader {
                         Vertex::new(pos, normal, uv)
                     })
                     .collect::<Vec<_>>();
-                (name.into(), MeshAsset { vertices: vertex, indices })
+                (
+                    name.into(),
+                    MeshAsset {
+                        vertices: vertex,
+                        indices,
+                    },
+                )
             })
             .collect::<_>();
         Ok(ObjMesh {

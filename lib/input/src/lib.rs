@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 use std::hash::Hash;
 
-
-use glam::{Vec3, vec3};
+use glam::{vec3, Vec3};
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, VirtualKeyCode, WindowEvent};
 
 #[derive(Debug, Clone)]
@@ -111,11 +110,11 @@ impl Input {
             },
             WindowEvent::KeyboardInput {
                 input:
-                winit::event::KeyboardInput {
-                    state,
-                    virtual_keycode: Some(vk),
-                    ..
-                },
+                    winit::event::KeyboardInput {
+                        state,
+                        virtual_keycode: Some(vk),
+                        ..
+                    },
                 ..
             } => match state {
                 ElementState::Pressed => self.keyboard.state.set(vk),

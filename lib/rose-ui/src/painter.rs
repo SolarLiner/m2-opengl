@@ -1,17 +1,15 @@
-use std::{collections::HashMap, num::NonZeroU32};
 use std::path::Path;
+use std::{collections::HashMap, num::NonZeroU32};
 
 use bytemuck::{offset_of, Pod, Zeroable};
 use egui::epaint::{self, Primitive};
 use eyre::Result;
-use glam::{IVec2, vec2, Vec2};
+use glam::{vec2, IVec2, Vec2};
 use winit::dpi::PhysicalSize;
 
-use rose_core::{
-    mesh::Mesh,
-    utils::thread_guard::ThreadGuard,
-};
 use rose_core::utils::reload_watcher::{ReloadFileProxy, ReloadWatcher};
+use rose_core::{mesh::Mesh, utils::thread_guard::ThreadGuard};
+use violette::framebuffer::BlendFunction;
 use violette::{
     framebuffer::{Blend, Framebuffer},
     gl,
@@ -19,7 +17,6 @@ use violette::{
     texture::Texture,
     vertex::{VertexAttributes, VertexDesc},
 };
-use violette::framebuffer::BlendFunction;
 
 pub type UiTexture = Texture<f32>;
 
@@ -62,7 +59,8 @@ impl UiImpl {
     pub fn new(reload_watcher: &ReloadWatcher) -> Result<Self> {
         let vert_shader_path = reload_watcher.base_path().join("ui/ui.vert.glsl");
         let frag_shader_path = reload_watcher.base_path().join("ui/ui.frag.glsl");
-        let (program, uniform_screen_size, uniform_sampler) = Self::create_program(&vert_shader_path, &frag_shader_path)?;
+        let (program, uniform_screen_size, uniform_sampler) =
+            Self::create_program(&vert_shader_path, &frag_shader_path)?;
         let mesh = Mesh::empty()?;
         Ok(Self {
             program,
@@ -72,11 +70,15 @@ impl UiImpl {
             textures: HashMap::new(),
             tex_trash_bin: Vec::default(),
             current_fbo: None,
-            reload_watcher: reload_watcher.proxy([vert_shader_path.as_path(), frag_shader_path.as_path()]),
+            reload_watcher: reload_watcher
+                .proxy([vert_shader_path.as_path(), frag_shader_path.as_path()]),
         })
     }
 
-    fn create_program(vert_shader_path: &Path, frag_shader_path: &Path) -> Result<(Program, UniformLocation, UniformLocation)> {
+    fn create_program(
+        vert_shader_path: &Path,
+        frag_shader_path: &Path,
+    ) -> Result<(Program, UniformLocation, UniformLocation)> {
         let program = Program::load(
             vert_shader_path,
             Some(&frag_shader_path),

@@ -2,12 +2,13 @@ use std::marker::PhantomData;
 
 use bytemuck::Pod;
 use eyre::{Context, Result};
-use glam::{vec2, Vec2, vec3, Vec3};
+use glam::{vec2, vec3, Vec2, Vec3};
 
 use violette::{
-    buffer::{ArrayBuffer, ElementBuffer, Buffer},
+    buffer::{ArrayBuffer, Buffer, ElementBuffer},
     framebuffer::Framebuffer,
-    program::Program, vertex::{DrawMode, VertexArray, VertexAttributes},
+    program::Program,
+    vertex::{DrawMode, VertexArray, VertexAttributes},
 };
 
 #[derive(Debug)]

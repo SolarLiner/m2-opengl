@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use crevice::std140::AsStd140;
 use eyre::Result;
-use glam::{Mat4, Vec2, Vec3, vec4, Vec4};
+use glam::{vec4, Mat4, Vec2, Vec3, Vec4};
 
 use violette::buffer::{BufferUsageHint, UniformBuffer};
 
@@ -63,7 +63,8 @@ pub struct ViewUniform {
 
 impl ViewUniform {
     pub fn update_from_camera(&mut self, camera: &Camera) {
-        self.mat_view = Mat4::from_rotation_translation(camera.transform.rotation, camera.transform.position);
+        self.mat_view =
+            Mat4::from_rotation_translation(camera.transform.rotation, camera.transform.position);
         self.mat_proj = camera.projection.matrix();
         self.inv_view = self.mat_view.inverse();
         self.inv_proj = self.mat_proj.inverse();

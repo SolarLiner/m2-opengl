@@ -18,16 +18,16 @@ use rose_platform::PhysicalSize;
 use crate::assets::{Material, MeshAsset};
 use crate::components::{Active, CameraParams, Inactive, Light, PanOrbitCamera};
 use crate::scene::Scene;
-use crate::systems::{input::InputSystem, render::RenderSystem};
 use crate::systems::hierarchy::{HierarchicalSystem, Parent};
 use crate::systems::PersistenceSystem;
+use crate::systems::{input::InputSystem, render::RenderSystem};
 
 pub mod assets;
 pub mod components;
-pub mod scene;
-pub mod systems;
 pub mod load_gltf;
 pub mod prelude;
+pub mod scene;
+pub mod systems;
 
 pub struct CoreSystems {
     pub render: RenderSystem,
@@ -74,8 +74,7 @@ impl CoreSystems {
         &self.input.input
     }
 
-    pub fn begin_frame(&mut self) {
-    }
+    pub fn begin_frame(&mut self) {}
 
     pub fn end_frame(&mut self, scene: Option<&mut Scene>, dt: Duration) -> Result<()> {
         if let Some(scene) = scene {

@@ -21,7 +21,11 @@ use rose_core::{
 use rose_platform::PhysicalSize;
 use rose_renderer::{material::MaterialInstance, DrawMaterial, Mesh, Renderer};
 
-use crate::{systems::hierarchy::GlobalTransform, assets::*, components::{Light as LightComponent, *}};
+use crate::{
+    assets::*,
+    components::{Light as LightComponent, *},
+    systems::hierarchy::GlobalTransform,
+};
 
 pub struct CustomMaterial<M>(ThreadGuard<Rc<M>>);
 

@@ -4,7 +4,7 @@ use std::f32::consts::PI;
 
 use assets_manager::Handle;
 use egui::{DragValue, Grid, RichText, Ui};
-use glam::{EulerRot, Quat, Vec3, vec3};
+use glam::{vec3, EulerRot, Quat, Vec3};
 use hecs::{CommandBuffer, Component, EntityRef};
 
 use rose_core::transform::Transform;
@@ -16,8 +16,8 @@ pub trait ComponentUi: NamedComponent + Component {
 }
 
 impl<A> ComponentUi for Handle<'static, A>
-    where
-        Self: NamedComponent,
+where
+    Self: NamedComponent,
 {
     fn ui(&mut self, ui: &mut Ui) {
         Grid::new("material-handle").num_columns(2).show(ui, |ui| {
@@ -37,8 +37,8 @@ impl ComponentUi for Transform {
                 ui.add(DragValue::new(&mut v.y).prefix("Y: ").suffix(" m"));
                 ui.add(DragValue::new(&mut v.z).prefix("Z: ").suffix(" m"));
             })
-                .response
-                .labelled_by(pos_label);
+            .response
+            .labelled_by(pos_label);
         };
         let ui_rot3 = |ui: &mut Ui, v: &mut Quat| {
             let (a, b, c) = v.to_euler(EulerRot::ZYX);
@@ -49,8 +49,8 @@ impl ComponentUi for Transform {
                 ui.add(DragValue::new(&mut rot_v3.y).prefix("Y: ").suffix(" °"));
                 ui.add(DragValue::new(&mut rot_v3.z).prefix("Z: ").suffix(" °"));
             })
-                .response
-                .labelled_by(pos_label);
+            .response
+            .labelled_by(pos_label);
             let rot_v3 = rot_v3 * PI / 180.;
             let [b, c, a] = rot_v3.to_array();
             *v = Quat::from_euler(EulerRot::ZYX, a, b, c);
@@ -64,8 +64,8 @@ impl ComponentUi for Transform {
                 ui.add(DragValue::new(&mut v.z).prefix("Z: ").suffix(" %"));
                 *v /= 100.;
             })
-                .response
-                .labelled_by(pos_label);
+            .response
+            .labelled_by(pos_label);
         };
 
         Grid::new("selected-entity-transform")
@@ -97,7 +97,8 @@ impl UiSystem {
     }
 
     pub fn register_component<C: ComponentUi>(&mut self) -> &mut Self {
-        self.component_ui_registry.insert(TypeId::of::<C>(), &component_ui::<C>);
+        self.component_ui_registry
+            .insert(TypeId::of::<C>(), &component_ui::<C>);
         self
     }
 
@@ -112,7 +113,12 @@ impl UiSystem {
         }
     }
 
-    pub fn spawn_component_popup(&self, ui: &mut Ui, entity: EntityRef, cmdbuf: &mut CommandBuffer) {
+    pub fn spawn_component_popup(
+        &self,
+        ui: &mut Ui,
+        entity: EntityRef,
+        cmdbuf: &mut CommandBuffer,
+    ) {
         for spawn_ui in &self.spawner_registry {
             spawn_ui(ui, entity, cmdbuf);
         }
@@ -131,7 +137,8 @@ pub fn component_ui<T: ComponentUi>(ui: &mut Ui, entity: EntityRef, cmd: &mut Co
     }
 }
 
-pub type DynComponentUi = &'static (dyn Send + Sync + Fn(&mut Ui, EntityRef<'_>, &mut CommandBuffer));
+pub type DynComponentUi =
+    &'static (dyn Send + Sync + Fn(&mut Ui, EntityRef<'_>, &mut CommandBuffer));
 
 pub fn insert_component<C: NamedComponent + Default>(
     ui: &mut Ui,
@@ -144,4 +151,4 @@ pub fn insert_component<C: NamedComponent + Default>(
 }
 
 pub type DynInsertComponent =
-&'static (dyn Fn(&mut Ui, EntityRef<'_>, &mut CommandBuffer) + Send + Sync);
+    &'static (dyn Fn(&mut Ui, EntityRef<'_>, &mut CommandBuffer) + Send + Sync);

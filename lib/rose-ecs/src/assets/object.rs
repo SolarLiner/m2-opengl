@@ -1,8 +1,8 @@
 use assets_manager::{
-    AnyCache, Asset, BoxedError, Compound, Handle, loader::TomlLoader, SharedString,
+    loader::TomlLoader, AnyCache, Asset, BoxedError, Compound, Handle, SharedString,
 };
 use eyre::WrapErr;
-use glam::{EulerRot, Quat, vec3, Vec3};
+use glam::{vec3, EulerRot, Quat, Vec3};
 use hecs::Bundle;
 use serde::{Deserialize, Serialize};
 

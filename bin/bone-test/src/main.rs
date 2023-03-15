@@ -19,7 +19,12 @@ impl Application for BoneTestApp {
         let mut mesh = MeshBuilder::new(Vertex::new).uv_sphere(1., 12, 24);
         for vert in mesh.vertices.iter_mut() {
             vert.bones_ix = bones_ix.as_ivec4();
-            vert.bones_weights = vec4(0., vert.position.y * 0.5 + 0.5, 0.5 - 0.5 * vert.position.y, 0.);
+            vert.bones_weights = vec4(
+                0.,
+                vert.position.y * 0.5 + 0.5,
+                0.5 - 0.5 * vert.position.y,
+                0.,
+            );
         }
         let mut mesh: rose::renderer::Mesh = mesh.upload()?.into();
         let root_bone = Bone::new(Mat4::IDENTITY);

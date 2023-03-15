@@ -1,8 +1,11 @@
 use std::{rc::Rc, time::Duration};
 
-use rose::{prelude::*, core::light::Light, renderer::{Renderer, Mesh}};
-
 use camera_controller::OrbitCameraController;
+use rose::{
+    core::light::Light,
+    prelude::*,
+    renderer::{Mesh, Renderer},
+};
 use violette::texture::Texture;
 
 mod camera_controller;
@@ -29,7 +32,10 @@ impl Application for App {
         let base_dir = std::env::current_dir().unwrap();
         let _sizef = Vec2::from_array(size.into());
         let size = UVec2::from_array(size.cast::<u32>().into());
-        let mesh = MeshBuilder::new(Vertex::new).uv_sphere(1.0, 32, 64).upload()?.into();
+        let mesh = MeshBuilder::new(Vertex::new)
+            .uv_sphere(1.0, 32, 64)
+            .upload()?
+            .into();
         let mut material = MaterialInstance::create(
             Texture::load_rgb32f("assets/textures/moon_color.png")?,
             Texture::load_rgb32f("assets/textures/moon_normal.png")?,
@@ -106,12 +112,10 @@ impl Application for App {
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => match delta {
-                MouseScrollDelta::LineDelta(_, y) => {
-                    self.camera_controller.scroll(&self.camera, y)
+                MouseScrollDelta::LineDelta(_, y) => self.camera_controller.scroll(&self.camera, y),
+                MouseScrollDelta::PixelDelta(delta) => {
+                    self.camera_controller.scroll(&self.camera, delta.y as _)
                 }
-                MouseScrollDelta::PixelDelta(delta) => self
-                    .camera_controller
-                    .scroll(&self.camera, delta.y as _),
             },
             WindowEvent::ModifiersChanged(state) => {
                 self.ctrl_pressed = state.contains(ModifiersState::CTRL)

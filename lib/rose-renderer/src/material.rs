@@ -1,4 +1,4 @@
-use std::{sync::RwLock};
+use std::sync::RwLock;
 
 use crevice::std140::AsStd140;
 use eyre::{Context, Result};
@@ -19,8 +19,8 @@ use violette::{
 };
 use violette_derive::VertexAttributes;
 
-use crate::{bones::Std140GpuBone, DrawMaterial};
 use crate::Mesh;
+use crate::{bones::Std140GpuBone, DrawMaterial};
 
 #[derive(Debug, Default, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable, VertexAttributes)]
 #[repr(C)]
@@ -150,7 +150,13 @@ impl Material {
         })
     }
 
-    pub fn draw_meshes<'a>(&mut self, frame: &Framebuffer, _view: &ViewUniformBuffer, instance: &MaterialInstance, meshes: impl IntoIterator<Item=Transformed<&'a Mesh>>) -> Result<()> {
+    pub fn draw_meshes<'a>(
+        &mut self,
+        frame: &Framebuffer,
+        _view: &ViewUniformBuffer,
+        instance: &MaterialInstance,
+        meshes: impl IntoIterator<Item = Transformed<&'a Mesh>>,
+    ) -> Result<()> {
         {
             if self.reload_watcher.should_reload() {
                 let mut paths = self.reload_watcher.paths();
@@ -200,7 +206,7 @@ impl Material {
         Ok(())
     }
 
-    fn program(&self) -> impl '_ + Drop + std::ops::Deref<Target=Program> {
+    fn program(&self) -> impl '_ + Drop + std::ops::Deref<Target = Program> {
         self.program.read().unwrap()
     }
 }

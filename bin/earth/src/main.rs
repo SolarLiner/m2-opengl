@@ -9,14 +9,14 @@ use rose::{
     prelude::*,
     renderer::{DrawMaterial, Mesh},
 };
+use violette::buffer::BufferUsageHint;
+use violette::shader::{FragmentShader, VertexShader};
 use violette::{
     buffer::UniformBuffer,
     framebuffer::Framebuffer,
-    FrontFace,
     program::{Program, UniformBlockIndex, UniformLocation},
+    FrontFace,
 };
-use violette::buffer::BufferUsageHint;
-use violette::shader::{FragmentShader, VertexShader};
 
 #[derive(AsStd140, Deserialize)]
 #[serde(default)]
@@ -147,7 +147,10 @@ impl AtmosphereMaterial {
             .iter()
             .find_map(|(_, (tr, light))| {
                 if light.kind == LightKind::Directional {
-                    Some((tr.0.rotation.mul_vec3(Vec3::NEG_Z), light.color * light.power))
+                    Some((
+                        tr.0.rotation.mul_vec3(Vec3::NEG_Z),
+                        light.color * light.power,
+                    ))
                 } else {
                     None
                 }
@@ -165,7 +168,9 @@ impl AtmosphereMaterial {
 
         for (_, (material, uniforms)) in world.query::<(&mut Self, &AtmosphereUniforms)>().iter() {
             // material.uniform.slice(0..).set(0, &uniforms.as_std140())?;
-            material.uniform.set(&[uniforms.as_std140()], BufferUsageHint::Stream)?;
+            material
+                .uniform
+                .set(&[uniforms.as_std140()], BufferUsageHint::Stream)?;
         }
         Ok(())
     }
@@ -198,7 +203,10 @@ impl Application for EarthApp {
         let mut scene = Scene::new("assets")?;
 
         let cache = scene.asset_cache().as_any_cache();
-        let sphere = cache.get_or_insert("prim:sphere", MeshBuilder::new(Vertex::new).uv_sphere(1., 64, 64).into());
+        let sphere = cache.get_or_insert(
+            "prim:sphere",
+            MeshBuilder::new(Vertex::new).uv_sphere(1., 64, 64).into(),
+        );
         scene.with_world_mut(|world| {
             let entity = world.spawn((Transform::default(), Rotate(Vec3::Y / (6. * 60.))));
             world.spawn_children(

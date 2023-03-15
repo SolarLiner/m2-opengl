@@ -18,8 +18,12 @@ impl Application for App {
     fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
         let sizeu = UVec2::from_array(size.cast::<u32>().into());
         let mut core_systems = CoreSystems::new(sizeu)?;
-        core_systems.persistence.register_component::<GlobalTransform>();
-        core_systems.render.renderer.set_environment(|rw| EnvironmentMap::load("assets/textures/derelict_highway_midday_1k.exr", rw).unwrap());
+        core_systems
+            .persistence
+            .register_component::<GlobalTransform>();
+        core_systems.render.renderer.set_environment(|rw| {
+            EnvironmentMap::load("assets/textures/derelict_highway_midday_1k.exr", rw).unwrap()
+        });
         let mut scene = Scene::new("assets")?;
         let cache = scene.asset_cache().as_any_cache();
         let (global_camera, local_camera) = scene.with_world_mut(|world| {

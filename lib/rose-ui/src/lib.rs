@@ -22,7 +22,11 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new<E>(event_loop: &EventLoopWindowTarget<E>, window: &Window, reload_watcher: &ReloadWatcher) -> Result<Self> {
+    pub fn new<E>(
+        event_loop: &EventLoopWindowTarget<E>,
+        window: &Window,
+        reload_watcher: &ReloadWatcher,
+    ) -> Result<Self> {
         let painter = UiImpl::new(reload_watcher)?;
         let ctx = egui::Context::default();
         let scale_factor = window.scale_factor() as _;

@@ -5,11 +5,11 @@ use glam::{UVec2, Vec3};
 
 use rose_core::screen_draw::ScreenDraw;
 use rose_core::utils::reload_watcher::ReloadWatcher;
+use violette::program::UniformLocation;
 use violette::{
     framebuffer::Framebuffer,
     texture::{Dimension, SampleMode, Texture},
 };
-use violette::program::UniformLocation;
 
 #[derive(Debug)]
 pub struct AutoExposure {

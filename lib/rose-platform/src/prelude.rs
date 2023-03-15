@@ -4,9 +4,7 @@ pub use winit::{
     window::WindowBuilder,
 };
 
-pub use crate::{circbuffer::CircBuffer, Application, RenderContext, RenderStats, TickContext};
-
+pub use crate::run;
 #[cfg(feature = "ui")]
 pub use crate::UiContext;
-
-pub use crate::run;
+pub use crate::{circbuffer::CircBuffer, Application, RenderContext, RenderStats, TickContext};

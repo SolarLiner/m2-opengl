@@ -1,24 +1,25 @@
-use std::{any::type_name, collections::HashMap};
 use std::any::TypeId;
+use std::{any::type_name, collections::HashMap};
 
 use assets_manager::{AnyCache, Compound, Handle};
 use eyre::Result;
 use hecs::{
-    Component,
-    EntityBuilder, EntityRef, serialize::row::{self, DeserializeContext, SerializeContext}, World,
-};
-use serde::{
-    de::{self, IntoDeserializer, MapAccess},
-    Deserialize,
-    Deserializer, ser::{self, SerializeMap}, Serialize, Serializer,
+    serialize::row::{self, DeserializeContext, SerializeContext},
+    Component, EntityBuilder, EntityRef, World,
 };
 use serde::ser::SerializeSeq;
+use serde::{
+    de::{self, IntoDeserializer, MapAccess},
+    ser::{self, SerializeMap},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 
 use rose_core::utils::thread_guard::ThreadGuard;
 
 pub trait SerializableComponent:
-Component + serde::Serialize + serde::Deserialize<'static>
-{}
+    Component + serde::Serialize + serde::Deserialize<'static>
+{
+}
 
 impl<C: Component + serde::Serialize + serde::Deserialize<'static>> SerializableComponent for C {}
 
@@ -111,7 +112,8 @@ impl PersistenceSystem {
         let type_id = TypeId::of::<C>();
         let dyn_persistence = DynPersistence::new::<C>();
         self.type_map.insert(dyn_persistence.name, type_id);
-        self.registry.insert(type_id, ThreadGuard::new(dyn_persistence));
+        self.registry
+            .insert(type_id, ThreadGuard::new(dyn_persistence));
         self
     }
 
@@ -119,7 +121,8 @@ impl PersistenceSystem {
         let type_id = TypeId::of::<A>();
         let dyn_asset = DynAsset::new::<A>();
         self.type_map.insert(dyn_asset.name, type_id);
-        self.asset_types.insert(type_id, ThreadGuard::new(dyn_asset));
+        self.asset_types
+            .insert(type_id, ThreadGuard::new(dyn_asset));
         self
     }
 
@@ -128,8 +131,8 @@ impl PersistenceSystem {
         cache: AnyCache<'static>,
         de: D,
     ) -> Result<World>
-        where
-            D::Error: 'static + Send + Sync,
+    where
+        D::Error: 'static + Send + Sync,
     {
         self.asset_cache.replace(ThreadGuard::new(cache));
         Ok(row::deserialize(self, de)?)
@@ -141,8 +144,8 @@ impl PersistenceSystem {
         ser: S,
         world: &World,
     ) -> Result<()>
-        where
-            S::Error: 'static + Send + Sync,
+    where
+        S::Error: 'static + Send + Sync,
     {
         self.asset_cache.replace(ThreadGuard::new(cache));
         row::serialize(world, self, ser)?;
@@ -156,8 +159,8 @@ impl DeserializeContext for PersistenceSystem {
         mut map: M,
         entity: &mut EntityBuilder,
     ) -> std::result::Result<(), M::Error>
-        where
-            M: MapAccess<'de>,
+    where
+        M: MapAccess<'de>,
     {
         while let Some(key) = map.next_key::<String>()? {
             let Some(type_id) = self.type_map.get(&*key) else { continue; };
@@ -165,8 +168,12 @@ impl DeserializeContext for PersistenceSystem {
                 let value = map.next_value::<serde_json::Value>()?;
                 (pers.deserialize)(entity, value).map_err(de::Error::custom)?;
             } else if let Some(asset) = self.asset_types.get(type_id) {
-                (asset.load)(*self.asset_cache.unwrap(), entity, &map.next_value::<String>()?)
-                    .map_err(de::Error::custom)?;
+                (asset.load)(
+                    *self.asset_cache.unwrap(),
+                    entity,
+                    &map.next_value::<String>()?,
+                )
+                .map_err(de::Error::custom)?;
             }
         }
         Ok(())
@@ -179,8 +186,8 @@ impl SerializeContext for PersistenceSystem {
         entity: EntityRef<'_>,
         mut map: S,
     ) -> std::result::Result<S::Ok, S::Error>
-        where
-            S: SerializeMap,
+    where
+        S: SerializeMap,
     {
         for pers in self.registry.values() {
             let Some(value) = (pers.serialize)(&entity).map_err(ser::Error::custom)? else { continue; };

@@ -1,8 +1,8 @@
+use std::f32::consts::PI;
 use std::{
     hash::{Hash, Hasher},
     ops::Mul,
 };
-use std::f32::consts::PI;
 
 use glam::{EulerRot, Mat4, Quat, Vec3};
 

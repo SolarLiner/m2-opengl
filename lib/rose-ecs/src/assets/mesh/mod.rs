@@ -1,8 +1,8 @@
 use std::{borrow::Cow, error::Error, fmt, fmt::Formatter};
 
-use assets_manager::{Asset, BoxedError, Compound, loader::Loader};
+use assets_manager::{loader::Loader, Asset, BoxedError, Compound};
 use eyre::Result;
-use glam::{Quat, vec2, Vec2, vec3, Vec3};
+use glam::{vec2, vec3, Quat, Vec2, Vec3};
 
 use rose_core::mesh::CpuMesh;
 use rose_renderer::material::Vertex;

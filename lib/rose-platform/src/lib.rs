@@ -1,12 +1,12 @@
+use std::path::PathBuf;
+use std::sync::RwLock;
 use std::{
     ffi::CString,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-use std::path::PathBuf;
-use std::sync::RwLock;
 
-use eyre::{Context, eyre, Result};
+use eyre::{eyre, Context, Result};
 use glutin::{
     config::{Api, ConfigTemplateBuilder},
     context::{ContextApi, ContextAttributesBuilder, Version},
@@ -17,19 +17,16 @@ use glutin::{
 use glutin_winit::DisplayBuilder;
 use histo::Histogram;
 use raw_window_handle::HasRawWindowHandle;
-use tracing_subscriber::{prelude::*};
-use winit::{
-    event::{ElementState, Event, KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
-    event_loop::{
-        ControlFlow,
-        EventLoopBuilder,
-    },
-    window::Fullscreen,
-};
+use tracing_subscriber::prelude::*;
 pub use winit::dpi::{LogicalSize, PhysicalSize};
 pub use winit::event as events;
 use winit::window::Window;
 pub use winit::window::WindowBuilder;
+use winit::{
+    event::{ElementState, Event, KeyboardInput, StartCause, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoopBuilder},
+    window::Fullscreen,
+};
 
 use rose_core::utils::reload_watcher::ReloadWatcher;
 
@@ -217,8 +214,11 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
     let app = Arc::new(Mutex::new(app));
 
     #[cfg(feature = "ui")]
-        let (_reload_watcher, mut ui) = {
-        let base_path = std::env::var("CARGO_PROJECT_DIR").map(PathBuf::from).or_else(|_| std::env::current_dir()).unwrap();
+    let (_reload_watcher, mut ui) = {
+        let base_path = std::env::var("CARGO_PROJECT_DIR")
+            .map(PathBuf::from)
+            .or_else(|_| std::env::current_dir())
+            .unwrap();
         let reload_watcher = ReloadWatcher::new(base_path.join("res/shaders"));
         let ui = rose_ui::Ui::new(&event_loop, &window, &reload_watcher)?;
         (reload_watcher, ui)
@@ -334,7 +334,10 @@ pub fn run<App: 'static + Application>(title: &str) -> Result<()> {
                         new_size.width.try_into().unwrap(),
                         new_size.height.try_into().unwrap(),
                     );
-                    app.lock().unwrap().resize(new_size, window.scale_factor()).unwrap();
+                    app.lock()
+                        .unwrap()
+                        .resize(new_size, window.scale_factor())
+                        .unwrap();
                     window.request_redraw();
                 }
                 event => {

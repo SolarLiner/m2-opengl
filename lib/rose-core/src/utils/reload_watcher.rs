@@ -1,13 +1,13 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread::{self},
 };
-use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(feature = "hot-reload")]
-use notify::{EventKind, recommended_watcher, RecursiveMode, Watcher};
+use notify::{recommended_watcher, EventKind, RecursiveMode, Watcher};
 
 #[derive(Debug)]
 pub struct ReloadWatcher {
@@ -38,9 +38,7 @@ impl ReloadWatcher {
             move || {
                 let (tx, rx) = crossbeam_channel::unbounded();
                 let mut watcher = recommended_watcher(tx).unwrap();
-                watcher
-                    .watch(&base_path, RecursiveMode::Recursive)
-                    .unwrap();
+                watcher.watch(&base_path, RecursiveMode::Recursive).unwrap();
                 tracing::info!("Watching {}", base_path.display());
                 for res in rx {
                     if cancel_thread.load(Ordering::Relaxed) {
@@ -109,7 +107,7 @@ impl ReloadWatcher {
         false
     }
 
-    pub fn proxy<'p>(&self, files: impl IntoIterator<Item=&'p Path>) -> ReloadFileProxy {
+    pub fn proxy<'p>(&self, files: impl IntoIterator<Item = &'p Path>) -> ReloadFileProxy {
         ReloadFileProxy::from_watcher(self, files)
     }
 
@@ -128,7 +126,7 @@ pub struct ReloadFileProxy {
 impl ReloadFileProxy {
     pub fn from_watcher<'p>(
         watcher: &ReloadWatcher,
-        paths: impl IntoIterator<Item=&'p Path>,
+        paths: impl IntoIterator<Item = &'p Path>,
     ) -> Self {
         Self {
             files: Vec::from_iter(paths.into_iter().map(|path| watcher.base_path.join(path))),
@@ -153,7 +151,7 @@ impl ReloadFileProxy {
         false
     }
 
-    pub fn paths(&self) -> impl '_ + Iterator<Item=&Path> {
+    pub fn paths(&self) -> impl '_ + Iterator<Item = &Path> {
         self.files.iter().map(|p| p.as_path())
     }
 }

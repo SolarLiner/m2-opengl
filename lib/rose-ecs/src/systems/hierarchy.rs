@@ -35,7 +35,8 @@ impl HierarchicalSystem {
             .reduce_with(|mut a, b| {
                 a.extend(b);
                 a
-            }).unwrap_or_default();
+            })
+            .unwrap_or_default();
         let mut q = world.query::<&H>();
         let v = q.view();
         let mut built_globals = hierarchy
@@ -49,9 +50,7 @@ impl HierarchicalSystem {
 
         let parents = hierarchy
             .into_iter()
-            .filter_map(|(e, opt)| {
-                opt.map(|parent| (e, parent))
-            })
+            .filter_map(|(e, opt)| opt.map(|parent| (e, parent)))
             .collect::<HashMap<_, _>>();
 
         // for (entity, parent) in parents_it {
@@ -109,16 +108,16 @@ impl MakeChild for CommandBuffer {
 
 pub trait MakeChildren {
     fn spawn_children<'e, I>(&mut self, parent: Entity, entities: I) -> Vec<Entity>
-        where
-            I: IntoIterator<Item=&'e mut EntityBuilder>,
-            I::IntoIter: ExactSizeIterator;
+    where
+        I: IntoIterator<Item = &'e mut EntityBuilder>,
+        I::IntoIter: ExactSizeIterator;
 }
 
 impl MakeChildren for World {
     fn spawn_children<'e, I>(&mut self, parent: Entity, entities: I) -> Vec<Entity>
-        where
-            I: IntoIterator<Item=&'e mut EntityBuilder>,
-            I::IntoIter: ExactSizeIterator,
+    where
+        I: IntoIterator<Item = &'e mut EntityBuilder>,
+        I::IntoIter: ExactSizeIterator,
     {
         let entities_it = entities.into_iter();
         let entities = self

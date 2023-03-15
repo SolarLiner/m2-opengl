@@ -6,8 +6,8 @@ use glam::UVec2;
 
 use rose_core::screen_draw::ScreenDraw;
 use rose_core::utils::reload_watcher::ReloadWatcher;
-use violette::{framebuffer::Framebuffer, program::UniformLocation, texture::Texture};
 use violette::texture::{SampleMode, TextureWrap};
+use violette::{framebuffer::Framebuffer, program::UniformLocation, texture::Texture};
 
 use crate::postprocess::autoexposure::AutoExposure;
 use crate::postprocess::blur::Blur;

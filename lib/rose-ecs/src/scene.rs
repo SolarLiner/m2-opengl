@@ -1,22 +1,22 @@
+use std::collections::{HashMap, VecDeque};
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 use std::{
     fmt::{self, Formatter},
     path::{Path, PathBuf},
 };
-use std::collections::{HashMap, VecDeque};
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
 
-use assets_manager::AssetCache;
 use assets_manager::source::{FileSystem, Source};
+use assets_manager::AssetCache;
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use egui::Ui;
 use eyre::Result;
 use hecs::{CommandBuffer, EntityBuilder, World};
 
-use crate::NamedComponent;
 use crate::prelude::{MakeChild, Parent};
-use crate::systems::ComponentUi;
 use crate::systems::persistence::PersistenceSystem;
+use crate::systems::ComponentUi;
+use crate::NamedComponent;
 
 pub struct Scene<FS: 'static = FileSystem> {
     assets: &'static AssetCache<FS>,
@@ -76,11 +76,11 @@ impl Scene {
         self.with_world_mut(|world| {
             let mut cmd = CommandBuffer::new();
             let scene_root = world.spawn((nested
-                                              .scene_path
-                                              .file_name()
-                                              .unwrap()
-                                              .to_string_lossy()
-                                              .to_string(), ));
+                .scene_path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),));
             let mut entity_map = HashMap::new();
             nested.with_world_mut(|nested_world| {
                 let mut nested_parent_entities = nested_world

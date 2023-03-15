@@ -4,7 +4,7 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     fmt, ops,
-    rc::{Rc},
+    rc::Rc,
     time::{Duration, Instant},
 };
 
@@ -18,7 +18,7 @@ use postprocess::Postprocess;
 use rose_core::{
     camera::{Camera, ViewUniform, ViewUniformBuffer},
     light::{GpuLight, Light, LightBuffer},
-    transform::{Transformed},
+    transform::Transformed,
     utils::{reload_watcher::ReloadWatcher, thread_guard::ThreadGuard},
 };
 use violette::{
@@ -27,8 +27,8 @@ use violette::{
 };
 
 use crate::bones::Bone;
-use crate::{env::Environment, material::MaterialInstance};
 pub use crate::postprocess::LensFlareParams;
+use crate::{env::Environment, material::MaterialInstance};
 
 pub mod bones;
 pub mod env;
@@ -308,8 +308,18 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn submit_mesh_standard(&mut self, material: Rc<MaterialInstance>, mesh: Transformed<Rc<Mesh>>) {
-        self.submit_mesh(Rc::new(StandardDrawMaterial { material: self.material.clone(), instance: material}), mesh);
+    pub fn submit_mesh_standard(
+        &mut self,
+        material: Rc<MaterialInstance>,
+        mesh: Transformed<Rc<Mesh>>,
+    ) {
+        self.submit_mesh(
+            Rc::new(StandardDrawMaterial {
+                material: self.material.clone(),
+                instance: material,
+            }),
+            mesh,
+        );
     }
 
     #[tracing::instrument(skip_all)]

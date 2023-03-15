@@ -2,18 +2,18 @@ use std::{path::PathBuf, sync::Arc};
 
 use crossbeam_channel::Sender;
 use eyre::Result;
-use glam::{Mat4, UVec2, vec2, Vec2, Vec3, Vec4};
+use glam::{vec2, Mat4, UVec2, Vec2, Vec3, Vec4};
 use gltf::{
     buffer::Data as BufferData,
     camera::Projection as CamProjection,
     image::{Data as ImageData, Format},
     material::AlphaMode,
-    Mesh,
     mesh::util::ReadTexCoords,
-    Node, texture::{MagFilter, MinFilter, WrappingMode},
+    texture::{MagFilter, MinFilter, WrappingMode},
+    Mesh, Node,
 };
 use image::{
-    buffer::ConvertBuffer, DynamicImage, GrayImage, ImageBuffer, Rgb, RgbaImage, RgbImage,
+    buffer::ConvertBuffer, DynamicImage, GrayImage, ImageBuffer, Rgb, RgbImage, RgbaImage,
 };
 use rayon::prelude::*;
 use tracing::Instrument;
@@ -22,11 +22,11 @@ use rose_core::transform::Transform;
 use rose_renderer::material::Vertex;
 use violette::texture::{SampleMode, TextureWrap};
 
+use crate::assets::Image;
 use crate::{
     assets::{Material, MeshAsset},
     prelude::*,
 };
-use crate::assets::Image;
 
 fn count_children(parent: gltf::Node) -> usize {
     1 + parent.children().map(count_children).sum::<usize>()

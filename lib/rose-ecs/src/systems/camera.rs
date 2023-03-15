@@ -1,6 +1,6 @@
 use std::f32::consts::{FRAC_PI_2, TAU};
 
-use glam::{Quat, vec2, Vec2, Vec2Swizzles, Vec3};
+use glam::{vec2, Quat, Vec2, Vec2Swizzles, Vec3};
 use hecs::World;
 
 use input::Input;
@@ -104,7 +104,8 @@ impl PanOrbitSystem {
         //     controller.target_rotation.x,
         //     0.,
         // );
-        cam_transform.rotation = Quat::from_rotation_x(controller.target_rotation.y) * Quat::from_rotation_y(controller.target_rotation.x);
+        cam_transform.rotation = Quat::from_rotation_x(controller.target_rotation.y)
+            * Quat::from_rotation_y(controller.target_rotation.x);
         cam_transform.position = controller.focus - controller.radius * Vec3::Z;
         // *cam_transform = cam_transform.looking_at(controller.focus);
     }

@@ -19,10 +19,13 @@ impl Application for App {
         core_systems
             .render
             .renderer
-            .set_environment(|reload_watcher| EnvironmentMap::load(
-                "assets/textures/derelict_highway_midday_1k.exr",
-                reload_watcher,
-            ).unwrap());
+            .set_environment(|reload_watcher| {
+                EnvironmentMap::load(
+                    "assets/textures/derelict_highway_midday_1k.exr",
+                    reload_watcher,
+                )
+                .unwrap()
+            });
         let scene = if let Some(name) = std::env::args().nth(1) {
             let path = PathBuf::from(name);
             let mut scene: Scene = smol::block_on(rose::ecs::load_gltf::load_gltf_scene(&path))?;
@@ -63,7 +66,10 @@ impl Application for App {
         if let Some(event) = self.core_systems.on_event(event) {
             match event {
                 WindowEvent::DroppedFile(path) => {
-                    match EnvironmentMap::load(path, self.core_systems.render.renderer.reload_watcher()) {
+                    match EnvironmentMap::load(
+                        path,
+                        self.core_systems.render.renderer.reload_watcher(),
+                    ) {
                         Ok(env) => self.core_systems.render.renderer.set_environment(|_| env),
                         Err(err) => {
                             tracing::error!("Cannot load environment map: {}", err);

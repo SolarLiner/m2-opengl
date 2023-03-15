@@ -1,15 +1,9 @@
 use std::fs::File;
 
 use eyre::Result;
-use tracing_subscriber::{
-    EnvFilter,
-    fmt::format::FmtSpan,
-    Layer,
-    layer::SubscriberExt,
-};
-use tracing_subscriber::util::SubscriberInitExt;
-
 use tracing_error::ErrorLayer;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{fmt::format::FmtSpan, layer::SubscriberExt, EnvFilter, Layer};
 
 pub fn enable() -> Result<()> {
     color_eyre::install()?;
@@ -29,7 +23,7 @@ pub fn enable() -> Result<()> {
         .with(fmt_layer)
         .with(json_layer);
     #[cfg(feature = "tracy")]
-        let registry = {
+    let registry = {
         let tracy_layer = tracing_tracy::TracyLayer::new();
         registry.with(tracy_layer)
     };

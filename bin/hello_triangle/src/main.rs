@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use eyre::Result;
-use glam::{vec2, Vec2, vec3, Vec3};
+use glam::{vec2, vec3, Vec2, Vec3};
 
 use rose_core::mesh::Mesh;
 use rose_core::utils::thread_guard::ThreadGuard;

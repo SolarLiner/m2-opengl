@@ -10,14 +10,11 @@ use glam::{Vec2, Vec3};
 use hecs::Bundle;
 use serde::{Deserialize, Serialize};
 
-use rose_core::{
-    camera::Projection,
-    transform::Transform,
-};
+use rose_core::{camera::Projection, transform::Transform};
 
-use crate::NamedComponent;
 #[cfg(feature = "ui")]
 use crate::systems::ComponentUi;
+use crate::NamedComponent;
 
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Active;
@@ -66,32 +63,30 @@ impl From<Projection> for CameraParams {
 #[cfg(feature = "ui")]
 impl ComponentUi for CameraParams {
     fn ui(&mut self, ui: &mut Ui) {
-        Grid::new("camera-params")
-            .num_columns(2)
-            .show(ui, |ui| {
-                let fov_label = ui.label("Vert. FOV").id;
-                self.fovy *= 180. / PI;
-                ui.add(DragValue::new(&mut self.fovy).suffix(" °"))
-                    .labelled_by(fov_label);
-                self.fovy *= PI / 180.;
-                ui.end_row();
+        Grid::new("camera-params").num_columns(2).show(ui, |ui| {
+            let fov_label = ui.label("Vert. FOV").id;
+            self.fovy *= 180. / PI;
+            ui.add(DragValue::new(&mut self.fovy).suffix(" °"))
+                .labelled_by(fov_label);
+            self.fovy *= PI / 180.;
+            ui.end_row();
 
-                let zrange_label = ui.label("Z Range").id;
-                ui.horizontal(|ui| {
-                    ui.add(
-                        DragValue::new(&mut self.zrange.start)
-                            .prefix("start:")
-                            .suffix(" m"),
-                    );
-                    ui.add(
-                        DragValue::new(&mut self.zrange.end)
-                            .prefix("end:")
-                            .suffix(" m"),
-                    );
-                })
-                    .response
-                    .labelled_by(zrange_label);
-            });
+            let zrange_label = ui.label("Z Range").id;
+            ui.horizontal(|ui| {
+                ui.add(
+                    DragValue::new(&mut self.zrange.start)
+                        .prefix("start:")
+                        .suffix(" m"),
+                );
+                ui.add(
+                    DragValue::new(&mut self.zrange.end)
+                        .prefix("end:")
+                        .suffix(" m"),
+                );
+            })
+            .response
+            .labelled_by(zrange_label);
+        });
     }
 }
 
@@ -129,12 +124,20 @@ impl ComponentUi for PanOrbitCamera {
             let rot_label = ui.label("Tgt. rotation").id;
             ui.horizontal(|ui| {
                 self.target_rotation *= 180. / PI;
-                ui.add(DragValue::new(&mut self.target_rotation.y).prefix("Lat:").suffix(" °"));
-                ui.add(DragValue::new(&mut self.target_rotation.x).prefix("Lon:").suffix(" °"));
+                ui.add(
+                    DragValue::new(&mut self.target_rotation.y)
+                        .prefix("Lat:")
+                        .suffix(" °"),
+                );
+                ui.add(
+                    DragValue::new(&mut self.target_rotation.x)
+                        .prefix("Lon:")
+                        .suffix(" °"),
+                );
                 self.target_rotation *= 180. / PI;
             })
-                .response
-                .labelled_by(rot_label);
+            .response
+            .labelled_by(rot_label);
             ui.end_row();
 
             let radius_label = ui.label("Radius").id;
@@ -148,8 +151,8 @@ impl ComponentUi for PanOrbitCamera {
                 ui.add(DragValue::new(&mut self.focus.y).prefix("Y:").suffix(" m"));
                 ui.add(DragValue::new(&mut self.focus.z).prefix("Z:").suffix(" m"));
             })
-                .response
-                .labelled_by(focus_label);
+            .response
+            .labelled_by(focus_label);
             // ui.end_row();
         });
     }
@@ -202,8 +205,8 @@ impl ComponentUi for Light {
                 ui.radio_value(&mut self.kind, LightKind::Directional, "Directional");
                 ui.radio_value(&mut self.kind, LightKind::Ambient, "Ambient");
             })
-                .response
-                .labelled_by(kind_label);
+            .response
+            .labelled_by(kind_label);
             ui.end_row();
 
             let color_label = ui.label("Color").id;

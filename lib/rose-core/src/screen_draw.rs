@@ -4,13 +4,13 @@ use std::path::Path;
 use eyre::{Context, Result};
 use once_cell::sync::Lazy;
 
+use violette::framebuffer::Framebuffer;
+use violette::shader::{FragmentShader, VertexShader};
 use violette::{
     buffer::{Buffer, ElementBuffer},
     program::Program,
     vertex::{DrawMode, VertexArray},
 };
-use violette::framebuffer::Framebuffer;
-use violette::shader::{FragmentShader, VertexShader};
 
 use crate::utils::{
     reload_watcher::{ReloadFileProxy, ReloadWatcher},
@@ -34,7 +34,7 @@ pub struct ScreenDraw {
 
 impl ScreenDraw {
     pub fn new<'s>(
-        shader_sources: impl IntoIterator<Item=&'s str>,
+        shader_sources: impl IntoIterator<Item = &'s str>,
         reload_watcher: ReloadFileProxy,
     ) -> Result<Self> {
         let vert_shader = VertexShader::new(SCREEN_VS)?;
@@ -57,19 +57,19 @@ impl ScreenDraw {
             files.iter().map(|(_, s)| s.as_str()),
             reload_watcher.proxy(files.iter().map(|(p, _)| p.as_path())),
         )
-            .with_context(|| format!("Loading shader {}", filepath.display()))
-            .with_context(|| {
-                format!(
-                    "File map:\n{}",
-                    files
-                        .iter()
-                        .map(|(p, _)| p.as_path())
-                        .enumerate()
-                        .map(|(ix, p)| format!("\t{} => {}", ix, p.display()))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                )
-            })
+        .with_context(|| format!("Loading shader {}", filepath.display()))
+        .with_context(|| {
+            format!(
+                "File map:\n{}",
+                files
+                    .iter()
+                    .map(|(p, _)| p.as_path())
+                    .enumerate()
+                    .map(|(ix, p)| format!("\t{} => {}", ix, p.display()))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        })
     }
 
     pub fn program(&self) -> Ref<Program> {
@@ -87,7 +87,9 @@ impl ScreenDraw {
                         tracing::info!(message="Reloading screen-space shader", path=%frag_path.display());
                         let new_program_result = (|| {
                             let vs = VertexShader::new(SCREEN_VS)?;
-                            let fs = FragmentShader::new_multiple(files.iter().map(|(_, s)| s.as_str()))?;
+                            let fs = FragmentShader::new_multiple(
+                                files.iter().map(|(_, s)| s.as_str()),
+                            )?;
                             let program = Program::new()
                                 .with_shader(vs.id)
                                 .with_shader(fs.id)

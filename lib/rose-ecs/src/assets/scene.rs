@@ -1,16 +1,9 @@
 use std::ops;
 
-use assets_manager::{
-    AnyCache,
-    Asset,
-    BoxedError,
-    Compound,
-    loader::TomlLoader,
-    SharedString,
-};
+use assets_manager::{loader::TomlLoader, AnyCache, Asset, BoxedError, Compound, SharedString};
 use serde::{Deserialize, Serialize};
 
-use rose_core::transform::{Transformed as TransformedCore, TransformExt};
+use rose_core::transform::{TransformExt, Transformed as TransformedCore};
 
 use crate::{
     assets::object::{ObjectDesc, TransformDesc},
@@ -61,7 +54,6 @@ pub struct SceneDesc {
     pub lights: Vec<Named<Transformed<Light>>>,
     pub objects: Vec<Named<Transformed<NamedObject>>>,
 }
-
 
 impl Asset for SceneDesc {
     const EXTENSIONS: &'static [&'static str] = &["scene", "toml"];
