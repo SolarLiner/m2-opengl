@@ -6,9 +6,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use color_eyre::owo_colors::OwoColorize;
 use egui::{
-    Align, Color32, Context, DragValue, Grid, Layout, PointerButton, Sense, TextEdit, Ui,
-    WidgetText,
+    Align, Color32, Context, DragValue, Grid,
+    Layout, PointerButton, RichText, Sense, TextEdit, Ui, WidgetText,
 };
 use egui_dock::{NodeIndex, TabViewer, Tree};
 use egui_gizmo::{Gizmo, GizmoMode};
@@ -84,6 +85,7 @@ impl EditorUiSystem {
             .register_component::<Handle<'static, Material>>()
             .register_component::<Light>()
             .register_component::<SceneId>()
+            .register_component::<Scene>()
             .register_spawn::<Transform>()
             .register_spawn::<Active>()
             .register_spawn::<Inactive>()
@@ -176,6 +178,86 @@ impl<'a> UiStateLocal<'a> {
     }
 }
 
+fn scene_hierarchy_node(
+    ui: &mut Ui,
+    selected_entity: &mut Option<Entity>,
+    cmd: &mut CommandBuffer,
+    world: &World,
+    entity: EntityRef,
+) {
+    let name = entity
+        .get::<&String>()
+        .map(|s| s.to_string())
+        .or_else(|| {
+            entity
+                .get::<&NamedObject>()
+                .map(|n| format!("[Object {:?}]", n.object.as_str()))
+        })
+        .unwrap_or("<Unnamed>".to_string());
+    let selected = *selected_entity == Some(entity.entity());
+    let heading = WidgetText::RichText(RichText::new(name));
+    let heading = if selected { heading.strong() } else { heading };
+    let resp = ui
+        .collapsing(heading, |ui| {
+            let mut query = world.query::<&Parent>();
+            let children = query
+                .iter()
+                .filter_map(|(e, p)| (p.0 == entity.entity()).then_some(e));
+            for child in children {
+                scene_hierarchy_node(
+                    ui,
+                    selected_entity,
+                    cmd,
+                    world,
+                    world.entity(child).unwrap(),
+                );
+            }
+        })
+        .header_response;
+    let label_resp = resp.context_menu(|ui| {
+        if let Some(mut name) = entity.get::<&mut String>() {
+            let name_label = ui.label("Name:").id;
+            ui.text_edit_singleline(&mut *name).labelled_by(name_label);
+        } else if ui.small_button("Add name").clicked() {
+            cmd.insert_one(entity.entity(), String::new());
+        }
+        ui.separator();
+        if ui.small_button("Remove").clicked() {
+            cmd.despawn(entity.entity());
+            if selected {
+                *selected_entity = None;
+            }
+            ui.close_menu();
+        }
+        ui.separator();
+        ui.menu_button("Parent to", |ui| {
+            thread_local! {static SEARCH: RefCell<String> = RefCell::new(String::new());}
+            SEARCH.with(|search_key| {
+                let mut q = world.query::<&String>();
+                let mut search = search_key.borrow_mut();
+                ui.text_edit_singleline(&mut *search);
+                egui::ScrollArea::new([false, true])
+                    .show(ui, |ui| {
+                        for (potential_parent, name) in q.iter() {
+                            if search.is_empty() || name.contains(search.as_str()) {
+                                if ui.small_button(name.as_str()).clicked() {
+                                    cmd.insert_one(entity.entity(), Parent(potential_parent));
+                                }
+                            }
+                        }
+                    });
+            });
+        });
+        if ui.small_button("Add child entity").clicked() {
+            cmd.spawn_child(entity.entity(), &mut EntityBuilder::new());
+            ui.close_menu();
+        }
+    });
+    if label_resp.clicked() {
+        selected_entity.replace(entity.entity());
+    }
+}
+
 impl<'a> TabViewer for UiStateLocal<'a> {
     type Tab = Tabs;
 
@@ -207,7 +289,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                             let camera = &self.renderer.camera;
                                             let gizmo_interact =
                                                 Gizmo::new("selected-entity-gizmo")
-                                                    .viewport(rect)
+                                                    // .viewport(rect)
                                                     .model_matrix(tr.matrix().to_cols_array_2d())
                                                     .view_matrix(
                                                         camera
@@ -258,38 +340,16 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                     if let Some(scene) = self.scene {
                         ui.vertical(|ui| {
                             scene.with_world(|world, cmd| {
-                                let mut q = world.query::<()>();
+                                let mut q = world.query::<()>().without::<&Parent>();
                                 for (entity, _) in q.iter() {
                                     let entity = world.entity(entity).unwrap();
-                                    let name = entity
-                                        .get::<&String>()
-                                        .map(|s| s.to_string())
-                                        .or_else(|| {
-                                            entity.get::<&NamedObject>().map(|n| {
-                                                format!("[Object {:?}]", n.object.as_str())
-                                            })
-                                        })
-                                        .unwrap_or("<Unnamed>".to_string());
-                                    let selected =
-                                        self.system.selected_entity == Some(entity.entity());
-                                    let label_resp =
-                                        ui.selectable_label(selected, name).context_menu(|ui| {
-                                            if let Some(mut name) = entity.get::<&mut String>() {
-                                                let name_label = ui.label("Name:").id;
-                                                ui.text_edit_singleline(&mut *name)
-                                                    .labelled_by(name_label);
-                                            } else if ui.small_button("Add name").clicked() {
-                                                cmd.insert_one(entity.entity(), String::new());
-                                            }
-                                            ui.separator();
-                                            if ui.small_button("Remove").clicked() {
-                                                cmd.despawn(entity.entity());
-                                                ui.close_menu();
-                                            }
-                                        });
-                                    if label_resp.clicked() {
-                                        self.system.selected_entity.replace(entity.entity());
-                                    }
+                                    scene_hierarchy_node(
+                                        ui,
+                                        &mut self.system.selected_entity,
+                                        cmd,
+                                        world,
+                                        entity,
+                                    );
                                 }
                                 let size = ui.available_size();
                                 let (_, response) = ui.allocate_exact_size(size, Sense::click());
@@ -407,12 +467,14 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                             Ok(mat) => cmd.insert_one(entity, mat),
                                                             Err(err) => tracing::error!("Could not load {:?} as mesh: {}", id, err),
                                                         }
+                                                        ui.close_menu();
                                                     }
                                                     if ui.small_button("Add material component").clicked() {
                                                         match cache.load::<assets::Material>(id) {
                                                             Ok(mat) => cmd.insert_one(entity, mat),
                                                             Err(err) => tracing::error!("Could not load {:?} as material: {}", id, err),
                                                         }
+                                                        ui.close_menu();
                                                     }
                                                     ui.separator();
                                                 }
@@ -425,6 +487,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                             tracing::error!("Could not load {:?} as an object: {}", id, err);
                                                         }
                                                     }
+                                                    ui.close_menu();
                                                 }
                                                 if ui.small_button("New entity with this mesh").clicked() {
                                                     match cache.load::<MeshAsset>(id) {
@@ -436,6 +499,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                         }),
                                                         Err(err) => tracing::error!("Could not load {:?} as mesh: {}", id, err),
                                                     }
+                                                    ui.close_menu();
                                                 }
                                                 if ui.small_button("New entity with this material").clicked() {
                                                     match cache.load::<assets::Material>(id) {
@@ -447,6 +511,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                         }),
                                                         Err(err) => tracing::error!("Could not load {:?} as material: {}", id, err),
                                                     }
+                                                    ui.close_menu();
                                                 }
                                             });
                                             ui.add_enabled_ui(false, |ui| {

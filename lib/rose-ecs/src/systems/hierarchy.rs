@@ -78,6 +78,12 @@ impl HierarchicalSystem {
         for (e, global) in built_globals {
             command_buffer.insert_one(e, global);
         }
+
+        for (entity, parent) in world.query::<&Parent>().iter() {
+            if world.entity(parent.0).is_err() {
+                command_buffer.remove_one::<Parent>(entity);
+            }
+        }
     }
 }
 

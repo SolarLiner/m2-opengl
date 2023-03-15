@@ -2,15 +2,20 @@ use std::{
     fmt::{self, Formatter},
     path::{Path, PathBuf},
 };
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 
 use assets_manager::AssetCache;
 use assets_manager::source::{FileSystem, Source};
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use egui::Ui;
 use eyre::Result;
-use hecs::{CommandBuffer, World};
+use hecs::{CommandBuffer, EntityBuilder, World};
 
+use crate::NamedComponent;
+use crate::prelude::{MakeChild, Parent};
+use crate::systems::ComponentUi;
 use crate::systems::persistence::PersistenceSystem;
 
 pub struct Scene<FS: 'static = FileSystem> {
@@ -65,6 +70,47 @@ impl Scene {
 
     pub fn reload(&self, persistence: &mut PersistenceSystem) -> Result<Self> {
         Self::load(persistence, self.scene_path.as_path())
+    }
+
+    pub fn add_nested(&mut self, mut nested: Scene) -> Result<()> {
+        self.with_world_mut(|world| {
+            let mut cmd = CommandBuffer::new();
+            let scene_root = world.spawn((nested
+                                              .scene_path
+                                              .file_name()
+                                              .unwrap()
+                                              .to_string_lossy()
+                                              .to_string(), ));
+            let mut entity_map = HashMap::new();
+            nested.with_world_mut(|nested_world| {
+                let mut nested_parent_entities = nested_world
+                    .query::<()>()
+                    .without::<&Parent>()
+                    .iter()
+                    .map(|(e, _)| e)
+                    .collect::<VecDeque<_>>();
+                while let Some(nested_entity) = nested_parent_entities.pop_front() {
+                    let entity = world.spawn_child(
+                        scene_root,
+                        EntityBuilder::new().add_bundle(nested_world.take(nested_entity).unwrap()),
+                    );
+                    if let Some(parent) = world.query_one::<&Parent>(nested_entity).unwrap().get() {
+                        cmd.insert_one(nested_entity, Parent(entity_map[&parent.0]));
+                    }
+                    entity_map.insert(nested_entity, entity);
+                    nested_parent_entities.extend(
+                        world
+                            .query::<&Parent>()
+                            .iter()
+                            .filter_map(|(e, p)| (p.0 == nested_entity).then_some(e)),
+                    );
+                }
+            });
+
+            world.insert_one(scene_root, nested).unwrap();
+            cmd.run_on(world);
+            Ok(())
+        })
     }
 }
 
@@ -130,5 +176,22 @@ impl<FS: Sync + Source> Scene<FS> {
         // let ser = serde_yaml::Serializer::new(&mut data);
         // persistence.serialize_world(ser, &self.world)?;
         Ok(())
+    }
+}
+
+impl<FS: Send + Sync> NamedComponent for Scene<FS> {
+    const NAME: &'static str = "Nested scene";
+}
+
+impl<FS: Send + Sync> ComponentUi for Scene<FS> {
+    fn ui(&mut self, ui: &mut Ui) {
+        egui::Grid::new("nested-scene-ui")
+            .num_columns(2)
+            .show(ui, |ui| {
+                let path_label = ui.label("Path").id;
+                ui.strong(self.scene_path.display().to_string())
+                    .labelled_by(path_label);
+                ui.end_row();
+            });
     }
 }

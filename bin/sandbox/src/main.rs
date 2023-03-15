@@ -3,6 +3,7 @@ use std::path::Path;
 use egui_gizmo::GizmoMode;
 use rfd::FileDialog;
 
+use rose::ecs::load_gltf::load_gltf_scene;
 use rose::prelude::*;
 use violette::framebuffer::{ClearBuffer, Framebuffer};
 
@@ -132,7 +133,10 @@ impl Application for Sandbox {
         if let Some(event) = self.core_systems.on_event(event) {
             match event {
                 WindowEvent::DroppedFile(possible_env_map) => {
-                    match EnvironmentMap::load(possible_env_map, self.core_systems.render.renderer.reload_watcher()) {
+                    match EnvironmentMap::load(
+                        possible_env_map,
+                        self.core_systems.render.renderer.reload_watcher(),
+                    ) {
                         Ok(env) => self.core_systems.render.renderer.set_environment(|_| env),
                         Err(err) => {
                             tracing::error!("Cannot load environment map: {}", err);
@@ -192,6 +196,21 @@ impl Application for Sandbox {
                         self.open_scene().unwrap();
                         ui.close_menu();
                     }
+                    if ui.small_button("Import GLTF").clicked() {
+                        let opt_file = FileDialog::new()
+                            .add_filter("GLTF files", &["gltf", "glb"])
+                            .pick_file();
+                        if let Some(file) = opt_file {
+                            match smol::block_on(load_gltf_scene(file)) {
+                                Ok(scene) => {
+                                    self.editor_scene.replace(scene);
+                                }
+                                Err(err) => {
+                                    tracing::error!("Cannot import scene: {}", err);
+                                }
+                            }
+                        }
+                    }
                     if let Some(scene_path) =
                         self.editor_scene.as_ref().map(|s| s.path().to_path_buf())
                     {
@@ -211,7 +230,7 @@ impl Application for Sandbox {
                         ui.weak("Save as ...");
                     }
                 });
-                if let Some(scene) = &self.editor_scene {
+                if let Some(scene) = &mut self.editor_scene {
                     ui.menu_button("Entity", |ui| {
                         if ui.small_button("Add empty").clicked() {
                             scene.with_world(|_, cmd| cmd.spawn(()));
@@ -221,14 +240,9 @@ impl Application for Sandbox {
                             if ui.small_button("Mesh").clicked() {
                                 scene.with_world(|_world, cmd| {
                                     let cache = scene.asset_cache().as_any_cache();
-                                    let mesh = self
-                                        .core_systems
-                                        .render
-                                        .primitive_cube(cache);
-                                    let material = self
-                                        .core_systems
-                                        .render
-                                        .default_material_handle(cache);
+                                    let mesh = self.core_systems.render.primitive_cube(cache);
+                                    let material =
+                                        self.core_systems.render.default_material_handle(cache);
                                     cmd.spawn(
                                         EntityBuilder::new()
                                             .add(String::from("Cube"))
@@ -263,6 +277,33 @@ impl Application for Sandbox {
                                 ui.close_menu();
                             }
                         });
+                        if ui.small_button("Insert nested ...").clicked() {
+                            let opt_file = FileDialog::new()
+                                .add_filter("Supported", &["scene", "toml", "gltf", "glb"])
+                                .add_filter("Scenes", &["scene"])
+                                .add_filter("TOML files", &["toml"])
+                                .add_filter("GLTF scenes", &["gltf", "glb"])
+                                .pick_file();
+                            if let Some(file) = opt_file {
+                                let nested =
+                                    match file.extension().unwrap().to_string_lossy().as_ref() {
+                                        "scene" | "toml" => Scene::load(
+                                            &mut self.core_systems.persistence,
+                                            file.as_path(),
+                                        ),
+                                        "gltf" | "glb" => {
+                                            smol::block_on(load_gltf_scene(file.as_path()))
+                                        }
+                                        _ => unreachable!(),
+                                    };
+                                match nested.and_then(|nested| scene.add_nested(nested)) {
+                                    Ok(()) => {}
+                                    Err(err) => {
+                                        tracing::error!("Cannot add nested scene: {}", err);
+                                    }
+                                }
+                            }
+                        }
                     });
                 } else {
                     ui.weak("Entity");
@@ -282,11 +323,8 @@ impl Application for Sandbox {
         //         let env = self.render_system.environment_mut();
         //         env.params.ui(ui);
         //     });
-        self.ui_system.on_ui(
-            ctx.egui,
-            self.editor_scene.as_ref(),
-            &mut self.core_systems,
-        );
+        self.ui_system
+            .on_ui(ctx.egui, self.editor_scene.as_ref(), &mut self.core_systems);
     }
 }
 
