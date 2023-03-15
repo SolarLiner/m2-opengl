@@ -1,24 +1,20 @@
-use std::{
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
+use crossbeam_channel::Sender;
 use eyre::Result;
-use glam::{Mat4, UVec2, vec2, Vec2, Vec3, Vec4};
+use glam::{vec2, Mat4, UVec2, Vec2, Vec3, Vec4};
 use gltf::{
     buffer::Data as BufferData,
     camera::Projection as CamProjection,
-    image::{
-        Data as ImageData,
-        Format,
-    },
+    image::{Data as ImageData, Format},
     material::AlphaMode,
-    Mesh,
     mesh::util::ReadTexCoords,
     texture::{MagFilter, MinFilter, WrappingMode},
+    Mesh, Node,
 };
+use gltf::buffer::Data;
 use image::{
-    buffer::ConvertBuffer, DynamicImage, GrayImage, ImageBuffer, Rgb, RgbaImage, RgbImage,
+    buffer::ConvertBuffer, DynamicImage, GrayImage, ImageBuffer, Rgb, RgbImage, RgbaImage,
 };
 use rayon::prelude::*;
 use tracing::Instrument;
@@ -27,11 +23,15 @@ use rose_core::transform::Transform;
 use rose_renderer::material::Vertex;
 use violette::texture::{SampleMode, TextureWrap};
 
+use crate::assets::Image;
 use crate::{
     assets::{Material, MeshAsset},
     prelude::*,
 };
-use crate::assets::Image;
+
+fn count_children(parent: gltf::Node) -> usize {
+    1 + parent.children().map(count_children).sum::<usize>()
+}
 
 pub async fn load_gltf_scene(path: impl Into<PathBuf>) -> Result<Scene> {
     let path = path.into();
@@ -41,8 +41,8 @@ pub async fn load_gltf_scene(path: impl Into<PathBuf>) -> Result<Scene> {
         let path = path.clone();
         move || gltf::import(path)
     })
-        .instrument(tracing::debug_span!("load_gltf"))
-        .await?;
+    .instrument(tracing::debug_span!("load_gltf"))
+    .await?;
     let gltf_scene = document
         .default_scene()
         .unwrap_or_else(|| document.scenes().next().unwrap());
@@ -50,46 +50,12 @@ pub async fn load_gltf_scene(path: impl Into<PathBuf>) -> Result<Scene> {
     let mut scene = Scene::new(path.parent().unwrap())?;
     let cache = scene.asset_cache();
     scene.with_world_mut(|world| {
-        let num_nodes = gltf_scene.nodes().len();
+        let num_nodes = gltf_scene.nodes().map(count_children).sum::<usize>();
         let reserved_entities = world.reserve_entities(num_nodes as u32).collect::<Vec<_>>();
         let (tx, rx) = crossbeam_channel::unbounded();
-        gltf_scene
-            .nodes()
-            .enumerate()
-            .par_bridge()
-            .fold(CommandBuffer::new, |mut cmd, (i, node)| {
-                tracing::info!("Entering node {:?}", gltf_scene.name());
-                let transform =
-                    Transform::from_matrix(Mat4::from_cols_array_2d(&node.transform().matrix()));
-                let mut entity = EntityBuilder::new();
-                entity.add(transform);
-                if let Some(name) = node.name() {
-                    entity.add(name.to_string());
-                }
-
-                if let Some(camera) = node.camera() {
-                    if let CamProjection::Perspective(pers) = camera.projection() {
-                        entity.add(CameraParams {
-                            zrange: pers.znear()..pers.zfar().unwrap_or(1e6),
-                            fovy: pers.yfov(),
-                        });
-                    }
-                }
-
-                cmd.insert(reserved_entities[i], entity.build());
-                let entity = reserved_entities[i];
-                if let Some(mesh) = node.mesh() {
-                    load_node_mesh(cache, mesh, &buffers[..], &images)
-                        .into_par_iter()
-                        .fold(CommandBuffer::new, |mut cmd, mut builder| {
-                            cmd.spawn_child(entity, &mut builder);
-                            cmd
-                        })
-                        .for_each(|cmd| tx.send(cmd).unwrap());
-                }
-                cmd
-            })
-            .for_each(|cmd| tx.send(cmd).unwrap());
+        gltf_scene.nodes().par_bridge().for_each(|node| {
+            gltf_load_node(&buffers, &images, cache, &reserved_entities, &tx, &node);
+        });
 
         drop(tx);
         for mut cmd in rx {
@@ -99,11 +65,54 @@ pub async fn load_gltf_scene(path: impl Into<PathBuf>) -> Result<Scene> {
     Ok(scene)
 }
 
-fn load_node_mesh(
-    cache: &'static AssetCache,
-    mesh: Mesh,
+fn gltf_load_node(
     buffers: &[BufferData],
     images: &[ImageData],
+    cache: &'static AssetCache,
+    reserved_entities: &[Entity],
+    tx: &Sender<CommandBuffer>,
+    node: &Node,
+) {
+    tracing::info!("Entering node {:?}", node.name());
+    let mut cmd = CommandBuffer::new();
+    let transform = Transform::from_matrix(Mat4::from_cols_array_2d(&node.transform().matrix()));
+    let mut entity = EntityBuilder::new();
+    entity.add(transform);
+    if let Some(name) = node.name() {
+        entity.add(name.to_string());
+    }
+
+    if let Some(camera) = node.camera() {
+        if let CamProjection::Perspective(pers) = camera.projection() {
+            entity.add(CameraParams {
+                zrange: pers.znear()..pers.zfar().unwrap_or(1e6),
+                fovy: pers.yfov(),
+            });
+        }
+    }
+
+    cmd.insert(reserved_entities[node.index()], entity.build());
+    let entity = reserved_entities[node.index()];
+    if let Some(mesh) = node.mesh() {
+        load_node_mesh(&buffers[..], &images, cache, mesh)
+            .into_par_iter()
+            .fold(CommandBuffer::new, |mut cmd, mut builder| {
+                cmd.spawn_child(entity, &mut builder);
+                cmd
+            })
+            .for_each(|cmd| tx.send(cmd).unwrap());
+    }
+    node.children()
+        .par_bridge()
+        .for_each(|node| gltf_load_node(buffers, images, cache, reserved_entities, tx, &node));
+    tx.send(cmd).unwrap();
+}
+
+fn load_node_mesh(
+    buffers: &[BufferData],
+    images: &[ImageData],
+    cache: &'static AssetCache,
+    mesh: Mesh,
 ) -> Vec<EntityBuilder> {
     let mesh_name = mesh
         .name()
@@ -270,8 +279,8 @@ fn image2image(texture: &ImageData) -> DynamicImage {
                     .flat_map(|v| [v[0], v[1], 0])
                     .collect(),
             )
-                .unwrap()
-                .convert(),
+            .unwrap()
+            .convert(),
         ),
         Format::R8G8B8 => DynamicImage::ImageRgb8(
             RgbImage::from_raw(texture.width, texture.height, texture.pixels.clone()).unwrap(),
@@ -285,7 +294,7 @@ fn image2image(texture: &ImageData) -> DynamicImage {
                 texture.height,
                 bytemuck::cast_slice(&texture.pixels).to_vec(),
             )
-                .unwrap(),
+            .unwrap(),
         ),
         Format::R16G16 => DynamicImage::ImageRgb32F(
             ImageBuffer::<Rgb<_>, Vec<_>>::from_raw(
@@ -296,8 +305,8 @@ fn image2image(texture: &ImageData) -> DynamicImage {
                     .flat_map(|v| [v[0], v[1], 0])
                     .collect(),
             )
-                .unwrap()
-                .convert(),
+            .unwrap()
+            .convert(),
         ),
         Format::R16G16B16 => DynamicImage::ImageRgb16(
             ImageBuffer::from_raw(
@@ -305,7 +314,7 @@ fn image2image(texture: &ImageData) -> DynamicImage {
                 texture.height,
                 bytemuck::cast_slice(&texture.pixels).to_vec(),
             )
-                .unwrap(),
+            .unwrap(),
         ),
         Format::R16G16B16A16 => DynamicImage::ImageRgba16(
             ImageBuffer::from_raw(
@@ -313,7 +322,7 @@ fn image2image(texture: &ImageData) -> DynamicImage {
                 texture.height,
                 bytemuck::cast_slice(&texture.pixels).to_vec(),
             )
-                .unwrap(),
+            .unwrap(),
         ),
         Format::R32G32B32FLOAT => DynamicImage::ImageRgb32F(
             ImageBuffer::from_raw(
@@ -321,7 +330,7 @@ fn image2image(texture: &ImageData) -> DynamicImage {
                 texture.height,
                 bytemuck::cast_slice(&texture.pixels).to_vec(),
             )
-                .unwrap(),
+            .unwrap(),
         ),
         Format::R32G32B32A32FLOAT => DynamicImage::ImageRgba32F(
             ImageBuffer::from_raw(
@@ -329,13 +338,13 @@ fn image2image(texture: &ImageData) -> DynamicImage {
                 texture.height,
                 bytemuck::cast_slice(&texture.pixels).to_vec(),
             )
-                .unwrap(),
+            .unwrap(),
         ),
     };
     image.flipv()
 }
 
-fn coerce_gltf_uv(uv: ReadTexCoords) -> impl Iterator<Item=Vec2> {
+fn coerce_gltf_uv(uv: ReadTexCoords) -> impl Iterator<Item = Vec2> {
     let data: Vec<_> = match uv {
         ReadTexCoords::F32(v) => v.map(Vec2::from).collect(),
         ReadTexCoords::U16(u) => u
