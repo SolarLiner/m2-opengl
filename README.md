@@ -18,7 +18,7 @@ Le projet est structuré selon plusieurs dossiers à la racine :
 - `assets` sont les données externes et ne contiennent pas de contenu original - ils sont là pour pouvoir être
   chargés par les binaries.
 - `bin` contient les projets (`crates` en jargon Rust) qui produisent des exécutables, qui servent à
-  montrer plusieurs aspects du projet. En particulier, les binaires `sandbox` et `load_gltf` sont notables car
+  montrer plusieurs aspects du projet. En particulier, les binaires `sandbox` et `load_gltf` sont notables, car
   permettent de montrer le pipeline de rendu en son complet. Ils sont resp. un pseudo-éditeur de scène et un
   visualiseur de fichiers GLTF
 - `lib` sont les différentes bibliothèques qui amènent différents niveaux d'abstractions, ainsi que les
