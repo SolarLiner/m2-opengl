@@ -18,7 +18,7 @@ void main() {
 
     vec3 position = texture(frame_position, v_uv).rgb;
     vec3 albedo = texture(frame_albedo, v_uv).rgb;
-    vec3 normal = texture(frame_normal, v_uv).rgb;
+    vec3 normal = nc.rgb;
     vec3 rough_metal = texture(frame_rough_metal, v_uv).rgb;
 
     float roughness = rough_metal.r;
