@@ -68,7 +68,7 @@ impl ViewUniform {
         self.inv_view = self.mat_view.inverse();
         self.inv_proj = self.mat_proj.inverse();
         self.viewport = vec4(0., 0., camera.projection.width, camera.projection.height);
-        self.camera_pos = camera.transform.position;
+        self.camera_pos = camera.transform.rotation * camera.transform.position;
     }
 }
 

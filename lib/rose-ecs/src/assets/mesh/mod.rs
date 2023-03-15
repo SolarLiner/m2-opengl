@@ -4,6 +4,7 @@ use assets_manager::{Asset, BoxedError, Compound, loader::Loader};
 use eyre::Result;
 use glam::{Quat, vec2, Vec2, vec3, Vec3};
 
+use rose_core::mesh::CpuMesh;
 use rose_renderer::material::Vertex;
 
 pub mod obj;
@@ -56,6 +57,15 @@ fn quad(_center: Vec3, normal: Vec3) -> [Vertex; 4] {
 impl Asset for MeshAsset {
     const EXTENSIONS: &'static [&'static str] = &["obj"];
     type Loader = DynamicMeshLoader;
+}
+
+impl From<CpuMesh<Vertex, u32>> for MeshAsset {
+    fn from(value: CpuMesh<Vertex, u32>) -> Self {
+        Self {
+            vertices: value.vertices,
+            indices: value.indices,
+        }
+    }
 }
 
 impl MeshAsset {

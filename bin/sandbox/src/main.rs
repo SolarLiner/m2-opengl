@@ -152,12 +152,14 @@ impl Application for Sandbox {
     fn render(&mut self, ctx: RenderContext) -> Result<()> {
         self.core_systems.begin_frame();
         if let Some(scene) = &mut self.active_scene {
+            self.core_systems.manual_camera_update = false;
             scene.on_frame();
             scene.with_world_mut(|world| {
                 self.pan_orbit_system
                     .on_frame(self.core_systems.input(), world)
             });
         } else if let Some(scene) = &mut self.editor_scene {
+            self.core_systems.manual_camera_update = true;
             scene.on_frame();
             let win_size = ctx
                 .window
@@ -316,6 +318,16 @@ impl Application for Sandbox {
                 );
                 ui.radio_value(&mut self.ui_system.gizmo_mode, GizmoMode::Rotate, "Rotate");
                 ui.radio_value(&mut self.ui_system.gizmo_mode, GizmoMode::Scale, "Scale");
+                ui.separator();
+                if self.active_scene.is_some() {
+                    if ui.small_button("Stop scene").clicked() {
+                        self.stop_active_scene();
+                    }
+                } else {
+                    if ui.small_button("Play").clicked() {
+                        self.start_active_scene();
+                    }
+                }
             });
         });
         // egui::Window::new("Environment")

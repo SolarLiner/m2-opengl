@@ -33,6 +33,7 @@ pub struct CoreSystems {
     pub render: RenderSystem,
     pub input: InputSystem,
     pub persistence: PersistenceSystem,
+    pub manual_camera_update: bool,
 }
 
 impl CoreSystems {
@@ -53,6 +54,7 @@ impl CoreSystems {
             render: RenderSystem::new(size)?,
             input: InputSystem::default(),
             persistence,
+            manual_camera_update: false,
         })
     }
 
@@ -79,7 +81,9 @@ impl CoreSystems {
         if let Some(scene) = scene {
             scene.with_world(|world, cmd| {
                 HierarchicalSystem.update::<Transform>(world, cmd);
-                self.render.update_from_active_camera(world);
+                if !self.manual_camera_update {
+                    self.render.update_from_active_camera(world);
+                }
                 self.render.on_frame(dt, world)
             })?;
             scene.flush_commands();

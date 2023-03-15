@@ -9,13 +9,14 @@ use rose::{
     prelude::*,
     renderer::{DrawMaterial, Mesh},
 };
-use violette::shader::{FragmentShader, VertexShader};
 use violette::{
     buffer::UniformBuffer,
     framebuffer::Framebuffer,
-    program::{Program, UniformBlockIndex, UniformLocation},
     FrontFace,
+    program::{Program, UniformBlockIndex, UniformLocation},
 };
+use violette::buffer::BufferUsageHint;
+use violette::shader::{FragmentShader, VertexShader};
 
 #[derive(AsStd140, Deserialize)]
 #[serde(default)]
@@ -32,8 +33,8 @@ impl Default for AtmosphereUniforms {
     fn default() -> Self {
         Self {
             center: Vec3::ZERO,
-            atm_radius: 6460e3,
-            ground_radius: 6360e3,
+            atm_radius: 1.1,
+            ground_radius: 1.,
             ground_albedo: Vec3::splat(0.1),
             sun_dir: Vec3::X,
             sun_color: Vec3::ZERO,
@@ -107,7 +108,7 @@ impl AtmosphereMaterial {
             .with_context(|| {
             format!(
                 "File map:{}",
-                vert_glsl
+                frag_glsl
                     .iter()
                     .map(|(p, _)| p.as_path())
                     .enumerate()
@@ -146,7 +147,7 @@ impl AtmosphereMaterial {
             .iter()
             .find_map(|(_, (tr, light))| {
                 if light.kind == LightKind::Directional {
-                    Some((tr.0.rotation.mul_vec3(Vec3::X), light.color * light.power))
+                    Some((tr.0.rotation.mul_vec3(Vec3::NEG_Z), light.color * light.power))
                 } else {
                     None
                 }
@@ -158,12 +159,13 @@ impl AtmosphereMaterial {
             .iter()
         {
             uniforms.center = transform.0.position;
-            uniforms.sun_dir = sun_dir;
+            uniforms.sun_dir = sun_dir.normalize();
             uniforms.sun_color = sun_color;
         }
 
         for (_, (material, uniforms)) in world.query::<(&mut Self, &AtmosphereUniforms)>().iter() {
-            material.uniform.slice(0..).set(0, &uniforms.as_std140())?;
+            // material.uniform.slice(0..).set(0, &uniforms.as_std140())?;
+            material.uniform.set(&[uniforms.as_std140()], BufferUsageHint::Stream)?;
         }
         Ok(())
     }
@@ -188,10 +190,6 @@ struct EarthApp {
 
 impl Application for EarthApp {
     fn new(size: PhysicalSize<f32>, scale_factor: f64) -> Result<Self> {
-        println!(
-            "LD_LIBRARY_PATH={}",
-            std::env::var("LD_LIBRARY_PATH").unwrap()
-        );
         let sizeu = Vec2::from_array(size.into()).as_uvec2();
         let mut core_systems = CoreSystems::new(sizeu)?;
         core_systems
@@ -200,6 +198,7 @@ impl Application for EarthApp {
         let mut scene = Scene::new("assets")?;
 
         let cache = scene.asset_cache().as_any_cache();
+        let sphere = cache.get_or_insert("prim:sphere", MeshBuilder::new(Vertex::new).uv_sphere(1., 64, 64).into());
         scene.with_world_mut(|world| {
             let entity = world.spawn((Transform::default(), Rotate(Vec3::Y / (6. * 60.))));
             world.spawn_children(
@@ -208,22 +207,22 @@ impl Application for EarthApp {
                     EntityBuilder::new().add_bundle(ObjectBundle {
                         // transform: Transform::default().scaled(Vec3::splat(6360e3)),
                         transform: Transform::default(),
-                        material: cache.load::<assets::Material>("materials.earth")?,
-                        mesh: core_systems.render.primitive_sphere(cache),
+                        material: cache.load::<assets::Material>("materials.white_diffuse")?,
+                        mesh: sphere,
                         active: Active,
                     }),
                     EntityBuilder::new().add_bundle(ObjectBundle::<
                         CustomMaterial<AtmosphereMaterial>,
                     > {
                         // transform: Transform::default().scaled(Vec3::splat(6460e3)),
-                        transform: Transform::default().scaled(Vec3::splat(1.05)),
+                        transform: Transform::default().scaled(Vec3::splat(2.)),
                         material: cache.get_or_insert(
                             "materials.earth.atmosphere",
                             CustomMaterial::new(AtmosphereMaterial::new(
                                 core_systems.render.renderer.reload_watcher(),
                             )?),
                         ),
-                        mesh: core_systems.render.primitive_sphere(cache),
+                        mesh: sphere,
                         active: Active,
                     }),
                 ],

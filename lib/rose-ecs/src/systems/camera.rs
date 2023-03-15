@@ -19,7 +19,7 @@ pub struct PanOrbitSystem {
 impl PanOrbitSystem {
     pub fn new(size: LogicalSize<f32>) -> Self {
         Self {
-            mouse_sensitivity: 10.,
+            mouse_sensitivity: 3.,
             scroll_sensitivity: 0.1,
             logical_window_size: Vec2::from_array(size.into()),
         }
