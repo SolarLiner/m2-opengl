@@ -2,19 +2,18 @@ use std::{path::PathBuf, sync::Arc};
 
 use crossbeam_channel::Sender;
 use eyre::Result;
-use glam::{vec2, Mat4, UVec2, Vec2, Vec3, Vec4};
+use glam::{Mat4, UVec2, vec2, Vec2, Vec3, Vec4};
 use gltf::{
     buffer::Data as BufferData,
     camera::Projection as CamProjection,
     image::{Data as ImageData, Format},
     material::AlphaMode,
+    Mesh,
     mesh::util::ReadTexCoords,
-    texture::{MagFilter, MinFilter, WrappingMode},
-    Mesh, Node,
+    Node, texture::{MagFilter, MinFilter, WrappingMode},
 };
-use gltf::buffer::Data;
 use image::{
-    buffer::ConvertBuffer, DynamicImage, GrayImage, ImageBuffer, Rgb, RgbImage, RgbaImage,
+    buffer::ConvertBuffer, DynamicImage, GrayImage, ImageBuffer, Rgb, RgbaImage, RgbImage,
 };
 use rayon::prelude::*;
 use tracing::Instrument;
@@ -23,11 +22,11 @@ use rose_core::transform::Transform;
 use rose_renderer::material::Vertex;
 use violette::texture::{SampleMode, TextureWrap};
 
-use crate::assets::Image;
 use crate::{
     assets::{Material, MeshAsset},
     prelude::*,
 };
+use crate::assets::Image;
 
 fn count_children(parent: gltf::Node) -> usize {
     1 + parent.children().map(count_children).sum::<usize>()
@@ -94,7 +93,7 @@ fn gltf_load_node(
     cmd.insert(reserved_entities[node.index()], entity.build());
     let entity = reserved_entities[node.index()];
     if let Some(mesh) = node.mesh() {
-        load_node_mesh(&buffers[..], &images, cache, mesh)
+        load_node_mesh(buffers, images, cache, mesh)
             .into_par_iter()
             .fold(CommandBuffer::new, |mut cmd, mut builder| {
                 cmd.spawn_child(entity, &mut builder);

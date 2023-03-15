@@ -323,10 +323,8 @@ impl Application for Sandbox {
                     if ui.small_button("Stop scene").clicked() {
                         self.stop_active_scene();
                     }
-                } else {
-                    if ui.small_button("Play").clicked() {
-                        self.start_active_scene();
-                    }
+                } else if ui.small_button("Play").clicked() {
+                    self.start_active_scene();
                 }
             });
         });

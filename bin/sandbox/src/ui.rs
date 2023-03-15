@@ -239,10 +239,8 @@ fn scene_hierarchy_node(
                 egui::ScrollArea::new([false, true])
                     .show(ui, |ui| {
                         for (potential_parent, name) in q.iter() {
-                            if search.is_empty() || name.contains(search.as_str()) {
-                                if ui.small_button(name.as_str()).clicked() {
-                                    cmd.insert_one(entity.entity(), Parent(potential_parent));
-                                }
+                            if (search.is_empty() || name.contains(search.as_str())) && ui.small_button(name.as_str()).clicked() {
+                                cmd.insert_one(entity.entity(), Parent(potential_parent));
                             }
                         }
                     });
@@ -271,7 +269,7 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                     .show(ui, |ui| {
                         if let Some(scene) = self.scene {
                             let size = ui.available_size_before_wrap();
-                            let (rect, response) =
+                            let (_rect, response) =
                                 ui.allocate_exact_size(size, Sense::click_and_drag());
                             let gizmo_interaction = if let Some(entity) =
                                 self.system.selected_entity
