@@ -57,7 +57,7 @@ impl Application for IrradianceMap {
             .with_resizable(false)
     }
 
-    fn new(size: PhysicalSize<f32>, scale_factor: f64) -> eyre::Result<Self> {
+    fn new(_size: PhysicalSize<f32>, _scale_factor: f64) -> eyre::Result<Self> {
         let reload_watcher = ReloadWatcher::new("res/shaders");
         let make_irradiance = ScreenDraw::load("screen/env/irradiance.glsl", &reload_watcher)?;
         let display_texture = ScreenDraw::load("blit.glsl", &reload_watcher)?;

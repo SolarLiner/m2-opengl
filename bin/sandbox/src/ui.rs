@@ -278,10 +278,8 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                                 let name_label = ui.label("Name:").id;
                                                 ui.text_edit_singleline(&mut *name)
                                                     .labelled_by(name_label);
-                                            } else {
-                                                if ui.small_button("Add name").clicked() {
-                                                    cmd.insert_one(entity.entity(), String::new());
-                                                }
+                                            } else if ui.small_button("Add name").clicked() {
+                                                cmd.insert_one(entity.entity(), String::new());
                                             }
                                             ui.separator();
                                             if ui.small_button("Remove").clicked() {
@@ -488,23 +486,20 @@ impl<'a> TabViewer for UiStateLocal<'a> {
                                     path.clone_from(&new_path);
                                 }
                             }
-                        })
-                        .response;
+                        });
                         ui.end_row();
-                    } else {
-                        if ui.button("Open").clicked() {
-                            if let Some(new_path) = rfd::FileDialog::new()
-                                .add_filter(
-                                    "Images",
-                                    &["jpg", "png", "bmp", "exr", "hdr", "tif", "tga"],
-                                )
-                                .pick_file()
-                            {
-                                self.renderer.renderer.set_environment(|reload_watcher| {
-                                    EnvironmentMap::load(&new_path, reload_watcher).unwrap()
-                                });
-                                self.system.envmap_path.replace(new_path);
-                            }
+                    } else if ui.button("Open").clicked() {
+                        if let Some(new_path) = rfd::FileDialog::new()
+                            .add_filter(
+                                "Images",
+                                &["jpg", "png", "bmp", "exr", "hdr", "tif", "tga"],
+                            )
+                            .pick_file()
+                        {
+                            self.renderer.renderer.set_environment(|reload_watcher| {
+                                EnvironmentMap::load(&new_path, reload_watcher).unwrap()
+                            });
+                            self.system.envmap_path.replace(new_path);
                         }
                     }
                     if remove_path {

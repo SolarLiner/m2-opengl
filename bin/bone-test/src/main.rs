@@ -12,7 +12,7 @@ impl Application for BoneTestApp {
     fn new(size: PhysicalSize<f32>, _scale_factor: f64) -> Result<Self> {
         let sizeu = UVec2::from_array(size.cast::<u32>().into());
         let base_dir = std::env::var("CARGO_PROJECT_DIR")
-            .map(|v| PathBuf::from(v))
+            .map(PathBuf::from)
             .or_else(|_| std::env::current_dir())
             .unwrap();
         let bones_ix = uvec4(0, 1, 2, u32::MAX);
@@ -26,7 +26,7 @@ impl Application for BoneTestApp {
         root_bone.add_child(Bone::new(Mat4::from_translation(Vec3::Y)));
         root_bone.add_child(Bone::new(Mat4::from_translation(Vec3::NEG_Y)));
         mesh.root_bone = Some(root_bone);
-        let mut renderer = Renderer::new(sizeu, &base_dir)?;
+        let mut renderer = Renderer::new(sizeu, base_dir)?;
         renderer.set_environment(|w| SimpleSky::new(SimpleSkyParams::default(), w).unwrap());
         renderer.add_lights([
             rose::core::light::Light::Ambient {
